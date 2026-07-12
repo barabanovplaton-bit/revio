@@ -40,14 +40,22 @@ export function Sidebar({
   onDeleteProject,
 }: SidebarProps) {
   const [collapsed, setCollapsed] = useState(false);
-  const [showArchived, setShowArchived] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
   const [menuFor, setMenuFor] = useState<string | null>(null);
   const [renaming, setRenaming] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState("");
 
-  const visible = projects.filter((p) =>
-    showArchived ? p.archived : !p.archived
-  );
+  // Фильтрация по поиску (по названию/описанию/контакту)
+  const visible = projects.filter((p) => {
+    if (!searchQuery.trim()) return true;
+    const q = searchQuery.toLowerCase();
+    return (
+      p.name.toLowerCase().includes(q) ||
+      (p.description || "").toLowerCase().includes(q) ||
+      (p.clientName || "").toLowerCase().includes(q)
+    );
+  });
 
   return (
     <aside
@@ -156,38 +164,52 @@ export function Sidebar({
           </div>
         ) : (
           <>
-            {/* Переключатель Активные/Архив */}
-            <div className="mb-2 flex gap-1 rounded-lg bg-bg-input p-1">
-              <button
-                type="button"
-                onClick={() => setShowArchived(false)}
-                className={cn(
-                  "flex-1 rounded-md px-3 py-1.5 text-xs font-medium transition-all",
-                  !showArchived
-                    ? "bg-bg-card text-text-primary"
-                    : "text-text-muted hover:text-text-primary"
-                )}
-              >
-                Активные
-              </button>
-              <button
-                type="button"
-                onClick={() => setShowArchived(true)}
-                className={cn(
-                  "flex-1 rounded-md px-3 py-1.5 text-xs font-medium transition-all",
-                  showArchived
-                    ? "bg-bg-card text-text-primary"
-                    : "text-text-muted hover:text-text-primary"
-                )}
-              >
-                Архив
-              </button>
+            {/* Поиск */}
+            <div className="mb-2">
+              {searchOpen ? (
+                <div className="relative">
+                  <SearchIcon className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-text-muted" />
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="Поиск проектов..."
+                    autoFocus
+                    onBlur={() => {
+                      if (!searchQuery) setSearchOpen(false);
+                    }}
+                    className="w-full rounded-lg border bg-bg-input py-1.5 pl-8 pr-7 text-xs text-text-primary placeholder:text-text-muted focus:border-border-strong focus:outline-none"
+                  />
+                  {searchQuery && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSearchQuery("");
+                        setSearchOpen(false);
+                      }}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-text-muted hover:text-text-primary"
+                      aria-label="Очистить"
+                    >
+                      <XIcon className="h-3 w-3" />
+                    </button>
+                  )}
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setSearchOpen(true)}
+                  className="flex w-full items-center gap-2 rounded-lg border border-transparent px-2.5 py-1.5 text-xs text-text-muted transition-colors hover:bg-bg-card hover:text-text-primary"
+                >
+                  <SearchIcon className="h-3.5 w-3.5" />
+                  Поиск проектов
+                </button>
+              )}
             </div>
 
             {visible.length === 0 ? (
               <div className="px-3 py-8 text-center text-xs text-text-muted">
-                {showArchived
-                  ? "Архив пуст"
+                {searchQuery
+                  ? "Ничего не нашлось"
                   : "Нет проектов. Создайте первый ↑"}
               </div>
             ) : (
@@ -492,6 +514,23 @@ function TrashIcon({ className }: { className?: string }) {
   return (
     <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
       <path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+    </svg>
+  );
+}
+
+function SearchIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <circle cx="11" cy="11" r="7" />
+      <path d="m21 21-4.3-4.3" />
+    </svg>
+  );
+}
+
+function XIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" aria-hidden>
+      <path d="M18 6 6 18M6 6l12 12" />
     </svg>
   );
 }

@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { ThemeProvider } from "./_lib/theme-context";
 import { Sidebar } from "./_components/sidebar";
 import { Avatar } from "./_components/avatar";
-import { ProjectsPage } from "./_components/projects-page";
+import { EmptyCanvas } from "./_components/empty-canvas";
 import { SignInModal } from "./_components/sign-in-modal";
 import { OnboardingModal } from "./_components/onboarding-modal";
 import { NewProjectModal } from "./_components/new-project-modal";
@@ -29,18 +29,14 @@ export default function Page() {
 }
 
 function App() {
-  // Auth state
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
 
-  // Projects state
   const [projects, setProjects] = useState<Project[]>([]);
   const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
   const [newProjectOpen, setNewProjectOpen] = useState(false);
-  const [justCreatedId, setJustCreatedId] = useState<string | null>(null);
 
-  // UI state
   const [signInOpen, setSignInOpen] = useState(false);
   const [onboardingOpen, setOnboardingOpen] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
@@ -50,7 +46,6 @@ function App() {
     setTimeout(() => setToast(null), 2400);
   }, []);
 
-  // Подписка на авторизацию
   useEffect(() => {
     const unsub = subscribeToAuth(async (u) => {
       setUser(u);
@@ -72,7 +67,6 @@ function App() {
     return () => unsub();
   }, []);
 
-  // Подписка на проекты пользователя
   useEffect(() => {
     if (!user) {
       setProjects([]);
@@ -126,7 +120,6 @@ function App() {
   const handleProjectCreated = useCallback(
     (id: string) => {
       setNewProjectOpen(false);
-      setJustCreatedId(id);
       setActiveProjectId(id);
       showToast("Проект создан");
     },
@@ -141,12 +134,9 @@ function App() {
     [showToast]
   );
 
-  const handlePinProject = useCallback(
-    async (id: string, pinned: boolean) => {
-      await togglePin(id, pinned);
-    },
-    []
-  );
+  const handlePinProject = useCallback(async (id: string, pinned: boolean) => {
+    await togglePin(id, pinned);
+  }, []);
 
   const handleArchiveProject = useCallback(
     async (id: string, archived: boolean) => {
@@ -166,7 +156,11 @@ function App() {
     [activeProjectId, showToast]
   );
 
-  // Пока проверяем авторизацию — показываем лоадер
+  const handleGoToLogin = useCallback(() => {
+    // Редирект на /login — там полноценная страница входа/регистрации
+    window.location.href = "/login?returnTo=/";
+  }, []);
+
   if (authLoading) {
     return (
       <div className="flex h-screen items-center justify-center bg-bg-page">
@@ -199,7 +193,7 @@ function App() {
 
       {/* Основная зона */}
       <main className="flex h-screen flex-1 flex-col overflow-hidden">
-        {/* Мобильная шапка (когда нет активного проекта) */}
+        {/* Мобильная шапка — только когда нет активного проекта */}
         {!activeProjectId && (
           <MobileTopBar
             onSignInClick={() => setSignInOpen(true)}
@@ -221,12 +215,12 @@ function App() {
               onProjectUpdated={() => {}}
             />
           ) : (
-            <div className="h-full overflow-y-auto">
-              <ProjectsPage
-                onNewProject={handleNewProject}
-                onOpenProject={handleSelectProject}
-              />
-            </div>
+            <EmptyCanvas
+              isAuthed={Boolean(user)}
+              onSignIn={handleGoToLogin}
+              onSignUp={handleGoToLogin}
+              onNewProject={handleNewProject}
+            />
           )}
         </div>
       </main>

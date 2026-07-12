@@ -115,10 +115,14 @@ export function subscribeToUserProjects(
       snap.forEach((d) => {
         list.push({ id: d.id, ...(d.data() as Omit<Project, "id">) });
       });
-      // Сортируем локально (firestore не умеет несколько orderBy с разными направлениями с where)
+      // Сортируем локально (без архивного разделителя — архив просто внизу)
       list.sort((a, b) => {
         // Архивные в конец
         if (a.archived !== b.archived) return a.archived ? 1 : -1;
+        // Сданные проекты (status=done) идут вниз, но выше архива
+        const aDone = a.status === "done" ? 1 : 0;
+        const bDone = b.status === "done" ? 1 : 0;
+        if (aDone !== bDone) return aDone - bDone;
         // Закреплённые в начало
         if (a.pinned !== b.pinned) return a.pinned ? -1 : 1;
         // По updatedAt desc
