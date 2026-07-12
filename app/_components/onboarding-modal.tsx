@@ -31,6 +31,7 @@ const REFERRALS: { id: ReferralSource; label: string; emoji: string }[] = [
   { id: "telegram-channel", label: "Telegram-канал", emoji: "📢" },
   { id: "telegram-chat", label: "Telegram-чат", emoji: "💬" },
   { id: "youtube", label: "YouTube", emoji: "▶️" },
+  { id: "tiktok", label: "TikTok", emoji: "🎵" },
   { id: "other", label: "Другое", emoji: "✨" },
 ];
 
@@ -87,7 +88,6 @@ export function OnboardingModal({ uid, initialName, onComplete }: OnboardingModa
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
       <div className="relative w-full max-w-md animate-slide-up rounded-3xl border bg-bg-card p-6 shadow-2xl">
-        {/* Прогресс-бар */}
         <div className="mb-6 flex items-center gap-1.5">
           {[1, 2, 3].map((s) => (
             <div
@@ -101,7 +101,6 @@ export function OnboardingModal({ uid, initialName, onComplete }: OnboardingModa
         </div>
 
         <AnimatePresence mode="wait">
-          {/* Шаг 1: Имя */}
           {step === 1 && (
             <motion.div
               key="step1"
@@ -134,7 +133,6 @@ export function OnboardingModal({ uid, initialName, onComplete }: OnboardingModa
             </motion.div>
           )}
 
-          {/* Шаг 2: Кто вы */}
           {step === 2 && (
             <motion.div
               key="step2"
@@ -172,7 +170,6 @@ export function OnboardingModal({ uid, initialName, onComplete }: OnboardingModa
             </motion.div>
           )}
 
-          {/* Шаг 3: Откуда узнали */}
           {step === 3 && (
             <motion.div
               key="step3"
@@ -187,7 +184,7 @@ export function OnboardingModal({ uid, initialName, onComplete }: OnboardingModa
               <p className="mb-5 text-sm text-text-muted">
                 Помогает понять что работает
               </p>
-              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
                 {REFERRALS.map((r) => (
                   <button
                     key={r.id}
@@ -217,7 +214,6 @@ export function OnboardingModal({ uid, initialName, onComplete }: OnboardingModa
           </div>
         )}
 
-        {/* Кнопки */}
         <div className="mt-6 flex items-center justify-between gap-3">
           {step > 1 ? (
             <button

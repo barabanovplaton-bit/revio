@@ -2,7 +2,7 @@
 
 import { useState, type ReactNode } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { cn, getInitial } from "@/lib/utils";
+import { cn } from "@/lib/utils";
 import { Avatar } from "./avatar";
 import { formatRelativeTime, type Project } from "@/lib/projects";
 
@@ -40,40 +40,30 @@ export function Sidebar({
   onDeleteProject,
 }: SidebarProps) {
   const [collapsed, setCollapsed] = useState(false);
-  const [searchOpen, setSearchOpen] = useState(false);
-  const [searchQuery, setSearchQuery] = useState("");
   const [menuFor, setMenuFor] = useState<string | null>(null);
   const [renaming, setRenaming] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState("");
 
-  // Фильтрация по поиску (по названию/описанию/контакту)
-  const visible = projects.filter((p) => {
-    if (!searchQuery.trim()) return true;
-    const q = searchQuery.toLowerCase();
-    return (
-      p.name.toLowerCase().includes(q) ||
-      (p.description || "").toLowerCase().includes(q) ||
-      (p.clientName || "").toLowerCase().includes(q)
-    );
-  });
+  // Проекты: активные сверху, сданные ниже, архивные в самом низу
+  // (сортировка уже сделана в subscribeToUserProjects)
 
   return (
     <aside
-      className="relative z-30 flex h-screen shrink-0 flex-col border-r bg-bg-sidebar"
+      className="relative z-30 flex h-full shrink-0 flex-col border-r bg-bg-sidebar"
       style={{
         width: collapsed ? 72 : 280,
         transition: "width 200ms ease-out",
       }}
     >
-      {/* Кнопка сворачивания */}
+      {/* Кнопка сворачивания — ТОЛЬКО на десктопе */}
       <button
         type="button"
         onClick={() => setCollapsed((v) => !v)}
         aria-label={collapsed ? "Развернуть панель" : "Свернуть панель"}
         className={cn(
-          "absolute top-4 z-40 flex h-8 w-8 items-center justify-center rounded-full",
+          "absolute top-4 z-40 hidden h-8 w-8 items-center justify-center rounded-full",
           "border bg-bg-card text-text-muted transition-all duration-150",
-          "hover:text-text-primary hover:shadow-glow"
+          "hover:text-text-primary hover:shadow-glow md:flex"
         )}
         style={{ right: -16 }}
       >
@@ -84,15 +74,14 @@ export function Sidebar({
         )}
       </button>
 
-      {/* Логотип + кнопки (свёрнутый режим: квадратные иконки) */}
+      {/* Логотип + кнопка Новый проект */}
       <div className="shrink-0 px-3 pt-4 pb-3">
         {collapsed ? (
-          // СВЁРНУТЫЙ: квадратные кнопки Новый проект + Поиск + логотип
+          // СВЁРНУТЫЙ (только десктоп): логотип + квадратная кнопка Новый проект
           <div className="flex flex-col items-center gap-2">
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-text-primary text-bg-page">
               <span className="font-display text-sm font-bold leading-none">R</span>
             </div>
-            {/* Квадратная кнопка Новый проект */}
             <button
               type="button"
               onClick={onNewProject}
@@ -102,58 +91,27 @@ export function Sidebar({
             >
               <PlusIcon className="h-5 w-5" />
             </button>
-            {/* Квадратная кнопка Поиск */}
-            <button
-              type="button"
-              onClick={() => setSearchOpen(true)}
-              title="Поиск проектов"
-              aria-label="Поиск проектов"
-              className="flex h-10 w-10 items-center justify-center rounded-xl border border-border-strong bg-bg-input text-text-muted transition-all hover:bg-bg-cardHover hover:text-text-primary active:scale-[0.95]"
-            >
-              <SearchIcon className="h-5 w-5" />
-            </button>
           </div>
         ) : (
-          // РАЗВЁРНУТЫЙ: логотип + кнопка Новый проект
+          // РАЗВЁРНУТЫЙ: логотип + белая кнопка Новый проект
           <>
             <div className="flex items-center gap-2">
               <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-text-primary text-bg-page">
                 <span className="font-display text-sm font-bold leading-none">R</span>
               </div>
-              <AnimatePresence>
-                <motion.span
-                  initial={{ opacity: 0, width: 0 }}
-                  animate={{ opacity: 1, width: "auto" }}
-                  exit={{ opacity: 0, width: 0 }}
-                  transition={{ duration: 0.15, ease: "easeOut" }}
-                  className="overflow-hidden whitespace-nowrap font-display text-base font-semibold tracking-tight text-text-primary"
-                >
-                  Revio
-                </motion.span>
-              </AnimatePresence>
+              <span className="overflow-hidden whitespace-nowrap font-display text-base font-semibold tracking-tight text-text-primary">
+                Revio
+              </span>
             </div>
 
-            <div className="mt-3 flex gap-2">
-              {/* Кнопка Новый проект */}
-              <button
-                type="button"
-                onClick={onNewProject}
-                className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-text-primary px-3 py-2.5 text-sm font-medium text-bg-page transition-all hover:opacity-90 active:scale-[0.98]"
-              >
-                <PlusIcon className="h-4 w-4" />
-                Новый проект
-              </button>
-              {/* Кнопка Поиск */}
-              <button
-                type="button"
-                onClick={() => setSearchOpen(true)}
-                title="Поиск проектов"
-                aria-label="Поиск проектов"
-                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-border-strong bg-bg-input text-text-muted transition-all hover:bg-bg-cardHover hover:text-text-primary"
-              >
-                <SearchIcon className="h-4 w-4" />
-              </button>
-            </div>
+            <button
+              type="button"
+              onClick={onNewProject}
+              className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl bg-text-primary px-3 py-2.5 text-sm font-medium text-bg-page transition-all hover:opacity-90 active:scale-[0.98]"
+            >
+              <PlusIcon className="h-4 w-4" />
+              Новый проект
+            </button>
           </>
         )}
       </div>
@@ -162,7 +120,7 @@ export function Sidebar({
       <div className="flex-1 overflow-y-auto px-2 scrollbar-hide">
         {collapsed ? (
           <div className="flex flex-col items-center gap-1">
-            {visible.slice(0, 8).map((p) => (
+            {projects.slice(0, 12).map((p) => (
               <button
                 key={p.id}
                 type="button"
@@ -181,60 +139,15 @@ export function Sidebar({
           </div>
         ) : (
           <>
-            {/* Поиск (инпут) */}
-            {searchOpen && (
-              <div className="mb-2">
-                <div className="relative">
-                  <SearchIcon className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-text-muted" />
-                  <input
-                    type="text"
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="Поиск проектов..."
-                    autoFocus
-                    onBlur={() => {
-                      if (!searchQuery) setSearchOpen(false);
-                    }}
-                    className="w-full rounded-lg border bg-bg-input py-1.5 pl-8 pr-7 text-xs text-text-primary placeholder:text-text-muted focus:border-border-strong focus:outline-none"
-                  />
-                  {searchQuery && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setSearchQuery("");
-                        setSearchOpen(false);
-                      }}
-                      className="absolute right-2 top-1/2 -translate-y-1/2 text-text-muted hover:text-text-primary"
-                      aria-label="Очистить"
-                    >
-                      <XIcon className="h-3 w-3" />
-                    </button>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {!searchOpen && searchQuery && (
-              // Если закрыли инпут но остался запрос — покажем что фильтр активен
-              <button
-                type="button"
-                onClick={() => setSearchOpen(true)}
-                className="mb-2 flex w-full items-center gap-1.5 rounded-lg bg-bg-input px-2.5 py-1.5 text-xs text-text-muted hover:text-text-primary"
-              >
-                <SearchIcon className="h-3 w-3" />
-                Фильтр: «{searchQuery}»
-              </button>
-            )}
-
-            {visible.length === 0 ? (
+            {projects.length === 0 ? (
               <div className="px-3 py-8 text-center text-xs text-text-muted">
-                {searchQuery
-                  ? "Ничего не нашлось"
-                  : "Нет проектов. Создайте первый ↑"}
+                {isAuthed
+                  ? "Нет проектов. Создайте первый ↑"
+                  : "Войдите, чтобы видеть проекты"}
               </div>
             ) : (
               <div className="space-y-0.5">
-                {visible.map((p) => (
+                {projects.map((p) => (
                   <ProjectItem
                     key={p.id}
                     project={p}
@@ -299,34 +212,26 @@ export function Sidebar({
           onSignOut={onSignOut}
           trailing={
             !collapsed ? (
-              <AnimatePresence>
-                <motion.div
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  transition={{ duration: 0.15 }}
-                  className="min-w-0 flex-1"
-                >
-                  {isAuthed ? (
-                    <>
-                      <div className="truncate text-sm font-medium text-text-primary">
-                        {userName || "Без имени"}
-                      </div>
-                      <div className="truncate text-xs text-text-muted">
-                        {userEmail || "Free план"}
-                      </div>
-                    </>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={onSignInClick}
-                      className="text-sm font-medium text-text-primary transition-colors hover:text-text-muted"
-                    >
-                      Войти
-                    </button>
-                  )}
-                </motion.div>
-              </AnimatePresence>
+              <div className="min-w-0 flex-1">
+                {isAuthed ? (
+                  <>
+                    <div className="truncate text-sm font-medium text-text-primary">
+                      {userName || "Без имени"}
+                    </div>
+                    <div className="truncate text-xs text-text-muted">
+                      {userEmail || "Free план"}
+                    </div>
+                  </>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={onSignInClick}
+                    className="text-sm font-medium text-text-primary transition-colors hover:text-text-muted"
+                  >
+                    Войти
+                  </button>
+                )}
+              </div>
             ) : null
           }
         />
@@ -398,7 +303,8 @@ function ProjectItem({
             <div
               className={cn(
                 "truncate text-sm font-medium",
-                active ? "text-text-primary" : "text-text-primary/90"
+                active ? "text-text-primary" : "text-text-primary/90",
+                project.status === "done" && "text-text-muted line-through"
               )}
             >
               {project.name}
@@ -408,7 +314,6 @@ function ProjectItem({
             {formatRelativeTime(project.updatedAt)}
           </div>
         </div>
-        {/* Кнопка меню (только на hover) */}
         <button
           type="button"
           onClick={(e) => {
@@ -427,7 +332,6 @@ function ProjectItem({
         </button>
       </button>
 
-      {/* Контекстное меню */}
       {menuOpen && (
         <div className="absolute right-2 top-full z-50 mt-1 w-44 animate-slide-up rounded-xl border bg-bg-card p-1 shadow-xl">
           <button
@@ -534,23 +438,6 @@ function TrashIcon({ className }: { className?: string }) {
   return (
     <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
       <path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
-    </svg>
-  );
-}
-
-function SearchIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-      <circle cx="11" cy="11" r="7" />
-      <path d="m21 21-4.3-4.3" />
-    </svg>
-  );
-}
-
-function XIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" aria-hidden>
-      <path d="M18 6 6 18M6 6l12 12" />
     </svg>
   );
 }

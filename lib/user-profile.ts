@@ -25,6 +25,8 @@ export type ReferralSource =
   | "other"
   | "none";
 
+// Совместимость со старыми значениями (если меняли тип)
+
 export interface UserProfile {
   uid: string;
   email: string | null;

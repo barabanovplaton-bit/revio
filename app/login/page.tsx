@@ -96,20 +96,6 @@ function LoginContent() {
             <GoogleIcon className="h-5 w-5" />
             {loading ? "Открываем Google..." : "Продолжить с Google"}
           </button>
-
-          <button
-            type="button"
-            disabled
-            className={cn(
-              "flex w-full items-center justify-center gap-3 rounded-2xl border border-border-strong bg-bg-input px-5 py-4",
-              "text-base font-medium text-text-muted",
-              "cursor-not-allowed opacity-60"
-            )}
-            title="Будет добавлен позже"
-          >
-            <MailIcon className="h-5 w-5" />
-            Войти по почте (скоро)
-          </button>
         </div>
 
         {error && (

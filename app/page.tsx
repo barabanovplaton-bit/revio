@@ -1,10 +1,11 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import { ThemeProvider } from "./_lib/theme-context";
 import { Sidebar } from "./_components/sidebar";
 import { Avatar } from "./_components/avatar";
-import { EmptyCanvas } from "./_components/empty-canvas";
+import { Canvas } from "./_components/canvas";
 import { OnboardingModal } from "./_components/onboarding-modal";
 import { NewProjectModal } from "./_components/new-project-modal";
 import { ProjectHub } from "./_components/project-hub";
@@ -28,6 +29,7 @@ export default function Page() {
 }
 
 function App() {
+  const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
@@ -45,10 +47,10 @@ function App() {
     setTimeout(() => setToast(null), 2400);
   }, []);
 
-  // Редирект на /login (вместо старой модалки)
+  // Мгновенный переход на /login (через router, без window.location)
   const goToLogin = useCallback(() => {
-    window.location.href = "/login?returnTo=/";
-  }, []);
+    router.push("/login?returnTo=/");
+  }, [router]);
 
   useEffect(() => {
     const unsub = subscribeToAuth(async (u) => {
@@ -107,7 +109,7 @@ function App() {
       return;
     }
     setNewProjectOpen(true);
-    setMobileSidebarOpen(false); // закрыть мобильную шторку
+    setMobileSidebarOpen(false);
   }, [user, profile, goToLogin]);
 
   const handleSelectProject = useCallback(
@@ -169,7 +171,6 @@ function App() {
     );
   }
 
-  // Sidebar содержимое (общее для десктопа и мобильной шторки)
   const sidebarContent = (
     <Sidebar
       isAuthed={Boolean(user)}
@@ -208,33 +209,31 @@ function App() {
       )}
 
       {/* Основная зона */}
-      <main className="flex h-screen flex-1 flex-col overflow-hidden">
-        {/* Мобильная шапка */}
-        <header className="flex h-14 shrink-0 items-center justify-between border-b bg-bg-sidebar px-3 md:hidden">
+      <main className="relative flex h-screen flex-1 flex-col overflow-hidden">
+        {/* Плавающий гамбургер на мобиле — без шапки */}
+        {!activeProjectId && (
           <button
             type="button"
             onClick={() => setMobileSidebarOpen(true)}
             aria-label="Открыть меню"
-            className="rounded-lg p-2 text-text-muted transition-colors hover:bg-bg-cardHover hover:text-text-primary"
+            className="absolute left-3 top-3 z-20 flex h-10 w-10 items-center justify-center rounded-xl border border-border bg-bg-card text-text-primary shadow-sm transition-all hover:bg-bg-cardHover active:scale-95 md:hidden"
           >
             <HamburgerIcon className="h-5 w-5" />
           </button>
-          <div className="flex items-center gap-2">
-            <div className="flex h-6 w-6 items-center justify-center rounded-md bg-text-primary text-bg-page">
-              <span className="font-display text-[10px] font-bold leading-none">R</span>
-            </div>
-            <span className="font-display text-sm font-semibold text-text-primary">
-              Revio
-            </span>
+        )}
+
+        {/* Аватар справа сверху на мобиле (когда нет проекта) */}
+        {!activeProjectId && (
+          <div className="absolute right-3 top-3 z-20 md:hidden">
+            <Avatar
+              name={user ? profile?.displayName || user.displayName : null}
+              email={user ? user.email : null}
+              photoURL={user ? user.photoURL : null}
+              onSignInClick={goToLogin}
+              onSignOut={handleSignOut}
+            />
           </div>
-          <Avatar
-            name={user ? profile?.displayName || user.displayName : null}
-            email={user ? user.email : null}
-            photoURL={user ? user.photoURL : null}
-            onSignInClick={goToLogin}
-            onSignOut={handleSignOut}
-          />
-        </header>
+        )}
 
         <div className="flex-1 overflow-hidden">
           {activeProjectId && user ? (
@@ -246,11 +245,14 @@ function App() {
               onProjectUpdated={() => {}}
             />
           ) : (
-            <EmptyCanvas
+            <Canvas
               isAuthed={Boolean(user)}
+              projects={projects}
+              activeProjectId={activeProjectId}
               onSignIn={goToLogin}
               onSignUp={goToLogin}
               onNewProject={handleNewProject}
+              onSelectProject={handleSelectProject}
             />
           )}
         </div>
@@ -282,8 +284,6 @@ function App() {
     </div>
   );
 }
-
-/* ===== Иконки ===== */
 
 function HamburgerIcon({ className }: { className?: string }) {
   return (
