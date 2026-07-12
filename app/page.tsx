@@ -5,7 +5,6 @@ import { ThemeProvider } from "./_lib/theme-context";
 import { Sidebar } from "./_components/sidebar";
 import { Avatar } from "./_components/avatar";
 import { EmptyCanvas } from "./_components/empty-canvas";
-import { SignInModal } from "./_components/sign-in-modal";
 import { OnboardingModal } from "./_components/onboarding-modal";
 import { NewProjectModal } from "./_components/new-project-modal";
 import { ProjectHub } from "./_components/project-hub";
@@ -37,13 +36,18 @@ function App() {
   const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
   const [newProjectOpen, setNewProjectOpen] = useState(false);
 
-  const [signInOpen, setSignInOpen] = useState(false);
   const [onboardingOpen, setOnboardingOpen] = useState(false);
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
 
   const showToast = useCallback((msg: string) => {
     setToast(msg);
     setTimeout(() => setToast(null), 2400);
+  }, []);
+
+  // Редирект на /login (вместо старой модалки)
+  const goToLogin = useCallback(() => {
+    window.location.href = "/login?returnTo=/";
   }, []);
 
   useEffect(() => {
@@ -56,7 +60,6 @@ function App() {
         if (!p || !p.onboardingCompleted) {
           setOnboardingOpen(true);
         }
-        setSignInOpen(false);
       } else {
         setProfile(null);
         setOnboardingOpen(false);
@@ -96,7 +99,7 @@ function App() {
 
   const handleNewProject = useCallback(() => {
     if (!user) {
-      setSignInOpen(true);
+      goToLogin();
       return;
     }
     if (!profile?.onboardingCompleted) {
@@ -104,17 +107,19 @@ function App() {
       return;
     }
     setNewProjectOpen(true);
-  }, [user, profile]);
+    setMobileSidebarOpen(false); // закрыть мобильную шторку
+  }, [user, profile, goToLogin]);
 
   const handleSelectProject = useCallback(
     (id: string) => {
       if (!user) {
-        setSignInOpen(true);
+        goToLogin();
         return;
       }
       setActiveProjectId(id);
+      setMobileSidebarOpen(false);
     },
-    [user]
+    [user, goToLogin]
   );
 
   const handleProjectCreated = useCallback(
@@ -156,11 +161,6 @@ function App() {
     [activeProjectId, showToast]
   );
 
-  const handleGoToLogin = useCallback(() => {
-    // Редирект на /login — там полноценная страница входа/регистрации
-    window.location.href = "/login?returnTo=/";
-  }, []);
-
   if (authLoading) {
     return (
       <div className="flex h-screen items-center justify-center bg-bg-page">
@@ -169,41 +169,72 @@ function App() {
     );
   }
 
+  // Sidebar содержимое (общее для десктопа и мобильной шторки)
+  const sidebarContent = (
+    <Sidebar
+      isAuthed={Boolean(user)}
+      userName={profile?.displayName || user?.displayName}
+      userEmail={user?.email}
+      userPhoto={user?.photoURL}
+      onSignInClick={goToLogin}
+      onSignOut={handleSignOut}
+      projects={projects}
+      activeProjectId={activeProjectId}
+      onSelectProject={handleSelectProject}
+      onNewProject={handleNewProject}
+      onPinProject={handlePinProject}
+      onArchiveProject={handleArchiveProject}
+      onRenameProject={handleRenameProject}
+      onDeleteProject={handleDeleteProject}
+    />
+  );
+
   return (
     <div className="flex h-screen w-full overflow-hidden bg-bg-page">
       {/* Сайдбар (десктоп) */}
-      <div className="hidden md:block">
-        <Sidebar
-          isAuthed={Boolean(user)}
-          userName={profile?.displayName || user?.displayName}
-          userEmail={user?.email}
-          userPhoto={user?.photoURL}
-          onSignInClick={() => setSignInOpen(true)}
-          onSignOut={handleSignOut}
-          projects={projects}
-          activeProjectId={activeProjectId}
-          onSelectProject={handleSelectProject}
-          onNewProject={handleNewProject}
-          onPinProject={handlePinProject}
-          onArchiveProject={handleArchiveProject}
-          onRenameProject={handleRenameProject}
-          onDeleteProject={handleDeleteProject}
-        />
-      </div>
+      <div className="hidden md:block">{sidebarContent}</div>
+
+      {/* Мобильная шторка */}
+      {mobileSidebarOpen && (
+        <div className="fixed inset-0 z-50 md:hidden">
+          <div
+            className="absolute inset-0 bg-black/60 backdrop-blur-sm animate-fade-in"
+            onClick={() => setMobileSidebarOpen(false)}
+          />
+          <div className="absolute left-0 top-0 h-full animate-slide-in-left">
+            {sidebarContent}
+          </div>
+        </div>
+      )}
 
       {/* Основная зона */}
       <main className="flex h-screen flex-1 flex-col overflow-hidden">
-        {/* Мобильная шапка — только когда нет активного проекта */}
-        {!activeProjectId && (
-          <MobileTopBar
-            onSignInClick={() => setSignInOpen(true)}
-            isAuthed={Boolean(user)}
-            userName={profile?.displayName || user?.displayName}
-            userEmail={user?.email}
-            userPhoto={user?.photoURL}
+        {/* Мобильная шапка */}
+        <header className="flex h-14 shrink-0 items-center justify-between border-b bg-bg-sidebar px-3 md:hidden">
+          <button
+            type="button"
+            onClick={() => setMobileSidebarOpen(true)}
+            aria-label="Открыть меню"
+            className="rounded-lg p-2 text-text-muted transition-colors hover:bg-bg-cardHover hover:text-text-primary"
+          >
+            <HamburgerIcon className="h-5 w-5" />
+          </button>
+          <div className="flex items-center gap-2">
+            <div className="flex h-6 w-6 items-center justify-center rounded-md bg-text-primary text-bg-page">
+              <span className="font-display text-[10px] font-bold leading-none">R</span>
+            </div>
+            <span className="font-display text-sm font-semibold text-text-primary">
+              Revio
+            </span>
+          </div>
+          <Avatar
+            name={user ? profile?.displayName || user.displayName : null}
+            email={user ? user.email : null}
+            photoURL={user ? user.photoURL : null}
+            onSignInClick={goToLogin}
             onSignOut={handleSignOut}
           />
-        )}
+        </header>
 
         <div className="flex-1 overflow-hidden">
           {activeProjectId && user ? (
@@ -217,8 +248,8 @@ function App() {
           ) : (
             <EmptyCanvas
               isAuthed={Boolean(user)}
-              onSignIn={handleGoToLogin}
-              onSignUp={handleGoToLogin}
+              onSignIn={goToLogin}
+              onSignUp={goToLogin}
               onNewProject={handleNewProject}
             />
           )}
@@ -226,12 +257,6 @@ function App() {
       </main>
 
       {/* Модалки */}
-      <SignInModal
-        open={signInOpen}
-        onClose={() => setSignInOpen(false)}
-        returnTo="/"
-      />
-
       {onboardingOpen && user && (
         <OnboardingModal
           uid={user.uid}
@@ -258,40 +283,22 @@ function App() {
   );
 }
 
-/* ===== Мобильная шапка ===== */
+/* ===== Иконки ===== */
 
-function MobileTopBar({
-  onSignInClick,
-  isAuthed,
-  userName,
-  userEmail,
-  userPhoto,
-  onSignOut,
-}: {
-  onSignInClick: () => void;
-  isAuthed: boolean;
-  userName?: string | null;
-  userEmail?: string | null;
-  userPhoto?: string | null;
-  onSignOut: () => void;
-}) {
+function HamburgerIcon({ className }: { className?: string }) {
   return (
-    <header className="flex h-14 shrink-0 items-center justify-between border-b bg-bg-sidebar px-4 md:hidden">
-      <div className="flex items-center gap-2">
-        <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-text-primary text-bg-page">
-          <span className="font-display text-xs font-bold leading-none">R</span>
-        </div>
-        <span className="font-display text-base font-semibold text-text-primary">
-          Revio
-        </span>
-      </div>
-      <Avatar
-        name={isAuthed ? userName : null}
-        email={isAuthed ? userEmail : null}
-        photoURL={isAuthed ? userPhoto : null}
-        onSignInClick={onSignInClick}
-        onSignOut={onSignOut}
-      />
-    </header>
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+      aria-hidden
+    >
+      <line x1="3" y1="6" x2="21" y2="6" />
+      <line x1="3" y1="12" x2="21" y2="12" />
+      <line x1="3" y1="18" x2="21" y2="18" />
+    </svg>
   );
 }

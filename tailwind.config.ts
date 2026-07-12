@@ -42,6 +42,7 @@ const config: Config = {
       animation: {
         "fade-in": "fadeIn 150ms ease-out",
         "slide-up": "slideUp 200ms ease-out",
+        "slide-in-left": "slideInLeft 200ms ease-out",
       },
       keyframes: {
         fadeIn: {
@@ -51,6 +52,10 @@ const config: Config = {
         slideUp: {
           "0%": { opacity: "0", transform: "translateY(4px)" },
           "100%": { opacity: "1", transform: "translateY(0)" },
+        },
+        slideInLeft: {
+          "0%": { transform: "translateX(-100%)" },
+          "100%": { transform: "translateX(0)" },
         },
       },
     },

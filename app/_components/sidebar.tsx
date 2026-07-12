@@ -84,20 +84,43 @@ export function Sidebar({
         )}
       </button>
 
-      {/* Логотип + кнопка новый проект */}
+      {/* Логотип + кнопки (свёрнутый режим: квадратные иконки) */}
       <div className="shrink-0 px-3 pt-4 pb-3">
-        <div
-          className={cn(
-            "flex items-center",
-            collapsed ? "justify-center" : "justify-between gap-2"
-          )}
-        >
-          <div className="flex items-center gap-2">
+        {collapsed ? (
+          // СВЁРНУТЫЙ: квадратные кнопки Новый проект + Поиск + логотип
+          <div className="flex flex-col items-center gap-2">
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-text-primary text-bg-page">
               <span className="font-display text-sm font-bold leading-none">R</span>
             </div>
-            <AnimatePresence>
-              {!collapsed && (
+            {/* Квадратная кнопка Новый проект */}
+            <button
+              type="button"
+              onClick={onNewProject}
+              title="Новый проект"
+              aria-label="Новый проект"
+              className="flex h-10 w-10 items-center justify-center rounded-xl border border-border-strong bg-bg-input text-text-primary transition-all hover:bg-bg-cardHover active:scale-[0.95]"
+            >
+              <PlusIcon className="h-5 w-5" />
+            </button>
+            {/* Квадратная кнопка Поиск */}
+            <button
+              type="button"
+              onClick={() => setSearchOpen(true)}
+              title="Поиск проектов"
+              aria-label="Поиск проектов"
+              className="flex h-10 w-10 items-center justify-center rounded-xl border border-border-strong bg-bg-input text-text-muted transition-all hover:bg-bg-cardHover hover:text-text-primary active:scale-[0.95]"
+            >
+              <SearchIcon className="h-5 w-5" />
+            </button>
+          </div>
+        ) : (
+          // РАЗВЁРНУТЫЙ: логотип + кнопка Новый проект
+          <>
+            <div className="flex items-center gap-2">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-text-primary text-bg-page">
+                <span className="font-display text-sm font-bold leading-none">R</span>
+              </div>
+              <AnimatePresence>
                 <motion.span
                   initial={{ opacity: 0, width: 0 }}
                   animate={{ opacity: 1, width: "auto" }}
@@ -107,38 +130,32 @@ export function Sidebar({
                 >
                   Revio
                 </motion.span>
-              )}
-            </AnimatePresence>
-          </div>
-        </div>
+              </AnimatePresence>
+            </div>
 
-        {/* Кнопка Новый проект */}
-        <button
-          type="button"
-          onClick={onNewProject}
-          title={collapsed ? "Новый проект" : undefined}
-          className={cn(
-            "mt-3 flex w-full items-center gap-2 rounded-xl border border-dashed border-border-strong px-3 py-2.5",
-            "text-sm font-medium text-text-primary transition-all",
-            "hover:bg-bg-cardHover active:scale-[0.99]",
-            collapsed && "justify-center px-0"
-          )}
-        >
-          <PlusIcon className="h-4 w-4 shrink-0" />
-          <AnimatePresence>
-            {!collapsed && (
-              <motion.span
-                initial={{ opacity: 0, width: 0 }}
-                animate={{ opacity: 1, width: "auto" }}
-                exit={{ opacity: 0, width: 0 }}
-                transition={{ duration: 0.15, ease: "easeOut" }}
-                className="overflow-hidden whitespace-nowrap"
+            <div className="mt-3 flex gap-2">
+              {/* Кнопка Новый проект */}
+              <button
+                type="button"
+                onClick={onNewProject}
+                className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-text-primary px-3 py-2.5 text-sm font-medium text-bg-page transition-all hover:opacity-90 active:scale-[0.98]"
               >
+                <PlusIcon className="h-4 w-4" />
                 Новый проект
-              </motion.span>
-            )}
-          </AnimatePresence>
-        </button>
+              </button>
+              {/* Кнопка Поиск */}
+              <button
+                type="button"
+                onClick={() => setSearchOpen(true)}
+                title="Поиск проектов"
+                aria-label="Поиск проектов"
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-border-strong bg-bg-input text-text-muted transition-all hover:bg-bg-cardHover hover:text-text-primary"
+              >
+                <SearchIcon className="h-4 w-4" />
+              </button>
+            </div>
+          </>
+        )}
       </div>
 
       {/* Список проектов */}
@@ -164,9 +181,9 @@ export function Sidebar({
           </div>
         ) : (
           <>
-            {/* Поиск */}
-            <div className="mb-2">
-              {searchOpen ? (
+            {/* Поиск (инпут) */}
+            {searchOpen && (
+              <div className="mb-2">
                 <div className="relative">
                   <SearchIcon className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-text-muted" />
                   <input
@@ -194,17 +211,20 @@ export function Sidebar({
                     </button>
                   )}
                 </div>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => setSearchOpen(true)}
-                  className="flex w-full items-center gap-2 rounded-lg border border-transparent px-2.5 py-1.5 text-xs text-text-muted transition-colors hover:bg-bg-card hover:text-text-primary"
-                >
-                  <SearchIcon className="h-3.5 w-3.5" />
-                  Поиск проектов
-                </button>
-              )}
-            </div>
+              </div>
+            )}
+
+            {!searchOpen && searchQuery && (
+              // Если закрыли инпут но остался запрос — покажем что фильтр активен
+              <button
+                type="button"
+                onClick={() => setSearchOpen(true)}
+                className="mb-2 flex w-full items-center gap-1.5 rounded-lg bg-bg-input px-2.5 py-1.5 text-xs text-text-muted hover:text-text-primary"
+              >
+                <SearchIcon className="h-3 w-3" />
+                Фильтр: «{searchQuery}»
+              </button>
+            )}
 
             {visible.length === 0 ? (
               <div className="px-3 py-8 text-center text-xs text-text-muted">

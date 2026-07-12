@@ -17,51 +17,49 @@ interface OnboardingModalProps {
     occupation: Occupation;
     referralSource: ReferralSource;
   }) => void;
-  onClose?: () => void; // не используется, онбординг нельзя закрыть без заполнения
 }
 
-const OCCUPATIONS: { id: Occupation; label: string; hint?: string }[] = [
-  { id: "web-dev", label: "Веб-разработчик", hint: "Сайты, лендинги, веб-приложения" },
-  { id: "designer", label: "Дизайнер", hint: "Графика, UI/UX, карточки" },
-  { id: "video-editor", label: "Монтажёр", hint: "Видео, рилзы, клипы" },
-  { id: "tilda", label: "Тильдолог", hint: "Tilda, конструкторы" },
-  { id: "other", label: "Другое" },
+const OCCUPATIONS: { id: Occupation; label: string; emoji: string }[] = [
+  { id: "web-dev", label: "Веб-разработчик", emoji: "💻" },
+  { id: "designer", label: "Дизайнер", emoji: "🎨" },
+  { id: "video-editor", label: "Монтажёр", emoji: "🎬" },
+  { id: "tilda", label: "Тильдолог", emoji: "🧩" },
+  { id: "other", label: "Другое", emoji: "✨" },
 ];
 
-const REFERRALS: { id: ReferralSource; label: string }[] = [
-  { id: "telegram-channel", label: "Telegram-канал" },
-  { id: "telegram-chat", label: "Telegram-чат" },
-  { id: "youtube", label: "YouTube" },
-  { id: "tiktok", label: "TikTok" },
-  { id: "other", label: "Другое" },
+const REFERRALS: { id: ReferralSource; label: string; emoji: string }[] = [
+  { id: "telegram-channel", label: "Telegram-канал", emoji: "📢" },
+  { id: "telegram-chat", label: "Telegram-чат", emoji: "💬" },
+  { id: "youtube", label: "YouTube", emoji: "▶️" },
+  { id: "other", label: "Другое", emoji: "✨" },
 ];
 
-export function OnboardingModal({
-  uid,
-  initialName,
-  onComplete,
-}: OnboardingModalProps) {
+export function OnboardingModal({ uid, initialName, onComplete }: OnboardingModalProps) {
   const [step, setStep] = useState<1 | 2 | 3>(1);
-  const [occupation, setOccupation] = useState<Occupation | null>(null);
   const [displayName, setDisplayName] = useState(initialName || "");
+  const [occupation, setOccupation] = useState<Occupation | null>(null);
   const [referral, setReferral] = useState<ReferralSource | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const canNext = step === 1 ? occupation !== null : step === 2 ? displayName.trim().length > 0 : true;
+  const canNext =
+    step === 1
+      ? displayName.trim().length > 0
+      : step === 2
+        ? occupation !== null
+        : true;
 
   const handleNext = async () => {
     if (step === 1) {
-      if (!occupation) return;
+      if (!displayName.trim()) return;
       setStep(2);
       return;
     }
     if (step === 2) {
-      if (!displayName.trim()) return;
+      if (!occupation) return;
       setStep(3);
       return;
     }
-    // step 3 → сохраняем
     if (!occupation) return;
     const finalReferral: ReferralSource = referral || "none";
     setSaving(true);
@@ -79,7 +77,7 @@ export function OnboardingModal({
       });
     } catch (e) {
       console.error(e);
-      setError("Не удалось сохранить. Проверь интернет и попробуй ещё раз.");
+      setError("Не удалось сохранить. Проверь интернет.");
     } finally {
       setSaving(false);
     }
@@ -89,7 +87,7 @@ export function OnboardingModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
       <div className="relative w-full max-w-md animate-slide-up rounded-3xl border bg-bg-card p-6 shadow-2xl">
-        {/* Шаг индикатор */}
+        {/* Прогресс-бар */}
         <div className="mb-6 flex items-center gap-1.5">
           {[1, 2, 3].map((s) => (
             <div
@@ -103,62 +101,10 @@ export function OnboardingModal({
         </div>
 
         <AnimatePresence mode="wait">
+          {/* Шаг 1: Имя */}
           {step === 1 && (
             <motion.div
               key="step1"
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -20 }}
-              transition={{ duration: 0.2 }}
-            >
-              <h2 className="mb-1 text-xl font-semibold text-text-primary">
-                Чем занимаетесь?
-              </h2>
-              <p className="mb-5 text-sm text-text-muted">
-                Покажем релевантные шаблоны брифов
-              </p>
-              <div className="space-y-2">
-                {OCCUPATIONS.map((o) => (
-                  <button
-                    key={o.id}
-                    type="button"
-                    onClick={() => setOccupation(o.id)}
-                    className={cn(
-                      "flex w-full items-center gap-3 rounded-xl border px-4 py-3 text-left transition-all",
-                      occupation === o.id
-                        ? "border-text-primary bg-bg-input"
-                        : "border-border hover:bg-bg-input"
-                    )}
-                  >
-                    <div
-                      className={cn(
-                        "flex h-5 w-5 shrink-0 items-center justify-center rounded-full border",
-                        occupation === o.id
-                          ? "border-text-primary bg-text-primary"
-                          : "border-border-strong"
-                      )}
-                    >
-                      {occupation === o.id && (
-                        <div className="h-2 w-2 rounded-full bg-bg-page" />
-                      )}
-                    </div>
-                    <div className="min-w-0">
-                      <div className="text-sm font-medium text-text-primary">
-                        {o.label}
-                      </div>
-                      {o.hint && (
-                        <div className="text-xs text-text-muted">{o.hint}</div>
-                      )}
-                    </div>
-                  </button>
-                ))}
-              </div>
-            </motion.div>
-          )}
-
-          {step === 2 && (
-            <motion.div
-              key="step2"
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: -20 }}
@@ -188,6 +134,45 @@ export function OnboardingModal({
             </motion.div>
           )}
 
+          {/* Шаг 2: Кто вы */}
+          {step === 2 && (
+            <motion.div
+              key="step2"
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -20 }}
+              transition={{ duration: 0.2 }}
+            >
+              <h2 className="mb-1 text-xl font-semibold text-text-primary">
+                Кто вы?
+              </h2>
+              <p className="mb-5 text-sm text-text-muted">
+                Покажем релевантные шаблоны брифов
+              </p>
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                {OCCUPATIONS.map((o) => (
+                  <button
+                    key={o.id}
+                    type="button"
+                    onClick={() => setOccupation(o.id)}
+                    className={cn(
+                      "flex flex-col items-center gap-2 rounded-xl border px-3 py-4 transition-all",
+                      occupation === o.id
+                        ? "border-text-primary bg-bg-input"
+                        : "border-border hover:bg-bg-input"
+                    )}
+                  >
+                    <span className="text-2xl">{o.emoji}</span>
+                    <span className="text-xs font-medium text-text-primary text-center">
+                      {o.label}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </motion.div>
+          )}
+
+          {/* Шаг 3: Откуда узнали */}
           {step === 3 && (
             <motion.div
               key="step3"
@@ -200,36 +185,25 @@ export function OnboardingModal({
                 Откуда узнали о нас?
               </h2>
               <p className="mb-5 text-sm text-text-muted">
-                Помогает понять, что работает. Можно пропустить
+                Помогает понять что работает
               </p>
-              <div className="space-y-2">
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
                 {REFERRALS.map((r) => (
                   <button
                     key={r.id}
                     type="button"
                     onClick={() => setReferral(r.id)}
                     className={cn(
-                      "flex w-full items-center gap-3 rounded-xl border px-4 py-3 text-left transition-all",
+                      "flex flex-col items-center gap-2 rounded-xl border px-3 py-4 transition-all",
                       referral === r.id
                         ? "border-text-primary bg-bg-input"
                         : "border-border hover:bg-bg-input"
                     )}
                   >
-                    <div
-                      className={cn(
-                        "flex h-5 w-5 shrink-0 items-center justify-center rounded-full border",
-                        referral === r.id
-                          ? "border-text-primary bg-text-primary"
-                          : "border-border-strong"
-                      )}
-                    >
-                      {referral === r.id && (
-                        <div className="h-2 w-2 rounded-full bg-bg-page" />
-                      )}
-                    </div>
-                    <div className="text-sm font-medium text-text-primary">
+                    <span className="text-2xl">{r.emoji}</span>
+                    <span className="text-xs font-medium text-text-primary text-center">
                       {r.label}
-                    </div>
+                    </span>
                   </button>
                 ))}
               </div>
@@ -256,7 +230,6 @@ export function OnboardingModal({
           ) : (
             <div />
           )}
-
           <button
             type="button"
             disabled={!canNext || saving}
