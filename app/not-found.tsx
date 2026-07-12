@@ -1,0 +1,1 @@
+export default function NotFound() { return <div className="flex h-screen items-center justify-center bg-[#050505] text-white"><div className="text-center"><h2 className="text-2xl font-bold mb-4">Страница не найдена</h2><a href="/" className="text-indigo-400 hover:text-indigo-300">Вернуться на главную</a></div></div>; }
