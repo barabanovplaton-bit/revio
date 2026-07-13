@@ -86,7 +86,7 @@ export function Sidebar({
     <aside
       className="relative z-30 flex h-full shrink-0 flex-col border-r bg-bg-sidebar"
       style={{
-        width: collapsed ? 72 : 264,
+        width: collapsed ? 72 : 240,
         transition: "width 300ms cubic-bezier(0.4, 0, 0.2, 1)",
       }}
       onClick={(e) => {
@@ -152,7 +152,7 @@ export function Sidebar({
                 <StaggerText text="Новый проект" visible={!collapsed} />
               </motion.button>
             ) : collapsed && isAuthed ? (
-              /* В свёрнутом: квадратная БЕЛАЯ кнопка + (та же X-координата через центрирование) */
+              /* В свёрнутом: квадратная БЕЛАЯ кнопка */
               <motion.button
                 key="new-collapsed"
                 type="button"
@@ -163,7 +163,7 @@ export function Sidebar({
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
                 transition={{ duration: 0.18, ease: "easeOut" }}
-                className="flex h-9 w-9 items-center justify-center rounded-lg bg-text-primary text-bg-page transition-all hover:opacity-90 active:scale-[0.95] mx-auto"
+                className="flex h-9 w-9 items-center justify-center rounded-lg bg-text-primary text-bg-page transition-all hover:opacity-80 active:scale-[0.95] mx-auto"
               >
                 <PlusIcon className="h-4 w-4" />
               </motion.button>
@@ -196,9 +196,9 @@ export function Sidebar({
         ) : (
           <div className="px-1">
             {projects.length === 0 ? (
-              <div className="px-3 py-8 text-center text-xs text-text-muted">
+              <div className="px-3 py-8 text-center text-xs text-text-muted whitespace-nowrap">
                 {isAuthed
-                  ? "Нет проектов. Создайте первый ↑"
+                  ? "Нет проектов"
                   : "Войдите, чтобы видеть проекты"}
               </div>
             ) : (

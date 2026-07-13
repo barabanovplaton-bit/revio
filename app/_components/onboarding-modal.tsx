@@ -53,8 +53,6 @@ const OCCUPATIONS: {
   { id: "short-video-editor", label: "Монтажёр коротких видео", Icon: ShortVideoEditorIcon },
   { id: "long-video-editor", label: "Монтажёр длинных видео", Icon: LongVideoEditorIcon },
   { id: "illustrator", label: "Иллюстратор", Icon: IllustratorIcon },
-  { id: "copywriter", label: "Копирайтер", Icon: CopywriterIcon },
-  { id: "marketer", label: "Маркетолог", Icon: MarketerIcon },
   { id: "other", label: "Другое", Icon: OtherIcon },
 ];
 
@@ -171,9 +169,9 @@ export function OnboardingModal({
         </div>
       </div>
 
-      {/* Контент — БОЛЬШОЙ отступ от прогресс-бара (mt-24 = 96px сверху) */}
-      <div className="flex flex-1 flex-col justify-center overflow-y-auto px-6 pt-24 pb-8">
-        <div className="w-full max-w-2xl">
+      {/* Контент — БОЛЬШОЙ отступ сверху (pt-24) + по центру */}
+      <div className="flex flex-1 items-center justify-center overflow-y-auto px-6 pt-24 pb-8">
+        <div className="w-full max-w-2xl text-center">
           <AnimatePresence mode="wait">
             {/* Шаг 1: Имя + аватар */}
             {step === 1 && (

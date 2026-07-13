@@ -207,21 +207,24 @@ function App() {
       {/* Сайдбар (десктоп) */}
       <div className="hidden md:block">{sidebarContent}</div>
 
-      {/* Мобильная шторка — с плавной анимацией открытия И закрытия */}
+      {/* Мобильная шторка — 80vw (4/5), overlay на 20% справа */}
       <AnimatePresence>
         {mobileSidebarOpen && (
           <div className="fixed inset-0 z-50 md:hidden">
+            {/* Overlay только на 20% справа (не покрывает шторку) */}
             <motion.div
-              className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+              className="absolute top-0 h-full bg-black/60 backdrop-blur-sm"
+              style={{ left: "80vw", right: 0 }}
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               transition={{ duration: 0.2, ease: "easeOut" }}
               onClick={() => setMobileSidebarOpen(false)}
             />
+            {/* Шторка 80vw (4/5 экрана) */}
             <motion.div
               className="absolute left-0 top-0 h-full"
-              style={{ width: "83vw" }}
+              style={{ width: "80vw" }}
               initial={{ x: "-100%" }}
               animate={{ x: 0 }}
               exit={{ x: "-100%" }}

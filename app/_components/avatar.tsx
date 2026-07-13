@@ -59,10 +59,10 @@ export function Avatar({
           "hover:bg-bg-cardHover"
         )}
       >
-        {/* Круглый аватар 36×36 — всегда на месте */}
+        {/* Круглый аватар 32×32 — компактнее, верхний край = верхний край текста */}
         <span
           className={cn(
-            "flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full",
+            "flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full",
             "transition-all duration-150"
           )}
           style={{
@@ -80,22 +80,22 @@ export function Avatar({
               draggable={false}
             />
           ) : isAuthed ? (
-            <span className="font-display text-sm font-semibold leading-none">
+            <span className="font-display text-xs font-semibold leading-none">
               {initial}
             </span>
           ) : (
-            <PlusIcon className="h-4 w-4" />
+            <PlusIcon className="h-3.5 w-3.5" />
           )}
         </span>
         {trailing}
       </button>
 
-      {/* Popover — по ширине блока, от левого края */}
+      {/* Popover — по ширине блока аватара (w-full), правый край = правый край блока */}
       {isAuthed && popoverOpen && (
         <>
-          <div className="absolute bottom-full left-0 h-3 w-48" />
+          <div className="absolute bottom-full left-0 h-3 w-full" />
           <div
-            className="absolute bottom-full z-50 mb-2 w-64 animate-slide-up rounded-2xl border bg-bg-card p-2 shadow-xl"
+            className="absolute bottom-full z-50 mb-2 w-full animate-slide-up rounded-2xl border bg-bg-card p-2 shadow-xl"
             style={{
               left: 0,
               transformOrigin: "bottom left",
