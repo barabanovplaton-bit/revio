@@ -54,7 +54,7 @@ export function Avatar({
         }}
         aria-label={isAuthed ? "Меню профиля" : "Войти"}
         className={cn(
-          "flex w-full items-center gap-2.5 rounded-lg py-1.5 pl-1.5 pr-2",
+          "flex w-full items-start gap-2.5 rounded-lg py-1.5 pl-1.5 pr-2 text-left",
           "transition-all duration-150",
           "hover:bg-bg-cardHover"
         )}
@@ -90,12 +90,12 @@ export function Avatar({
         {trailing}
       </button>
 
-      {/* Popover — по ширине блока аватара (w-full), правый край = правый край блока */}
+      {/* Popover — фиксированная ширина w-64 (256px), может выходить за края узкой сосиски */}
       {isAuthed && popoverOpen && (
         <>
-          <div className="absolute bottom-full left-0 h-3 w-full" />
+          <div className="absolute bottom-full left-0 h-3 w-64" />
           <div
-            className="absolute bottom-full z-50 mb-2 w-full animate-slide-up rounded-2xl border bg-bg-card p-2 shadow-xl"
+            className="absolute bottom-full z-50 mb-2 w-64 animate-slide-up rounded-2xl border bg-bg-card p-2 shadow-xl"
             style={{
               left: 0,
               transformOrigin: "bottom left",

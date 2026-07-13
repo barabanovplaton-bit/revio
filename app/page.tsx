@@ -207,30 +207,40 @@ function App() {
       {/* Сайдбар (десктоп) */}
       <div className="hidden md:block">{sidebarContent}</div>
 
-      {/* Мобильная шторка — 80vw (4/5), overlay на 20% справа */}
+      {/* Мобильная шторка — 2 полоски:
+          Полоса 1+2 (0-85vw): шторка (80vw) + пустота (5vw) — клик НЕ закрывает
+          Полоса 3 (85-100vw): заблюренная — клик закрывает */}
       <AnimatePresence>
         {mobileSidebarOpen && (
           <div className="fixed inset-0 z-50 md:hidden">
-            {/* Overlay только на 20% справа (не покрывает шторку) */}
+            {/* Полоса 3: заблюренная, клик закрывает (с 85vw до правого края) */}
             <motion.div
               className="absolute top-0 h-full bg-black/60 backdrop-blur-sm"
-              style={{ left: "80vw", right: 0 }}
+              style={{ left: "85vw", right: 0 }}
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               transition={{ duration: 0.2, ease: "easeOut" }}
               onClick={() => setMobileSidebarOpen(false)}
             />
-            {/* Шторка 80vw (4/5 экрана) */}
+            {/* Полоса 1+2: шторка 80vw + пустота 5vw (pointer-events-none, клик не закрывает) */}
             <motion.div
               className="absolute left-0 top-0 h-full"
-              style={{ width: "80vw" }}
+              style={{ width: "85vw" }}
               initial={{ x: "-100%" }}
               animate={{ x: 0 }}
               exit={{ x: "-100%" }}
               transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
             >
-              {sidebarContent}
+              {/* Сама шторка 80vw */}
+              <div style={{ width: "80vw", height: "100%" }}>
+                {sidebarContent}
+              </div>
+              {/* Пустота 5vw — прозрачная, клик проходит сквозь (pointer-events-none) */}
+              <div
+                className="absolute top-0 h-full"
+                style={{ left: "80vw", width: "5vw", pointerEvents: "none" }}
+              />
             </motion.div>
           </div>
         )}
