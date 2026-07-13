@@ -1,0 +1,112 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer utilities {
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  .no-spinners::-webkit-inner-spin-button,
+  .no-spinners::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+  .no-spinners {
+    -moz-appearance: textfield;
+  }
+}
+
+/* ============ ТЕМА (системная + ручная) ============ */
+:root {
+  /* Тёмная (по умолчанию) */
+  --bg-page: #0A0A0A;
+  --bg-sidebar: #0F0F0F;
+  --bg-card: #141414;
+  --bg-card-hover: #1A1A1A;
+  --bg-input: #1A1A1A;
+  --border: #1F1F1F;
+  --border-strong: #2A2A2A;
+  --text-primary: #EDEDED;
+  --text-muted: #6B6B6B;
+  --text-subtle: #4A4A4A;
+  --avatar-bg: #FFFFFF;
+  --avatar-fg: #0A0A0A;
+  --shadow-glow: rgba(255, 255, 255, 0.06);
+  color-scheme: dark;
+}
+
+:root[data-theme="light"] {
+  --bg-page: #FAFAFA;
+  --bg-sidebar: #F4F4F4;
+  --bg-card: #FFFFFF;
+  --bg-card-hover: #F0F0F0;
+  --bg-input: #F4F4F4;
+  --border: #E5E5E5;
+  --border-strong: #D4D4D4;
+  --text-primary: #0A0A0A;
+  --text-muted: #6B6B6B;
+  --text-subtle: #9CA3AF;
+  --avatar-bg: #0A0A0A;
+  --avatar-fg: #FFFFFF;
+  --shadow-glow: rgba(0, 0, 0, 0.05);
+  color-scheme: light;
+}
+
+/* Системная тема: dark пока не выбрана явно */
+@media (prefers-color-scheme: light) {
+  :root[data-theme="system"] {
+    --bg-page: #FAFAFA;
+    --bg-sidebar: #F4F4F4;
+    --bg-card: #FFFFFF;
+    --bg-card-hover: #F0F0F0;
+    --bg-input: #F4F4F4;
+    --border: #E5E5E5;
+    --border-strong: #D4D4D4;
+    --text-primary: #0A0A0A;
+    --text-muted: #6B6B6B;
+    --text-subtle: #9CA3AF;
+    --avatar-bg: #0A0A0A;
+    --avatar-fg: #FFFFFF;
+    --shadow-glow: rgba(0, 0, 0, 0.05);
+    color-scheme: light;
+  }
+}
+
+/* ============ КАСТОМНЫЙ СКРОЛЛБАР (таблетка) ============ */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-subtle);
+}
+
+/* ============ БАЗОВЫЕ СТИЛИ ============ */
+html, body {
+  background: var(--bg-page);
+  color: var(--text-primary);
+  font-feature-settings: "cv11", "ss01";
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* {
+  border-color: var(--border);
+}
+
+/* Плавные переходы для смены темы */
+body, .theme-transition {
+  transition: background-color 200ms ease-out, color 200ms ease-out, border-color 200ms ease-out;
+}
