@@ -208,39 +208,31 @@ function App() {
       <div className="hidden md:block">{sidebarContent}</div>
 
       {/* Мобильная шторка — 2 полоски:
-          Полоса 1+2 (0-85vw): шторка (80vw) + пустота (5vw) — клик НЕ закрывает
-          Полоса 3 (85-100vw): заблюренная — клик закрывает */}
+          Полоса 1 (80%): шторка
+          Полоса 2 (20%): пустая заблюренная, клик закрывает */}
       <AnimatePresence>
         {mobileSidebarOpen && (
           <div className="fixed inset-0 z-50 md:hidden">
-            {/* Полоса 3: заблюренная, клик закрывает (с 85vw до правого края) */}
+            {/* Полоса 2: заблюренная 20%, клик закрывает */}
             <motion.div
               className="absolute top-0 h-full bg-black/60 backdrop-blur-sm"
-              style={{ left: "85vw", right: 0 }}
+              style={{ left: "80vw", right: 0 }}
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               transition={{ duration: 0.2, ease: "easeOut" }}
               onClick={() => setMobileSidebarOpen(false)}
             />
-            {/* Полоса 1+2: шторка 80vw + пустота 5vw (pointer-events-none, клик не закрывает) */}
+            {/* Полоса 1: шторка 80% */}
             <motion.div
               className="absolute left-0 top-0 h-full"
-              style={{ width: "85vw" }}
+              style={{ width: "80vw" }}
               initial={{ x: "-100%" }}
               animate={{ x: 0 }}
               exit={{ x: "-100%" }}
               transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
             >
-              {/* Сама шторка 80vw */}
-              <div style={{ width: "80vw", height: "100%" }}>
-                {sidebarContent}
-              </div>
-              {/* Пустота 5vw — прозрачная, клик проходит сквозь (pointer-events-none) */}
-              <div
-                className="absolute top-0 h-full"
-                style={{ left: "80vw", width: "5vw", pointerEvents: "none" }}
-              />
+              {sidebarContent}
             </motion.div>
           </div>
         )}

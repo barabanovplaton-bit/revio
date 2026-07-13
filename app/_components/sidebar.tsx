@@ -119,9 +119,9 @@ export function Sidebar({
       {/* Все элементы на одной X-координате (px-3), одинаковый размер h-9 w-9 */}
       <div className="shrink-0 px-3 pt-4 pb-3">
         {/* Логотип — всегда на месте, не двигается */}
-        <div className="flex h-9 items-center gap-2.5">
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-text-primary text-bg-page">
-            <span className="font-display text-sm font-bold leading-none">R</span>
+        <div className="flex h-8 items-center gap-2.5">
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-text-primary text-bg-page">
+            <span className="font-display text-xs font-bold leading-none">R</span>
           </div>
           {/* Текст "Revio" — stagger по буквам */}
           <div className="overflow-hidden">
@@ -152,7 +152,7 @@ export function Sidebar({
                 <StaggerText text="Новый проект" visible={!collapsed} />
               </motion.button>
             ) : collapsed && isAuthed ? (
-              /* В свёрнутом: серая контурная кнопка (как в развёрнутом) */
+              /* В свёрнутом: БЕЛАЯ квадратная кнопка */
               <motion.button
                 key="new-collapsed"
                 type="button"
@@ -163,7 +163,7 @@ export function Sidebar({
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
                 transition={{ duration: 0.18, ease: "easeOut" }}
-                className="flex h-9 w-9 items-center justify-center rounded-lg border border-border-strong bg-bg-input text-text-primary transition-all hover:bg-bg-cardHover active:scale-95 mx-auto"
+                className="flex h-8 w-8 items-center justify-center rounded-lg bg-text-primary text-bg-page transition-all hover:opacity-80 active:scale-95 mx-auto"
               >
                 <PlusIcon className="h-4 w-4" />
               </motion.button>
@@ -283,13 +283,13 @@ export function Sidebar({
         ) : (
           // Не залогинен
           collapsed ? (
-            // Свёрнутый: серая контурная круглая иконка (как Новый проект)
+            // Свёрнутый: БЕЛАЯ круглая иконка
             <div className="flex justify-center">
               <button
                 type="button"
                 onClick={onSignInClick}
                 title="Попробовать бесплатно"
-                className="flex h-9 w-9 items-center justify-center rounded-full border border-border-strong bg-bg-input text-text-primary transition-all hover:bg-bg-cardHover active:scale-95"
+                className="flex h-8 w-8 items-center justify-center rounded-full bg-text-primary text-bg-page transition-all hover:opacity-80 active:scale-95"
               >
                 <PlusIcon className="h-4 w-4" />
               </button>
@@ -303,7 +303,7 @@ export function Sidebar({
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
                 transition={{ duration: 0.18, ease: "easeOut" }}
-                className="flex h-9 w-full items-center justify-center rounded-lg bg-text-primary px-3 text-sm font-medium text-bg-page transition-all hover:opacity-90 active:scale-[0.98]"
+                className="flex h-9 w-full items-center justify-center rounded-lg bg-text-primary px-3 text-sm font-medium text-bg-page transition-all hover:opacity-90 active:scale-[0.98] whitespace-nowrap"
               >
                 <StaggerText text="Попробовать бесплатно" visible={!collapsed} />
               </motion.button>
