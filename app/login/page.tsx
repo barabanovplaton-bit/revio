@@ -109,13 +109,6 @@ export default function LoginPage() {
               <MailIcon className="h-5 w-5" />
               Войти через почту
             </button>
-            <button
-              type="button"
-              onClick={() => router.push("/")}
-              className="mt-2 text-sm text-text-muted transition-colors hover:text-text-primary"
-            >
-              ← На главную
-            </button>
           </div>
         ) : (
           <div className="space-y-3">
@@ -183,6 +176,13 @@ export default function LoginPage() {
               className="text-sm text-text-muted transition-colors hover:text-text-primary"
             >
               ← Назад
+            </button>
+            <button
+              type="button"
+              onClick={() => router.push("/")}
+              className="text-sm text-text-muted transition-colors hover:text-text-primary"
+            >
+              ← На главную
             </button>
           </div>
         )}

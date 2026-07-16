@@ -8,7 +8,7 @@ import { Avatar } from "./_components/avatar";
 import { NewProjectModal } from "./_components/new-project-modal";
 import { OnboardingModal } from "./_components/onboarding-modal";
 import { signOut, subscribeToAuth, type User } from "@/lib/auth";
-import { getUserProfile, type UserProfile } from "@/lib/user-profile";
+import { type UserProfile } from "@/lib/user-profile";
 import {
   subscribeToUserProjects,
   updateProject,
@@ -363,6 +363,8 @@ function App() {
           defaultName={
             profile?.displayName || user.email?.split("@")[0] || ""
           }
+          email={user.email}
+          photoURL={user.photoURL}
           onComplete={() => {
             setOnboardingNeeded(false);
             setProfile((prev) =>

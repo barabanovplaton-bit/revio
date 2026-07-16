@@ -11,15 +11,11 @@ import { db } from "./firebase";
 import type { User } from "./auth";
 
 export type Occupation =
-  | "web-dev"
   | "web-designer"
   | "card-designer"
   | "interior-designer"
-  | "short-video-editor"
-  | "long-video-editor"
   | "illustrator"
-  | "copywriter"
-  | "marketer"
+  | "video-editor"
   | "other";
 
 export type ReferralSource =
