@@ -17,26 +17,22 @@ import {
 } from "firebase/firestore";
 import { db } from "./firebase";
 
-export type ProjectType = "image" | "video" | "site";
-export type ProjectStatus = "brief" | "revisions" | "checklist" | "done";
-export type ProjectModule = "brief" | "revisions" | "checklist";
-
 export interface Project {
   id: string;
   ownerUid: string;
   name: string;
   description: string;
-  /** Контакт заказчика: имя + телефон/TG/email — чтобы фрилансер не потерял */
-  clientName?: string;
-  clientContact?: string;
-  type: ProjectType | null; // выбирается на шаге 2
-  status: ProjectStatus;
-  activeModule: ProjectModule;
+  /** Массив URL картинок (Cloudinary) */
+  imageUrls: string[];
+  /** Текущий круг правок */
+  currentRound: number;
   /** Лимит кругов правок */
   roundsTotal: number;
   roundsLeft: number;
   /** Текст при исчерпании лимита */
   limitMessage: string;
+  /** Заблокирован ли проект (клиент отправил правки) */
+  isLocked: boolean;
   /** Закреплённый проект (показывается сверху в сайдбаре) */
   pinned: boolean;
   /** Архивный (не показывается в основном списке) */
@@ -49,24 +45,11 @@ export interface Project {
 
 const COLLECTION = "projects";
 
-export const PROJECT_TYPE_LABEL: Record<ProjectType, string> = {
-  image: "Изображение / Макет",
-  video: "Видеоролик",
-  site: "Живой сайт (URL)",
-};
-
-export const PROJECT_STATUS_LABEL: Record<ProjectStatus, string> = {
-  brief: "Бриф",
-  revisions: "Правки",
-  checklist: "На сдаче",
-  done: "Сдан",
-};
-
 /** Создать проект. Возвращает id нового проекта. */
 export async function createProject(
   data: Omit<
     Project,
-    "id" | "ownerUid" | "status" | "activeModule" | "pinned" | "archived" | "icon" | "createdAt" | "updatedAt"
+    "id" | "ownerUid" | "imageUrls" | "currentRound" | "isLocked" | "pinned" | "archived" | "icon" | "createdAt" | "updatedAt"
   > & { icon?: string },
   ownerUid: string
 ): Promise<string> {
@@ -74,14 +57,12 @@ export async function createProject(
     ownerUid,
     name: data.name,
     description: data.description,
-    clientName: data.clientName || "",
-    clientContact: data.clientContact || "",
-    type: data.type,
-    status: "brief" as ProjectStatus,
-    activeModule: "brief" as ProjectModule,
+    imageUrls: [],
+    currentRound: 1,
     roundsTotal: data.roundsTotal,
     roundsLeft: data.roundsTotal,
     limitMessage: data.limitMessage,
+    isLocked: false,
     pinned: false,
     archived: false,
     icon: data.icon || "📁",
@@ -115,14 +96,10 @@ export function subscribeToUserProjects(
       snap.forEach((d) => {
         list.push({ id: d.id, ...(d.data() as Omit<Project, "id">) });
       });
-      // Сортируем локально (без архивного разделителя — архив просто внизу)
+      // Сортируем локально
       list.sort((a, b) => {
         // Архивные в конец
         if (a.archived !== b.archived) return a.archived ? 1 : -1;
-        // Сданные проекты (status=done) идут вниз, но выше архива
-        const aDone = a.status === "done" ? 1 : 0;
-        const bDone = b.status === "done" ? 1 : 0;
-        if (aDone !== bDone) return aDone - bDone;
         // Закреплённые в начало
         if (a.pinned !== b.pinned) return a.pinned ? -1 : 1;
         // По updatedAt desc
@@ -163,6 +140,14 @@ export async function toggleArchive(id: string, archived: boolean): Promise<void
 /** Удалить проект навсегда. */
 export async function deleteProject(id: string): Promise<void> {
   await deleteDoc(doc(db, COLLECTION, id));
+}
+
+/** Обновить картинки проекта */
+export async function updateProjectImages(
+  id: string,
+  imageUrls: string[]
+): Promise<void> {
+  await updateProject(id, { imageUrls });
 }
 
 /** Форматирование относительного времени. */
