@@ -6,6 +6,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { BellIcon } from "./_components/bell-icon";
 import { Avatar } from "./_components/avatar";
 import { NewProjectModal } from "./_components/new-project-modal";
+import { OnboardingModal } from "./_components/onboarding-modal";
 import { signOut, subscribeToAuth, type User } from "@/lib/auth";
 import { getUserProfile, type UserProfile } from "@/lib/user-profile";
 import {
@@ -31,6 +32,7 @@ function App() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
   const [newProjectOpen, setNewProjectOpen] = useState(false);
+  const [onboardingNeeded, setOnboardingNeeded] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const [menuFor, setMenuFor] = useState<string | null>(null);
   const [query, setQuery] = useState("");
@@ -50,12 +52,18 @@ function App() {
       setUser(u);
       setAuthLoading(false);
       if (u) {
-        const p = await getUserProfile(u.uid);
+        const { profile: p, isNew } = await import("@/lib/user-profile").then((m) =>
+          m.getOrCreateUserProfile(u)
+        );
         setProfile(p);
+        if (isNew || (p && !p.onboardingCompleted)) {
+          setOnboardingNeeded(true);
+        }
       } else {
         setProfile(null);
         setProjects([]);
         setActiveProjectId(null);
+        setOnboardingNeeded(false);
       }
     });
     return () => unsub();
@@ -346,6 +354,22 @@ function App() {
           ownerUid={user.uid}
           onClose={() => setNewProjectOpen(false)}
           onCreated={handleProjectCreated}
+        />
+      )}
+
+      {onboardingNeeded && user && (
+        <OnboardingModal
+          uid={user.uid}
+          defaultName={
+            profile?.displayName || user.email?.split("@")[0] || ""
+          }
+          onComplete={() => {
+            setOnboardingNeeded(false);
+            setProfile((prev) =>
+              prev ? { ...prev, onboardingCompleted: true } : prev
+            );
+            showToast("Добро пожаловать!");
+          }}
         />
       )}
 

@@ -222,16 +222,7 @@ export default function SettingsPage() {
               <button
                 type="button"
                 onClick={() => router.push("/pricing")}
-                className="h-10 rounded-xl px-5 text-sm font-medium text-bg-page transition-all active:scale-[0.98]"
-                style={{
-                  backgroundColor: ACCENT,
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.backgroundColor = "#d06fe0";
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.backgroundColor = ACCENT;
-                }}
+                className="h-10 rounded-xl border border-border-strong bg-bg-input px-5 text-sm font-medium text-text-primary transition-all hover:bg-bg-cardHover active:scale-[0.98]"
               >
                 Смотреть тарифы
               </button>
