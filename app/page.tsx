@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
+import { BellIcon } from "./_components/bell-icon";
 import { Avatar } from "./_components/avatar";
 import { NewProjectModal } from "./_components/new-project-modal";
 import { signOut, subscribeToAuth, type User } from "@/lib/auth";
@@ -33,6 +34,7 @@ function App() {
   const [toast, setToast] = useState<string | null>(null);
   const [menuFor, setMenuFor] = useState<string | null>(null);
   const [query, setQuery] = useState("");
+  const [hasNotifications] = useState(false);
 
   const showToast = useCallback((msg: string) => {
     setToast(msg);
@@ -141,7 +143,6 @@ function App() {
     );
   }
 
-  // Если выбран проект — показываем ProjectHub
   if (activeProjectId && user) {
     return (
       <ProjectView
@@ -164,18 +165,34 @@ function App() {
 
   return (
     <div className="flex min-h-screen flex-col bg-bg-page">
-      {/* Шапка */}
-      <header className="sticky top-0 z-20 border-b border-border-strong bg-bg-page/80 backdrop-blur-xl">
-        <div className="mx-auto flex max-w-3xl items-center justify-between px-4 py-3 md:px-8">
-          <div className="flex items-center gap-3">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-text-primary text-bg-page">
-              <span className="font-display text-xs font-bold">R</span>
-            </div>
-            <h1 className="font-display text-lg font-semibold text-text-primary">
-              Revio
-            </h1>
-          </div>
+      {/* Шапка — sticky, тоньше */}
+      <header className="sticky top-0 z-20 border-b border-border bg-bg-page/80 backdrop-blur-xl">
+        <div className="mx-auto flex max-w-3xl items-center justify-between px-4 py-2 md:px-6">
+          {/* Лого — левый край */}
           <div className="flex items-center gap-2">
+            <div className="flex h-7 w-7 items-center justify-center rounded-md bg-text-primary text-bg-page">
+              <span className="font-display text-[10px] font-bold">R</span>
+            </div>
+            <span className="font-display text-base font-semibold text-text-primary">
+              Revio
+            </span>
+          </div>
+
+          {/* Правый край: колокольчик + аватар */}
+          <div className="flex items-center gap-1">
+            {user && (
+              <button
+                type="button"
+                onClick={() => router.push("/notifications")}
+                className="relative rounded-lg p-1.5 text-text-muted transition-colors hover:bg-bg-cardHover hover:text-text-primary"
+                aria-label="Уведомления"
+              >
+                <BellIcon className="h-5 w-5" />
+                {hasNotifications && (
+                  <span className="absolute right-1 top-1 h-2 w-2 rounded-full bg-red-500" />
+                )}
+              </button>
+            )}
             {user ? (
               <Avatar
                 name={profile?.displayName}
@@ -188,7 +205,7 @@ function App() {
               <button
                 type="button"
                 onClick={goToLogin}
-                className="rounded-xl bg-text-primary px-4 py-2 text-sm font-medium text-bg-page transition-all hover:opacity-90"
+                className="rounded-lg bg-text-primary px-3 py-1.5 text-xs font-medium text-bg-page transition-all hover:opacity-90"
               >
                 Войти
               </button>
@@ -198,9 +215,8 @@ function App() {
       </header>
 
       {/* Контент */}
-      <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-6 md:px-8 md:py-10">
+      <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-6 md:px-6 md:py-8">
         {!user ? (
-          // Не залогинен
           <div className="flex flex-col items-center justify-center py-20 text-center">
             <h2 className="mb-2 font-display text-2xl font-semibold text-text-primary">
               Правки без хаоса
@@ -218,25 +234,25 @@ function App() {
           </div>
         ) : (
           <>
-            {/* Поиск + кнопка нового проекта */}
+            {/* Поиск + кнопка "Новый проект" */}
             <div className="mb-6 flex items-center gap-3">
-              <div className="relative flex-1">
+              <button
+                type="button"
+                onClick={handleNewProject}
+                className="shrink-0 rounded-xl bg-text-primary px-5 py-2.5 text-sm font-medium text-bg-page transition-all hover:opacity-90 active:scale-[0.98]"
+              >
+                Новый проект
+              </button>
+              <div className="relative w-64">
                 <input
                   type="text"
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
                   placeholder="Поиск проектов..."
-                  className="w-full rounded-xl border border-border-strong bg-bg-input px-4 py-2.5 pl-10 text-sm text-text-primary placeholder:text-text-muted focus:border-text-primary focus:outline-none"
+                  className="w-full rounded-lg border border-border-strong bg-bg-input px-3 py-2 pl-9 text-sm text-text-primary placeholder:text-text-muted focus:border-text-primary focus:outline-none"
                 />
-                <SearchIcon className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-text-muted" />
+                <SearchIcon className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-text-muted" />
               </div>
-              <button
-                type="button"
-                onClick={handleNewProject}
-                className="shrink-0 rounded-xl bg-text-primary px-4 py-2.5 text-sm font-medium text-bg-page transition-all hover:opacity-90 active:scale-[0.98]"
-              >
-                + Новый
-              </button>
             </div>
 
             {/* Список проектов */}
@@ -251,7 +267,7 @@ function App() {
                     onClick={handleNewProject}
                     className="rounded-xl border border-border-strong bg-bg-input px-5 py-3 text-sm font-medium text-text-primary transition-all hover:bg-bg-cardHover"
                   >
-                    + Создать первый проект
+                    Создать первый проект
                   </button>
                 )}
               </div>
@@ -276,11 +292,7 @@ function App() {
                       setMenuFor(null);
                     }}
                     onDelete={() => {
-                      if (
-                        confirm(
-                          `Удалить «${p.name}» навсегда?`
-                        )
-                      ) {
+                      if (confirm(`Удалить «${p.name}» навсегда?`)) {
                         handleDeleteProject(p.id);
                       }
                       setMenuFor(null);
@@ -312,11 +324,7 @@ function App() {
                           setMenuFor(null);
                         }}
                         onDelete={() => {
-                          if (
-                            confirm(
-                              `Удалить «${p.name}» навсегда?`
-                            )
-                          ) {
+                          if (confirm(`Удалить «${p.name}» навсегда?`)) {
                             handleDeleteProject(p.id);
                           }
                           setMenuFor(null);
@@ -331,7 +339,6 @@ function App() {
         )}
       </main>
 
-      {/* Модалка нового проекта */}
       {newProjectOpen && user && (
         <NewProjectModal
           open={newProjectOpen}
@@ -341,7 +348,6 @@ function App() {
         />
       )}
 
-      {/* Тост */}
       <AnimatePresence>
         {toast && (
           <motion.div
@@ -435,7 +441,6 @@ function ProjectCard({
         </button>
       </div>
 
-      {/* Меню */}
       <AnimatePresence>
         {menuOpen && (
           <motion.div
@@ -485,7 +490,7 @@ function ProjectCard({
   );
 }
 
-/* ===== ProjectView — страница проекта ===== */
+/* ===== ProjectView ===== */
 function ProjectView({
   projectId,
   ownerUid,
@@ -497,7 +502,6 @@ function ProjectView({
   onBack: () => void;
   onProjectDeleted: () => void;
 }) {
-  // Импортируем ProjectHub динамически чтобы не тащить лишнее
   const [hub, setHub] = useState<any>(null);
 
   useEffect(() => {
@@ -529,15 +533,7 @@ function ProjectView({
 /* ===== Иконки ===== */
 function SearchIcon({ className }: { className?: string }) {
   return (
-    <svg
-      className={className}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={1.8}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
       <circle cx="11" cy="11" r="7" />
       <path d="m21 21-4.3-4.3" />
     </svg>

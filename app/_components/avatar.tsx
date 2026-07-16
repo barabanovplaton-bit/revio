@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useRef, useEffect, type ReactNode } from "react";
+import { useState, useRef, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { cn, getInitial } from "@/lib/utils";
 
 interface AvatarProps {
@@ -9,8 +10,6 @@ interface AvatarProps {
   photoURL?: string | null;
   onSignInClick?: () => void;
   onSignOut?: () => void;
-  onOpenSettings?: () => void;
-  trailing?: ReactNode;
 }
 
 export function Avatar({
@@ -19,9 +18,8 @@ export function Avatar({
   photoURL,
   onSignInClick,
   onSignOut,
-  onOpenSettings,
-  trailing,
 }: AvatarProps) {
+  const router = useRouter();
   const [popoverOpen, setPopoverOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const isAuthed = Boolean(name || email);
@@ -40,11 +38,7 @@ export function Avatar({
   const initial = getInitial(name, email);
 
   return (
-    <div
-      ref={containerRef}
-      className="group relative flex w-full items-center gap-2.5 px-1 py-1"
-    >
-      {/* Весь блок кликабелен */}
+    <div ref={containerRef} className="relative">
       <button
         type="button"
         onClick={(e) => {
@@ -54,52 +48,38 @@ export function Avatar({
         }}
         aria-label={isAuthed ? "Меню профиля" : "Войти"}
         className={cn(
-          "flex w-full items-start gap-2.5 rounded-lg py-1.5 pl-1.5 pr-2 text-left",
-          "transition-all duration-150",
-          "hover:bg-bg-cardHover"
+          "flex h-8 w-8 items-center justify-center overflow-hidden rounded-full transition-all",
+          !isAuthed && "border border-border-strong bg-bg-input",
+          isAuthed && "bg-avatar-bg text-avatar-fg"
         )}
+        style={
+          isAuthed
+            ? { backgroundColor: "var(--avatar-bg)", color: "var(--avatar-fg)" }
+            : undefined
+        }
       >
-        {/* Круглый аватар 32×32 — компактнее, верхний край = верхний край текста */}
-        <span
-          className={cn(
-            "flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full",
-            "transition-all duration-150"
-          )}
-          style={{
-            backgroundColor: isAuthed ? "var(--avatar-bg)" : "var(--bg-input)",
-            color: isAuthed ? "var(--avatar-fg)" : "var(--text-primary)",
-            border: isAuthed ? "none" : "1px solid var(--border-strong)",
-          }}
-        >
-          {isAuthed && photoURL ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={photoURL}
-              alt={name || "аватар"}
-              className="h-full w-full object-cover"
-              draggable={false}
-            />
-          ) : isAuthed ? (
-            <span className="font-display text-xs font-semibold leading-none">
-              {initial}
-            </span>
-          ) : (
-            <PlusIcon className="h-3.5 w-3.5" />
-          )}
-        </span>
-        {trailing}
+        {isAuthed && photoURL ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={photoURL}
+            alt={name || "аватар"}
+            className="h-full w-full object-cover"
+            draggable={false}
+          />
+        ) : isAuthed ? (
+          <span className="font-display text-xs font-semibold leading-none">
+            {initial}
+          </span>
+        ) : (
+          <UserIcon className="h-4 w-4 text-text-muted" />
+        )}
       </button>
 
-      {/* Popover — фиксированная ширина w-64 (256px), может выходить за края узкой сосиски */}
       {isAuthed && popoverOpen && (
         <>
-          <div className="absolute bottom-full left-0 h-3 w-64" />
+          <div className="fixed inset-0 z-40" onClick={() => setPopoverOpen(false)} />
           <div
-            className="absolute bottom-full z-50 mb-2 w-64 animate-slide-up rounded-2xl border bg-bg-card p-2 shadow-xl"
-            style={{
-              left: 0,
-              transformOrigin: "bottom left",
-            }}
+            className="absolute right-0 top-full z-50 mt-2 w-60 rounded-xl border border-border-strong bg-bg-card p-1.5 shadow-xl"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="px-3 py-2">
@@ -112,41 +92,49 @@ export function Avatar({
                 </div>
               )}
               <div className="mt-2">
-                <span
-                  className="inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[10px] font-medium"
-                  style={{
-                    backgroundColor: "var(--avatar-bg)",
-                    color: "var(--avatar-fg)",
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPopoverOpen(false);
+                    router.push("/pricing");
                   }}
+                  className="inline-flex items-center gap-1.5 rounded-full bg-text-primary px-2.5 py-0.5 text-[10px] font-medium text-bg-page transition-opacity hover:opacity-80"
                 >
-                  <span
-                    className="h-1 w-1 rounded-full"
-                    style={{ backgroundColor: "currentColor" }}
-                  />
                   Free
-                </span>
+                </button>
               </div>
             </div>
-            <div className="my-1 h-px bg-border" />
+            <div className="my-1 h-px bg-border-strong" />
             <button
               type="button"
               onClick={() => {
                 setPopoverOpen(false);
-                onOpenSettings?.();
+                router.push("/pricing");
+              }}
+              className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-text-primary transition-colors hover:bg-bg-cardHover"
+            >
+              <CrownIcon className="h-4 w-4 text-text-muted" />
+              Тарифы
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setPopoverOpen(false);
+                router.push("/settings");
               }}
               className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-text-primary transition-colors hover:bg-bg-cardHover"
             >
               <SettingsIcon className="h-4 w-4 text-text-muted" />
               Настройки
             </button>
+            <div className="my-1 h-px bg-border-strong" />
             <button
               type="button"
               onClick={() => {
                 setPopoverOpen(false);
                 onSignOut?.();
               }}
-              className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-medium transition-colors hover:bg-red-500/10"
-              style={{ color: "#EF4444" }}
+              className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-red-400 transition-colors hover:bg-red-500/10"
             >
               <ExitIcon className="h-4 w-4" />
               Выйти
@@ -158,18 +146,28 @@ export function Avatar({
   );
 }
 
-function PlusIcon({ className }: { className?: string }) {
+function UserIcon({ className }: { className?: string }) {
   return (
-    <svg className={className} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" aria-hidden>
-      <path d="M8 3v10M3 8h10" />
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
+      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+      <circle cx="12" cy="7" r="4" />
+    </svg>
+  );
+}
+
+function CrownIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
+      <path d="M2 4l3 12h14l3-12-6 7-4-7-4 7-6-7z" />
+      <path d="M5 16h14v2a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-2z" />
     </svg>
   );
 }
 
 function SettingsIcon({ className }: { className?: string }) {
   return (
-    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-      <path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z" />
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="3" />
       <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
     </svg>
   );
@@ -177,7 +175,7 @@ function SettingsIcon({ className }: { className?: string }) {
 
 function ExitIcon({ className }: { className?: string }) {
   return (
-    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
       <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
       <polyline points="16 17 21 12 16 7" />
       <line x1="21" y1="12" x2="9" y2="12" />
