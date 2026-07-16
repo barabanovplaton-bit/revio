@@ -1,11 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { BellIcon } from "../_components/bell-icon";
 import { Avatar } from "../_components/avatar";
-import { signOut } from "@/lib/auth";
+import { signOut, subscribeToAuth, type User } from "@/lib/auth";
+import { getUserProfile, type UserProfile } from "@/lib/user-profile";
 
 const ACCENT = "#E880FC";
 
@@ -45,10 +46,6 @@ const plans = [
 
 const faqItems = [
   {
-    q: "Можно попробовать Pro бесплатно?",
-    a: "Нет, но у вас уже есть бесплатный проект со всеми основными функциями. Попробуйте и убедитесь, что Revio удобен.",
-  },
-  {
     q: "Как оплатить?",
     a: "Сейчас мы принимаем оплату через СБП. Нажмите «Оплатить» и получите инструкцию. Позже добавим ЮKassa и другие способы.",
   },
@@ -60,11 +57,30 @@ const faqItems = [
     q: "Что такое «круги правок»?",
     a: "Каждый раз, когда клиент отправляет правки — это один круг. В Free доступно 5 кругов, в Pro — безлимит.",
   },
+  {
+    q: "Чем Free отличается от Pro?",
+    a: "Free — 1 проект, 10 изображений, 5 кругов. Pro — безлимит всего плюс история версий и приоритетная поддержка.",
+  },
 ];
 
 export default function PricingPage() {
   const router = useRouter();
   const [openFaq, setOpenFaq] = useState<number | null>(null);
+  const [user, setUser] = useState<User | null>(null);
+  const [profile, setProfile] = useState<UserProfile | null>(null);
+
+  useEffect(() => {
+    const unsub = subscribeToAuth(async (u) => {
+      setUser(u);
+      if (u) {
+        const p = await getUserProfile(u.uid);
+        setProfile(p);
+      } else {
+        setProfile(null);
+      }
+    });
+    return () => unsub();
+  }, []);
 
   return (
     <div className="min-h-screen bg-bg-page">
@@ -83,21 +99,36 @@ export default function PricingPage() {
             </span>
           </div>
           <div className="flex items-center gap-1">
-            <button
-              type="button"
-              onClick={() => router.push("/notifications")}
-              className="relative rounded-xl p-2 text-text-muted transition-colors hover:bg-bg-cardHover hover:text-text-primary"
-              aria-label="Уведомления"
-            >
-              <BellIcon className="h-5 w-5" />
-            </button>
-            <Avatar
-              onSignInClick={() => router.push("/login")}
-              onSignOut={async () => {
-                await signOut();
-                router.push("/");
-              }}
-            />
+            {user && (
+              <button
+                type="button"
+                onClick={() => router.push("/notifications")}
+                className="relative rounded-xl p-2 text-text-muted transition-colors hover:bg-bg-cardHover hover:text-text-primary"
+                aria-label="Уведомления"
+              >
+                <BellIcon className="h-5 w-5" />
+              </button>
+            )}
+            {user ? (
+              <Avatar
+                name={profile?.displayName}
+                email={user.email}
+                photoURL={user.photoURL}
+                onSignInClick={() => router.push("/login")}
+                onSignOut={async () => {
+                  await signOut();
+                  router.push("/");
+                }}
+              />
+            ) : (
+              <button
+                type="button"
+                onClick={() => router.push("/login")}
+                className="h-9 rounded-xl bg-text-primary px-4 text-sm font-medium text-bg-page transition-all hover:opacity-90"
+              >
+                Войти
+              </button>
+            )}
           </div>
         </header>
       </div>
@@ -113,7 +144,7 @@ export default function PricingPage() {
           </p>
         </div>
 
-        {/* Карточки */}
+        {/* Карточки — flex col, кнопка внизу через mt-auto */}
         <div className="mx-auto grid max-w-2xl grid-cols-1 gap-4 sm:grid-cols-2">
           {plans.map((plan, i) => (
             <motion.div
@@ -121,7 +152,7 @@ export default function PricingPage() {
               initial={{ opacity: 0, y: 16 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: i * 0.1, duration: 0.35 }}
-              className={`relative rounded-2xl border p-6 ${
+              className={`relative flex flex-col rounded-2xl border p-6 ${
                 plan.highlighted
                   ? "border-text-primary bg-bg-card"
                   : "border-border-strong bg-bg-card"
@@ -153,7 +184,7 @@ export default function PricingPage() {
                   {plan.description}
                 </div>
               </div>
-              <ul className="mb-6 space-y-2">
+              <ul className="mb-6 flex-1 space-y-2">
                 {plan.features.map((f) => (
                   <li
                     key={f}
@@ -191,7 +222,7 @@ export default function PricingPage() {
           ))}
         </div>
 
-        {/* FAQ — Accordion */}
+        {/* FAQ — Accordion, текст по центру */}
         <div className="mx-auto mt-16 max-w-lg">
           <h3 className="mb-4 text-center text-sm font-medium text-text-muted">
             Часто задаваемые вопросы
@@ -200,7 +231,7 @@ export default function PricingPage() {
             {faqItems.map((item, i) => (
               <div
                 key={i}
-                className="rounded-xl border border-border-strong bg-bg-card overflow-hidden"
+                className="rounded-xl border border-border-strong bg-bg-card overflow-hidden transition-colors hover:border-text-primary/30"
               >
                 <button
                   type="button"
@@ -220,9 +251,9 @@ export default function PricingPage() {
                       initial={{ height: 0, opacity: 0 }}
                       animate={{ height: "auto", opacity: 1 }}
                       exit={{ height: 0, opacity: 0 }}
-                      transition={{ duration: 0.2 }}
+                      transition={{ duration: 0.15 }}
                     >
-                      <div className="px-4 pb-3 text-xs leading-relaxed text-text-muted">
+                      <div className="px-4 pb-3 text-center text-xs leading-relaxed text-text-muted">
                         {item.a}
                       </div>
                     </motion.div>

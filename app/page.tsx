@@ -234,16 +234,9 @@ function App() {
           </div>
         ) : (
           <>
-            {/* Поиск + кнопка "Новый проект" — одинаковая высота */}
+            {/* Поиск + кнопка "Новый проект" — одинаковая высота, по сетке */}
             <div className="mb-6 flex items-center gap-3">
-              <button
-                type="button"
-                onClick={handleNewProject}
-                className="h-10 shrink-0 rounded-xl bg-text-primary px-5 text-sm font-medium text-bg-page transition-all hover:opacity-90 active:scale-[0.98]"
-              >
-                Новый проект
-              </button>
-              <div className="relative h-10 w-64">
+              <div className="relative h-10 flex-1">
                 <input
                   type="text"
                   value={query}
@@ -253,6 +246,14 @@ function App() {
                 />
                 <SearchIcon className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-text-muted" />
               </div>
+              <button
+                type="button"
+                onClick={handleNewProject}
+                className="flex h-10 shrink-0 items-center gap-2 rounded-xl bg-text-primary px-5 text-sm font-medium text-bg-page transition-all hover:opacity-90 active:scale-[0.98]"
+              >
+                <PlusIcon className="h-4 w-4" />
+                Новый проект
+              </button>
             </div>
 
             {/* Список проектов */}
@@ -546,6 +547,14 @@ function DotsIcon({ className }: { className?: string }) {
       <circle cx="12" cy="5" r="1.5" />
       <circle cx="12" cy="12" r="1.5" />
       <circle cx="12" cy="19" r="1.5" />
+    </svg>
+  );
+}
+
+function PlusIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round">
+      <path d="M12 5v14M5 12h14" />
     </svg>
   );
 }

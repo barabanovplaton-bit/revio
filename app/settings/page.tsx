@@ -79,34 +79,45 @@ export default function SettingsPage() {
             </span>
           </div>
           <div className="flex items-center gap-1">
-            <button
-              type="button"
-              onClick={() => router.push("/notifications")}
-              className="relative rounded-xl p-2 text-text-muted transition-colors hover:bg-bg-cardHover hover:text-text-primary"
-              aria-label="Уведомления"
-            >
-              <BellIcon className="h-5 w-5" />
-            </button>
-            <Avatar
-              name={profile?.displayName}
-              email={user?.email}
-              photoURL={user?.photoURL}
-              onSignInClick={() => router.push("/login")}
-              onSignOut={handleSignOut}
-            />
+            {user && (
+              <button
+                type="button"
+                onClick={() => router.push("/notifications")}
+                className="relative rounded-xl p-2 text-text-muted transition-colors hover:bg-bg-cardHover hover:text-text-primary"
+                aria-label="Уведомления"
+              >
+                <BellIcon className="h-5 w-5" />
+              </button>
+            )}
+            {user ? (
+              <Avatar
+                name={profile?.displayName}
+                email={user.email}
+                photoURL={user.photoURL}
+                onSignInClick={() => router.push("/login")}
+                onSignOut={handleSignOut}
+              />
+            ) : (
+              <button
+                type="button"
+                onClick={() => router.push("/login")}
+                className="h-9 rounded-xl bg-text-primary px-4 text-sm font-medium text-bg-page transition-all hover:opacity-90"
+              >
+                Войти
+              </button>
+            )}
           </div>
         </header>
       </div>
 
       <main className="mx-auto max-w-3xl px-4 py-8 md:px-6">
-        <div className="space-y-6">
+        <div className="space-y-4">
           {/* Профиль */}
           <section className="rounded-2xl border border-border-strong bg-bg-card p-6">
             <h2 className="mb-4 text-sm font-medium text-text-muted">
               Профиль
             </h2>
             <div className="flex items-start gap-5">
-              {/* Аватар */}
               {user?.photoURL ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
@@ -126,7 +137,7 @@ export default function SettingsPage() {
                 </div>
               )}
               <div className="min-w-0 flex-1">
-                <div className="text-xs text-text-muted mb-1">Имя</div>
+                <div className="mb-1 text-xs text-text-muted">Имя</div>
                 <div className="flex items-center gap-2">
                   <input
                     type="text"
@@ -211,7 +222,16 @@ export default function SettingsPage() {
               <button
                 type="button"
                 onClick={() => router.push("/pricing")}
-                className="h-10 rounded-xl border border-border-strong bg-bg-input px-4 text-sm font-medium text-text-primary transition-all hover:bg-bg-cardHover"
+                className="h-10 rounded-xl px-5 text-sm font-medium text-bg-page transition-all active:scale-[0.98]"
+                style={{
+                  backgroundColor: ACCENT,
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.backgroundColor = "#d06fe0";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.backgroundColor = ACCENT;
+                }}
               >
                 Смотреть тарифы
               </button>
