@@ -165,15 +165,15 @@ function App() {
 
   return (
     <div className="flex min-h-screen flex-col bg-bg-page">
-      {/* Шапка — sticky, тоньше */}
-      <header className="sticky top-0 z-20 border-b border-border bg-bg-page/80 backdrop-blur-xl">
-        <div className="mx-auto flex max-w-3xl items-center justify-between px-4 py-2 md:px-6">
+      {/* Floating header */}
+      <div className="sticky top-0 z-20 px-4 pt-3 md:px-6">
+        <header className="mx-auto flex max-w-3xl items-center justify-between rounded-2xl border border-border-strong bg-bg-card px-5 py-3 shadow-lg">
           {/* Лого — левый край */}
-          <div className="flex items-center gap-2">
-            <div className="flex h-7 w-7 items-center justify-center rounded-md bg-text-primary text-bg-page">
-              <span className="font-display text-[10px] font-bold">R</span>
+          <div className="flex items-center gap-2.5">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-text-primary text-bg-page">
+              <span className="font-display text-xs font-bold">R</span>
             </div>
-            <span className="font-display text-base font-semibold text-text-primary">
+            <span className="font-display text-lg font-semibold text-text-primary">
               Revio
             </span>
           </div>
@@ -184,12 +184,12 @@ function App() {
               <button
                 type="button"
                 onClick={() => router.push("/notifications")}
-                className="relative rounded-lg p-1.5 text-text-muted transition-colors hover:bg-bg-cardHover hover:text-text-primary"
+                className="relative rounded-xl p-2 text-text-muted transition-colors hover:bg-bg-cardHover hover:text-text-primary"
                 aria-label="Уведомления"
               >
                 <BellIcon className="h-5 w-5" />
                 {hasNotifications && (
-                  <span className="absolute right-1 top-1 h-2 w-2 rounded-full bg-red-500" />
+                  <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-red-500" />
                 )}
               </button>
             )}
@@ -205,14 +205,14 @@ function App() {
               <button
                 type="button"
                 onClick={goToLogin}
-                className="rounded-lg bg-text-primary px-3 py-1.5 text-xs font-medium text-bg-page transition-all hover:opacity-90"
+                className="rounded-xl bg-text-primary px-4 py-2 text-sm font-medium text-bg-page transition-all hover:opacity-90"
               >
                 Войти
               </button>
             )}
           </div>
-        </div>
-      </header>
+        </header>
+      </div>
 
       {/* Контент */}
       <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-6 md:px-6 md:py-8">
@@ -234,24 +234,24 @@ function App() {
           </div>
         ) : (
           <>
-            {/* Поиск + кнопка "Новый проект" */}
+            {/* Поиск + кнопка "Новый проект" — одинаковая высота */}
             <div className="mb-6 flex items-center gap-3">
               <button
                 type="button"
                 onClick={handleNewProject}
-                className="shrink-0 rounded-xl bg-text-primary px-5 py-2.5 text-sm font-medium text-bg-page transition-all hover:opacity-90 active:scale-[0.98]"
+                className="h-10 shrink-0 rounded-xl bg-text-primary px-5 text-sm font-medium text-bg-page transition-all hover:opacity-90 active:scale-[0.98]"
               >
                 Новый проект
               </button>
-              <div className="relative w-64">
+              <div className="relative h-10 w-64">
                 <input
                   type="text"
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
                   placeholder="Поиск проектов..."
-                  className="w-full rounded-lg border border-border-strong bg-bg-input px-3 py-2 pl-9 text-sm text-text-primary placeholder:text-text-muted focus:border-text-primary focus:outline-none"
+                  className="h-full w-full rounded-xl border border-border-strong bg-bg-input px-3 pl-10 text-sm text-text-primary placeholder:text-text-muted focus:border-text-primary focus:outline-none"
                 />
-                <SearchIcon className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-text-muted" />
+                <SearchIcon className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-text-muted" />
               </div>
             </div>
 

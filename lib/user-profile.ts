@@ -120,3 +120,12 @@ export async function getUserProfile(uid: string): Promise<UserProfile | null> {
   if (!snap.exists()) return null;
   return snap.data() as UserProfile;
 }
+
+/** Обновить имя пользователя. */
+export async function updateDisplayName(
+  uid: string,
+  displayName: string
+): Promise<void> {
+  const ref = doc(db, COLLECTION, uid);
+  await setDoc(ref, { displayName, updatedAt: serverTimestamp() }, { merge: true });
+}

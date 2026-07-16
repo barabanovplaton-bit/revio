@@ -1,7 +1,11 @@
 "use client";
 
+import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
+import { BellIcon } from "../_components/bell-icon";
+import { Avatar } from "../_components/avatar";
+import { signOut } from "@/lib/auth";
 
 const ACCENT = "#E880FC";
 
@@ -13,8 +17,8 @@ const plans = [
     description: "Для тестирования и небольших проектов",
     features: [
       "1 проект",
-      "5 изображений",
-      "1 круг правок",
+      "10 изображений",
+      "5 кругов правок",
       "Публичная ссылка для клиента",
     ],
     cta: "Текущий тариф",
@@ -28,7 +32,7 @@ const plans = [
     features: [
       "Безлимит проектов",
       "Безлимит изображений",
-      "5 кругов правок",
+      "Безлимит кругов правок",
       "Публичная ссылка для клиента",
       "История версий",
       "Приоритетная поддержка",
@@ -39,33 +43,71 @@ const plans = [
   },
 ];
 
+const faqItems = [
+  {
+    q: "Можно попробовать Pro бесплатно?",
+    a: "Нет, но у вас уже есть бесплатный проект со всеми основными функциями. Попробуйте и убедитесь, что Revio удобен.",
+  },
+  {
+    q: "Как оплатить?",
+    a: "Сейчас мы принимаем оплату через СБП. Нажмите «Оплатить» и получите инструкцию. Позже добавим ЮKassa и другие способы.",
+  },
+  {
+    q: "Можно отменить подписку?",
+    a: "Да, в любой момент. Pro отключится в конце оплаченного периода. Без скрытых платежей.",
+  },
+  {
+    q: "Что такое «круги правок»?",
+    a: "Каждый раз, когда клиент отправляет правки — это один круг. В Free доступно 5 кругов, в Pro — безлимит.",
+  },
+];
+
 export default function PricingPage() {
   const router = useRouter();
+  const [openFaq, setOpenFaq] = useState<number | null>(null);
 
   return (
     <div className="min-h-screen bg-bg-page">
-      <header className="sticky top-0 z-20 border-b border-border bg-bg-page/80 backdrop-blur-xl">
-        <div className="mx-auto flex max-w-3xl items-center gap-3 px-4 py-3 md:px-6">
-          <button
-            type="button"
+      {/* Floating header */}
+      <div className="sticky top-0 z-20 px-4 pt-3 md:px-6">
+        <header className="mx-auto flex max-w-3xl items-center justify-between rounded-2xl border border-border-strong bg-bg-card px-5 py-3 shadow-lg">
+          <div
+            className="flex cursor-pointer items-center gap-2.5"
             onClick={() => router.push("/")}
-            className="rounded-lg p-1.5 text-text-muted transition-colors hover:bg-bg-cardHover hover:text-text-primary"
-            aria-label="Назад"
           >
-            <ArrowIcon className="h-5 w-5" />
-          </button>
-          <h1 className="font-display text-base font-semibold text-text-primary">
-            Тарифы
-          </h1>
-        </div>
-      </header>
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-text-primary text-bg-page">
+              <span className="font-display text-xs font-bold">R</span>
+            </div>
+            <span className="font-display text-lg font-semibold text-text-primary">
+              Revio
+            </span>
+          </div>
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={() => router.push("/notifications")}
+              className="relative rounded-xl p-2 text-text-muted transition-colors hover:bg-bg-cardHover hover:text-text-primary"
+              aria-label="Уведомления"
+            >
+              <BellIcon className="h-5 w-5" />
+            </button>
+            <Avatar
+              onSignInClick={() => router.push("/login")}
+              onSignOut={async () => {
+                await signOut();
+                router.push("/");
+              }}
+            />
+          </div>
+        </header>
+      </div>
 
       <main className="mx-auto max-w-3xl px-4 py-12 md:px-6">
         {/* Заголовок */}
         <div className="mb-10 text-center">
-          <h2 className="mb-2 font-display text-3xl font-bold text-text-primary">
+          <h1 className="mb-2 font-display text-3xl font-bold text-text-primary">
             Простое ценообразование
-          </h2>
+          </h1>
           <p className="text-sm text-text-muted">
             Начните бесплатно. Обновитесь, когда будете готовы.
           </p>
@@ -88,10 +130,7 @@ export default function PricingPage() {
               {plan.highlighted && (
                 <div
                   className="absolute -top-3 left-6 rounded-full px-3 py-0.5 text-[10px] font-bold uppercase tracking-wide"
-                  style={{
-                    backgroundColor: ACCENT,
-                    color: "#000",
-                  }}
+                  style={{ backgroundColor: ACCENT, color: "#000" }}
                 >
                   Популярный
                 </div>
@@ -137,10 +176,10 @@ export default function PricingPage() {
                 disabled={plan.ctaDisabled}
                 onClick={() => {
                   if (!plan.ctaDisabled) {
-                    alert("Оплата будет доступна в следующем шаге");
+                    alert("Оплата через СБП будет доступна в следующем шаге");
                   }
                 }}
-                className={`w-full rounded-xl py-2.5 text-sm font-medium transition-all ${
+                className={`h-10 w-full rounded-xl text-sm font-medium transition-all ${
                   plan.ctaDisabled
                     ? "cursor-default border border-border-strong bg-bg-input text-text-muted"
                     : "bg-text-primary text-bg-page hover:opacity-90 active:scale-[0.98]"
@@ -152,44 +191,49 @@ export default function PricingPage() {
           ))}
         </div>
 
-        {/* FAQ */}
-        <div className="mx-auto mt-16 max-w-lg space-y-4">
-          <h3 className="text-center text-sm font-medium text-text-muted">
+        {/* FAQ — Accordion */}
+        <div className="mx-auto mt-16 max-w-lg">
+          <h3 className="mb-4 text-center text-sm font-medium text-text-muted">
             Часто задаваемые вопросы
           </h3>
-          <FaqItem
-            q="Можно попробовать Pro бесплатно?"
-            a="Да, напишите нам — дадим 7 дней бесплатно."
-          />
-          <FaqItem
-            q="Как оплатить?"
-            a="Сейчас ручная активация. Напишите нам, и мы включим Pro."
-          />
-          <FaqItem
-            q="Можно отменить?"
-            a="Да, в любой момент. Pro отключится в конце периода."
-          />
+          <div className="space-y-2">
+            {faqItems.map((item, i) => (
+              <div
+                key={i}
+                className="rounded-xl border border-border-strong bg-bg-card overflow-hidden"
+              >
+                <button
+                  type="button"
+                  onClick={() => setOpenFaq(openFaq === i ? null : i)}
+                  className="flex w-full items-center justify-between px-4 py-3 text-left text-sm font-medium text-text-primary transition-colors hover:bg-bg-cardHover"
+                >
+                  {item.q}
+                  <ChevronIcon
+                    className={`h-4 w-4 shrink-0 text-text-muted transition-transform duration-200 ${
+                      openFaq === i ? "rotate-180" : ""
+                    }`}
+                  />
+                </button>
+                <AnimatePresence>
+                  {openFaq === i && (
+                    <motion.div
+                      initial={{ height: 0, opacity: 0 }}
+                      animate={{ height: "auto", opacity: 1 }}
+                      exit={{ height: 0, opacity: 0 }}
+                      transition={{ duration: 0.2 }}
+                    >
+                      <div className="px-4 pb-3 text-xs leading-relaxed text-text-muted">
+                        {item.a}
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+            ))}
+          </div>
         </div>
       </main>
     </div>
-  );
-}
-
-function FaqItem({ q, a }: { q: string; a: string }) {
-  return (
-    <div className="rounded-xl border border-border-strong bg-bg-card p-4">
-      <div className="mb-1 text-sm font-medium text-text-primary">{q}</div>
-      <div className="text-xs text-text-muted">{a}</div>
-    </div>
-  );
-}
-
-function ArrowIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
-      <path d="M19 12H5" />
-      <path d="m12 19-7-7 7-7" />
-    </svg>
   );
 }
 
@@ -212,6 +256,22 @@ function CheckIcon({
       strokeLinejoin="round"
     >
       <polyline points="20 6 9 17 4 12" />
+    </svg>
+  );
+}
+
+function ChevronIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <polyline points="6 9 12 15 18 9" />
     </svg>
   );
 }

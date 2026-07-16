@@ -3,6 +3,8 @@
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { BellIcon } from "../_components/bell-icon";
+import { Avatar } from "../_components/avatar";
+import { signOut } from "@/lib/auth";
 
 interface Notification {
   id: string;
@@ -31,21 +33,39 @@ export default function NotificationsPage() {
 
   return (
     <div className="min-h-screen bg-bg-page">
-      <header className="sticky top-0 z-20 border-b border-border bg-bg-page/80 backdrop-blur-xl">
-        <div className="mx-auto flex max-w-3xl items-center gap-3 px-4 py-3 md:px-6">
-          <button
-            type="button"
+      {/* Floating header */}
+      <div className="sticky top-0 z-20 px-4 pt-3 md:px-6">
+        <header className="mx-auto flex max-w-3xl items-center justify-between rounded-2xl border border-border-strong bg-bg-card px-5 py-3 shadow-lg">
+          <div
+            className="flex cursor-pointer items-center gap-2.5"
             onClick={() => router.push("/")}
-            className="rounded-lg p-1.5 text-text-muted transition-colors hover:bg-bg-cardHover hover:text-text-primary"
-            aria-label="Назад"
           >
-            <ArrowIcon className="h-5 w-5" />
-          </button>
-          <h1 className="font-display text-base font-semibold text-text-primary">
-            Уведомления
-          </h1>
-        </div>
-      </header>
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-text-primary text-bg-page">
+              <span className="font-display text-xs font-bold">R</span>
+            </div>
+            <span className="font-display text-lg font-semibold text-text-primary">
+              Revio
+            </span>
+          </div>
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={() => router.push("/notifications")}
+              className="relative rounded-xl p-2 text-text-muted transition-colors hover:bg-bg-cardHover hover:text-text-primary"
+              aria-label="Уведомления"
+            >
+              <BellIcon className="h-5 w-5" />
+            </button>
+            <Avatar
+              onSignInClick={() => router.push("/login")}
+              onSignOut={async () => {
+                await signOut();
+                router.push("/");
+              }}
+            />
+          </div>
+        </header>
+      </div>
 
       <main className="mx-auto max-w-3xl px-4 py-8 md:px-6">
         {MOCK.length === 0 ? (
@@ -61,7 +81,7 @@ export default function NotificationsPage() {
                 initial={{ opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: i * 0.05 }}
-                className={`flex items-start gap-3 rounded-xl border p-4 ${
+                className={`flex items-start gap-3 rounded-2xl border p-4 ${
                   n.read
                     ? "border-border-strong bg-bg-card"
                     : "border-text-primary/20 bg-bg-card"
@@ -80,14 +100,5 @@ export default function NotificationsPage() {
         )}
       </main>
     </div>
-  );
-}
-
-function ArrowIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
-      <path d="M19 12H5" />
-      <path d="m12 19-7-7 7-7" />
-    </svg>
   );
 }
