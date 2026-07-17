@@ -232,8 +232,8 @@ export function OnboardingModal({
       </div>
 
       {/* Content — scrollable */}
-      <div className="relative flex min-h-0 flex-1 justify-center overflow-y-auto px-4 pt-6 pb-6">
-        <div className="w-full max-w-md">
+      <div className="flex min-h-0 flex-1 justify-center overflow-y-auto px-4 pt-6 pb-4">
+        <div className="w-full max-w-md pb-2">
           <AnimatePresence mode="wait">
             {/* Шаг 1: Имя (кнопка внутри — нет скролла) */}
             {step === 0 && (
@@ -366,9 +366,6 @@ export function OnboardingModal({
             )}
           </AnimatePresence>
         </div>
-        {(step === 1 || step === 2) && (
-          <div className="pointer-events-none absolute inset-x-0 bottom-0 h-28 bg-gradient-to-t from-bg-page to-transparent" />
-        )}
       </div>
 
       {/* Fixed bottom bar — buttons (steps 1 & 2) */}
