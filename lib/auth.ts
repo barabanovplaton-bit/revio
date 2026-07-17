@@ -6,6 +6,7 @@ import {
   getRedirectResult,
   signOut as fbSignOut,
   onAuthStateChanged,
+  sendPasswordResetEmail as fbSendPasswordReset,
   sendSignInLinkToEmail,
   isSignInWithEmailLink,
   signInWithEmailLink,
@@ -81,6 +82,11 @@ export async function completeEmailSignIn(): Promise<User | null> {
 /** Выход. */
 export async function signOut(): Promise<void> {
   await fbSignOut(auth);
+}
+
+/** Отправить ссылку для сброса пароля. */
+export async function sendPasswordReset(email: string): Promise<void> {
+  await fbSendPasswordReset(auth, email);
 }
 
 /** Подписка на изменения состояния авторизации. */

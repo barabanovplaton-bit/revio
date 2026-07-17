@@ -15,6 +15,7 @@ export type Occupation =
   | "card-designer"
   | "interior-designer"
   | "illustrator"
+  | "photographer"
   | "video-editor"
   | "other";
 

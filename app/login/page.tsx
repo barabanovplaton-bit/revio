@@ -6,6 +6,7 @@ import {
   signInWithGoogle,
   handleRedirectResult,
   subscribeToAuth,
+  sendPasswordReset,
 } from "@/lib/auth";
 import {
   createUserWithEmailAndPassword,
@@ -14,60 +15,108 @@ import {
 import { auth } from "@/lib/firebase";
 import { getOrCreateUserProfile } from "@/lib/user-profile";
 
+type AuthTab = "login" | "register";
+
 export default function LoginPage() {
   const router = useRouter();
-  const [mode, setMode] = useState<"choose" | "email">("choose");
+  const [screen, setScreen] = useState<"choose" | "email">("choose");
+  const [tab, setTab] = useState<AuthTab>("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     handleRedirectResult().then((user) => {
-      if (user) router.push("/");
+      if (user) {
+        setLoading(true);
+        router.push("/?loading=true");
+      }
     });
     const unsub = subscribeToAuth((user) => {
-      if (user) router.push("/");
+      if (user) {
+        setLoading(true);
+        router.push("/?loading=true");
+      }
     });
     return () => unsub();
   }, [router]);
 
   const handleGoogle = async () => {
     try {
+      setLoading(true);
       await signInWithGoogle();
-      router.push("/");
+      router.push("/?loading=true");
     } catch (e: any) {
+      setLoading(false);
       console.error("Login error:", e);
     }
   };
 
-  const handleEmailAuth = async (isRegister: boolean) => {
+  const handleLogin = async () => {
     setError("");
     setLoading(true);
     try {
-      let cred;
-      if (isRegister) {
-        cred = await createUserWithEmailAndPassword(auth, email, password);
-      } else {
-        cred = await signInWithEmailAndPassword(auth, email, password);
-      }
+      const cred = await signInWithEmailAndPassword(auth, email, password);
       await getOrCreateUserProfile(cred.user);
-      router.push("/");
+      router.push("/?loading=true");
     } catch (e: any) {
       const code = e?.code || "";
-      if (code === "auth/email-already-in-use") {
-        setError("Этот email уже зарегистрирован. Нажмите «Войти».");
-      } else if (code === "auth/user-not-found") {
+      if (code === "auth/user-not-found") {
         setError("Аккаунт не найден. Нажмите «Зарегистрироваться».");
       } else if (
         code === "auth/wrong-password" ||
         code === "auth/invalid-credential"
       ) {
         setError("Неверный email или пароль.");
+      } else if (code === "auth/invalid-email") {
+        setError("Некорректный email.");
+      } else {
+        setError("Ошибка. Попробуйте ещё раз.");
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleRegister = async () => {
+    setError("");
+    setLoading(true);
+    try {
+      const cred = await createUserWithEmailAndPassword(auth, email, password);
+      await getOrCreateUserProfile(cred.user);
+      router.push("/?loading=true");
+    } catch (e: any) {
+      const code = e?.code || "";
+      if (code === "auth/email-already-in-use") {
+        setError("Этот email уже зарегистрирован. Нажмите «Войти».");
       } else if (code === "auth/weak-password") {
         setError("Пароль слишком короткий (минимум 6 символов).");
       } else if (code === "auth/invalid-email") {
         setError("Некорректный email.");
+      } else {
+        setError("Ошибка. Попробуйте ещё раз.");
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleResetPassword = async () => {
+    setError("");
+    setSuccess("");
+    if (!email) {
+      setError("Введите email для восстановления пароля.");
+      return;
+    }
+    setLoading(true);
+    try {
+      await sendPasswordReset(email);
+      setSuccess("Ссылка для восстановления отправлена на " + email);
+    } catch (e: any) {
+      if (e?.code === "auth/user-not-found") {
+        setError("Аккаунт с таким email не найден.");
       } else {
         setError("Ошибка. Попробуйте ещё раз.");
       }
@@ -81,6 +130,7 @@ export default function LoginPage() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-bg-page px-4">
       <div className="w-full max-w-sm text-center">
+        {/* Лого */}
         <div className="mb-8 flex justify-center">
           <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-text-primary text-bg-page">
             <span className="font-display text-lg font-bold">R</span>
@@ -91,100 +141,186 @@ export default function LoginPage() {
         </h1>
         <p className="mb-8 text-sm text-text-muted">Правки без хаоса</p>
 
-        {mode === "choose" ? (
-          <div className="space-y-3">
-            <button
-              type="button"
-              onClick={handleGoogle}
-              className="flex w-full items-center justify-center gap-3 rounded-xl border border-border-strong bg-bg-card px-5 py-3 text-sm font-medium text-text-primary transition-all hover:bg-bg-cardHover active:scale-[0.98]"
-            >
-              <GoogleIcon className="h-5 w-5" />
-              Войти через Google
-            </button>
-            <button
-              type="button"
-              onClick={() => setMode("email")}
-              className="flex w-full items-center justify-center gap-3 rounded-xl border border-border-strong bg-bg-card px-5 py-3 text-sm font-medium text-text-primary transition-all hover:bg-bg-cardHover active:scale-[0.98]"
-            >
-              <MailIcon className="h-5 w-5" />
-              Войти через почту
-            </button>
-          </div>
-        ) : (
-          <div className="space-y-3">
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => {
-                setEmail(e.target.value);
-                setError("");
-              }}
-              placeholder="Email"
-              className="h-11 w-full rounded-xl border border-border-strong bg-bg-input px-4 text-sm text-text-primary placeholder:text-text-muted focus:border-text-primary focus:outline-none"
-            />
-            <div>
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => {
-                  setPassword(e.target.value);
-                  setError("");
-                }}
-                placeholder="Пароль (минимум 6 символов)"
-                className="h-11 w-full rounded-xl border border-border-strong bg-bg-input px-4 text-sm text-text-primary placeholder:text-text-muted focus:border-text-primary focus:outline-none"
-              />
-              {password.length > 0 && (
-                <div className="mt-1 flex items-center justify-between px-1">
-                  <span className="text-[10px] text-text-muted">
-                    {password.length}/6 минимум
-                  </span>
-                  <span
-                    className={`text-[10px] ${
-                      password.length >= 6 ? "text-green-400" : "text-red-400"
-                    }`}
-                  >
-                    {password.length >= 6 ? "✓ ОК" : "✕ Мало"}
-                  </span>
-                </div>
-              )}
+        {screen === "choose" ? (
+          <>
+            <div className="space-y-3">
+              <button
+                type="button"
+                onClick={handleGoogle}
+                disabled={loading}
+                className="flex w-full items-center justify-center gap-3 rounded-xl border border-border-strong bg-bg-card px-5 py-3 text-sm font-medium text-text-primary transition-all hover:bg-bg-cardHover active:scale-[0.98] disabled:opacity-40"
+              >
+                <GoogleIcon className="h-5 w-5" />
+                Войти через Google
+              </button>
+              <button
+                type="button"
+                onClick={() => setScreen("email")}
+                className="flex w-full items-center justify-center gap-3 rounded-xl border border-border-strong bg-bg-card px-5 py-3 text-sm font-medium text-text-primary transition-all hover:bg-bg-cardHover active:scale-[0.98]"
+              >
+                <MailIcon className="h-5 w-5" />
+                Войти через почту
+              </button>
             </div>
-            {error && <p className="text-xs text-red-400">{error}</p>}
-            <button
-              type="button"
-              onClick={() => handleEmailAuth(false)}
-              disabled={loading || !canSubmit}
-              className="h-11 w-full rounded-xl bg-text-primary text-sm font-medium text-bg-page transition-all hover:opacity-90 active:scale-[0.98] disabled:opacity-40"
-            >
-              {loading ? "..." : "Войти"}
-            </button>
-            <button
-              type="button"
-              onClick={() => handleEmailAuth(true)}
-              disabled={loading || !canSubmit}
-              className="h-11 w-full rounded-xl border border-border-strong bg-bg-input text-sm font-medium text-text-primary transition-all hover:bg-bg-cardHover active:scale-[0.98] disabled:opacity-40"
-            >
-              {loading ? "..." : "Зарегистрироваться"}
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setMode("choose");
-                setError("");
-                setEmail("");
-                setPassword("");
-              }}
-              className="text-sm text-text-muted transition-colors hover:text-text-primary"
-            >
-              ← Назад
-            </button>
             <button
               type="button"
               onClick={() => router.push("/")}
-              className="text-sm text-text-muted transition-colors hover:text-text-primary"
+              className="mt-6 text-sm text-text-muted transition-colors hover:text-text-primary"
             >
               ← На главную
             </button>
-          </div>
+          </>
+        ) : (
+          <>
+            {/* Табы */}
+            <div className="mb-6 flex rounded-xl border border-border-strong bg-bg-input p-1">
+              <button
+                type="button"
+                onClick={() => {
+                  setTab("login");
+                  setError("");
+                  setSuccess("");
+                }}
+                className={`flex-1 rounded-lg py-2 text-sm font-medium transition-all ${
+                  tab === "login"
+                    ? "bg-bg-card text-text-primary shadow-sm"
+                    : "text-text-muted hover:text-text-primary"
+                }`}
+              >
+                Войти
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setTab("register");
+                  setError("");
+                  setSuccess("");
+                }}
+                className={`flex-1 rounded-lg py-2 text-sm font-medium transition-all ${
+                  tab === "register"
+                    ? "bg-bg-card text-text-primary shadow-sm"
+                    : "text-text-muted hover:text-text-primary"
+                }`}
+              >
+                Зарегистрироваться
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => {
+                  setEmail(e.target.value);
+                  setError("");
+                  setSuccess("");
+                }}
+                placeholder="Email"
+                className="h-12 w-full rounded-xl border border-border-strong bg-bg-input px-4 text-sm text-text-primary placeholder:text-text-muted focus:border-text-primary focus:outline-none"
+              />
+              <div>
+                <input
+                  type="password"
+                  value={password}
+                  onChange={(e) => {
+                    setPassword(e.target.value);
+                    setError("");
+                    setSuccess("");
+                  }}
+                  placeholder="Пароль (минимум 6 символов)"
+                  className="h-12 w-full rounded-xl border border-border-strong bg-bg-input px-4 text-sm text-text-primary placeholder:text-text-muted focus:border-text-primary focus:outline-none"
+                />
+                {password.length > 0 && (
+                  <div className="mt-1 flex items-center justify-between px-1">
+                    <span className="text-[10px] text-text-muted">
+                      {password.length}/6 минимум
+                    </span>
+                    <span
+                      className={`text-[10px] ${
+                        password.length >= 6 ? "text-green-400" : "text-red-400"
+                      }`}
+                    >
+                      {password.length >= 6 ? "✓ ОК" : "✕ Мало"}
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              {error && <p className="text-xs text-red-400">{error}</p>}
+              {success && <p className="text-xs text-green-400">{success}</p>}
+
+              <button
+                type="button"
+                onClick={tab === "login" ? handleLogin : handleRegister}
+                disabled={loading || !canSubmit}
+                className="h-12 w-full rounded-xl bg-text-primary text-sm font-medium text-bg-page transition-all hover:opacity-90 active:scale-[0.98] disabled:opacity-40"
+              >
+                {loading
+                  ? "..."
+                  : tab === "login"
+                    ? "Войти"
+                    : "Зарегистрироваться"}
+              </button>
+
+              {tab === "login" && (
+                <button
+                  type="button"
+                  onClick={handleResetPassword}
+                  className="text-xs text-text-muted transition-colors hover:text-text-primary"
+                >
+                  Забыли пароль?
+                </button>
+              )}
+
+              <div className="pt-2 text-xs text-text-muted">
+                {tab === "login" ? (
+                  <>
+                    Нет аккаунта?{" "}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setTab("register");
+                        setError("");
+                        setSuccess("");
+                      }}
+                      className="font-medium text-text-primary transition-colors hover:opacity-80"
+                    >
+                      Зарегистрируйтесь
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    Уже есть аккаунт?{" "}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setTab("login");
+                        setError("");
+                        setSuccess("");
+                      }}
+                      className="font-medium text-text-primary transition-colors hover:opacity-80"
+                    >
+                      Войдите
+                    </button>
+                  </>
+                )}
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => {
+                setScreen("choose");
+                setError("");
+                setSuccess("");
+                setEmail("");
+                setPassword("");
+              }}
+              className="mt-6 text-sm text-text-muted transition-colors hover:text-text-primary"
+            >
+              ← Назад
+            </button>
+          </>
         )}
       </div>
     </div>

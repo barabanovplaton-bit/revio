@@ -28,6 +28,7 @@ function App() {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
+  const [showLoading, setShowLoading] = useState(false);
 
   const [projects, setProjects] = useState<Project[]>([]);
   const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
@@ -37,6 +38,18 @@ function App() {
   const [menuFor, setMenuFor] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [hasNotifications] = useState(false);
+
+  // Проверяем ?loading=true в URL
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get("loading") === "true") {
+        setShowLoading(true);
+        // Чистим URL без перезагрузки
+        window.history.replaceState({}, "", "/");
+      }
+    }
+  }, []);
 
   const showToast = useCallback((msg: string) => {
     setToast(msg);
@@ -51,6 +64,11 @@ function App() {
     const unsub = subscribeToAuth(async (u) => {
       setUser(u);
       setAuthLoading(false);
+      if (showLoading) {
+        // Даём загрузке показаться минимум 800мс
+        await new Promise((r) => setTimeout(r, 800));
+        setShowLoading(false);
+      }
       if (u) {
         const { profile: p, isNew } = await import("@/lib/user-profile").then((m) =>
           m.getOrCreateUserProfile(u)
@@ -67,7 +85,7 @@ function App() {
       }
     });
     return () => unsub();
-  }, []);
+  }, [showLoading]);
 
   useEffect(() => {
     if (!user) {
@@ -143,10 +161,13 @@ function App() {
     [activeProjectId, showToast]
   );
 
-  if (authLoading) {
+  if (showLoading || authLoading) {
     return (
-      <div className="flex h-screen items-center justify-center bg-bg-page">
-        <div className="flex h-8 w-8 animate-spin rounded-full border-2 border-border-strong border-t-text-primary" />
+      <div className="flex h-screen flex-col items-center justify-center bg-bg-page">
+        <div className="mb-6 flex h-14 w-14 items-center justify-center rounded-2xl bg-text-primary text-bg-page">
+          <span className="font-display text-xl font-bold">R</span>
+        </div>
+        <div className="flex h-6 w-6 animate-spin rounded-full border-2 border-border-strong border-t-text-primary" />
       </div>
     );
   }
