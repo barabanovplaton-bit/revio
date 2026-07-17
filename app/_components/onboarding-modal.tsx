@@ -232,7 +232,7 @@ export function OnboardingModal({
       </div>
 
       {/* Content — scrollable */}
-      <div className="flex min-h-0 flex-1 justify-center overflow-y-auto px-4 pt-6 pb-6">
+      <div className="relative flex min-h-0 flex-1 justify-center overflow-y-auto px-4 pt-6 pb-6">
         <div className="w-full max-w-md">
           <AnimatePresence mode="wait">
             {/* Шаг 1: Имя (кнопка внутри — нет скролла) */}
@@ -310,20 +310,20 @@ export function OnboardingModal({
                 <p className="mb-5 text-center text-xs text-text-muted">
                   Это поможет подобрать шаблоны
                 </p>
-                <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-2">
                   {OCCUPATIONS.map((o) => (
                     <button
                       key={o.value}
                       type="button"
                       onClick={() => setOccupation(o.value)}
-                      className={`flex h-12 items-center gap-2 rounded-xl border px-3 text-left text-sm transition-all ${
+                      className={`flex h-12 w-full items-center gap-3 rounded-xl border px-4 text-left text-sm transition-all ${
                         occupation === o.value
                           ? "border-text-primary bg-bg-card"
                           : "border-border-strong bg-bg-card hover:border-text-primary/30"
                       }`}
                     >
                       <span className="shrink-0 text-text-muted">{o.icon}</span>
-                      <span className="text-text-primary truncate">{o.label}</span>
+                      <span className="text-text-primary">{o.label}</span>
                     </button>
                   ))}
                 </div>
@@ -345,20 +345,20 @@ export function OnboardingModal({
                 <p className="mb-5 text-center text-xs text-text-muted">
                   Это поможет нам стать лучше
                 </p>
-                <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-2">
                   {REFERRAL_SOURCES.map((r) => (
                     <button
                       key={r.value}
                       type="button"
                       onClick={() => setReferral(r.value)}
-                      className={`flex h-12 items-center gap-2 rounded-xl border px-3 text-left text-sm transition-all ${
+                      className={`flex h-12 w-full items-center gap-3 rounded-xl border px-4 text-left text-sm transition-all ${
                         referral === r.value
                           ? "border-text-primary bg-bg-card"
                           : "border-border-strong bg-bg-card hover:border-text-primary/30"
                       }`}
                     >
                       <span className="shrink-0 text-text-muted">{r.icon}</span>
-                      <span className="text-text-primary truncate">{r.label}</span>
+                      <span className="text-text-primary">{r.label}</span>
                     </button>
                   ))}
                 </div>
@@ -366,11 +366,14 @@ export function OnboardingModal({
             )}
           </AnimatePresence>
         </div>
+        {(step === 1 || step === 2) && (
+          <div className="pointer-events-none absolute inset-x-0 bottom-0 h-28 bg-gradient-to-t from-bg-page to-transparent" />
+        )}
       </div>
 
       {/* Fixed bottom bar — buttons (steps 1 & 2) */}
       {step === 1 && (
-        <div className="shrink-0 border-t border-border-strong bg-bg-page px-4 py-4">
+        <div className="shrink-0 bg-bg-page px-4 pt-6 pb-4">
           <div className="mx-auto flex max-w-md gap-2">
             <button
               type="button"
@@ -391,7 +394,7 @@ export function OnboardingModal({
         </div>
       )}
       {step === 2 && (
-        <div className="shrink-0 border-t border-border-strong bg-bg-page px-4 py-4">
+        <div className="shrink-0 bg-bg-page px-4 pt-6 pb-4">
           <div className="mx-auto flex max-w-md gap-2">
             <button
               type="button"
