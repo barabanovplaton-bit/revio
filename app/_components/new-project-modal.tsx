@@ -83,10 +83,14 @@ export function NewProjectModal({
         {
           name: name.trim(),
           description: description.trim(),
+          clientName: "",
+          clientContact: "",
           roundsTotal: Math.max(1, Number(roundsTotal) || 1),
           roundsLeft: Math.max(1, Number(roundsTotal) || 1),
           limitMessage: limitMessage.trim(),
           icon: emoji,
+          iconColor: "#E880FC",
+          status: "waiting_for_images",
         },
         ownerUid
       );

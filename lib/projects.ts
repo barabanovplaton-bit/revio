@@ -22,6 +22,8 @@ export interface Project {
   ownerUid: string;
   name: string;
   description: string;
+  clientName: string;
+  clientContact: string;
   /** Массив URL картинок (Cloudinary) */
   imageUrls: string[];
   /** Текущий круг правок */
@@ -37,8 +39,12 @@ export interface Project {
   pinned: boolean;
   /** Архивный (не показывается в основном списке) */
   archived: boolean;
-  /** Иконка проекта (эмодзи или символ) — для разнообразия */
+  /** Иконка проекта */
   icon: string;
+  /** Цвет иконки */
+  iconColor: string;
+  /** Статус проекта */
+  status: "waiting_for_images" | "in_progress" | "exhausted";
   createdAt: Timestamp | null;
   updatedAt: Timestamp | null;
 }
@@ -49,14 +55,16 @@ const COLLECTION = "projects";
 export async function createProject(
   data: Omit<
     Project,
-    "id" | "ownerUid" | "imageUrls" | "currentRound" | "isLocked" | "pinned" | "archived" | "icon" | "createdAt" | "updatedAt"
-  > & { icon?: string },
+    "id" | "ownerUid" | "imageUrls" | "currentRound" | "isLocked" | "pinned" | "archived" | "createdAt" | "updatedAt"
+  > & { icon?: string; iconColor?: string; status?: Project["status"] },
   ownerUid: string
 ): Promise<string> {
   const docRef = await addDoc(collection(db, COLLECTION), {
     ownerUid,
     name: data.name,
     description: data.description,
+    clientName: data.clientName || "",
+    clientContact: data.clientContact || "",
     imageUrls: [],
     currentRound: 1,
     roundsTotal: data.roundsTotal,
@@ -66,6 +74,8 @@ export async function createProject(
     pinned: false,
     archived: false,
     icon: data.icon || "📁",
+    iconColor: data.iconColor || "#E880FC",
+    status: data.status || "waiting_for_images",
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   });

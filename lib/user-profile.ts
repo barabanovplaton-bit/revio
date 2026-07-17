@@ -40,6 +40,7 @@ export interface UserProfile {
   occupation: Occupation | null;
   referralSource: ReferralSource | null;
   onboardingCompleted: boolean;
+  plan: "free" | "pro";
   createdAt: Timestamp | null;
   updatedAt: Timestamp | null;
 }
@@ -73,6 +74,7 @@ export async function getOrCreateUserProfile(
     occupation: null,
     referralSource: null,
     onboardingCompleted: false,
+    plan: "free",
     createdAt: null,
     updatedAt: null,
   };

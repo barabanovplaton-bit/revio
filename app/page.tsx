@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { BellIcon } from "./_components/bell-icon";
 import { Avatar } from "./_components/avatar";
-import { NewProjectModal } from "./_components/new-project-modal";
+import { NewProjectWizard } from "./_components/new-project-wizard";
 import { OnboardingModal } from "./_components/onboarding-modal";
 import { signOut, subscribeToAuth, type User } from "@/lib/auth";
 import { type UserProfile } from "@/lib/user-profile";
@@ -373,9 +373,10 @@ function App() {
       </main>
 
       {newProjectOpen && user && (
-        <NewProjectModal
+        <NewProjectWizard
           open={newProjectOpen}
           ownerUid={user.uid}
+          userPlan={profile?.plan || "free"}
           onClose={() => setNewProjectOpen(false)}
           onCreated={handleProjectCreated}
         />
@@ -472,6 +473,7 @@ function ProjectCard({
                 {project.name}
               </div>
               <div className="flex items-center gap-2 text-xs text-text-muted">
+                <StatusBadge status={project.status} />
                 <span>Круг {project.currentRound}/{project.roundsTotal}</span>
                 <span>·</span>
                 <span>{formatRelativeTime(project.updatedAt)}</span>
@@ -606,5 +608,19 @@ function PlusIcon({ className }: { className?: string }) {
     <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round">
       <path d="M12 5v14M5 12h14" />
     </svg>
+  );
+}
+
+function StatusBadge({ status }: { status: Project["status"] }) {
+  const config = {
+    waiting_for_images: { text: "Ожидает", color: "bg-yellow-500/20 text-yellow-400" },
+    in_progress: { text: "В работе", color: "bg-green-500/20 text-green-400" },
+    exhausted: { text: "Раунды закончились", color: "bg-red-500/20 text-red-400" },
+  };
+  const { text, color } = config[status] || config.waiting_for_images;
+  return (
+    <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium ${color}`}>
+      {text}
+    </span>
   );
 }
