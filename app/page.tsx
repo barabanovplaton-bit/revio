@@ -29,6 +29,7 @@ function App() {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [showLoading, setShowLoading] = useState(false);
+  const [profileLoaded, setProfileLoaded] = useState(false);
 
   const [projects, setProjects] = useState<Project[]>([]);
   const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
@@ -74,6 +75,7 @@ function App() {
           m.getOrCreateUserProfile(u)
         );
         setProfile(p);
+        setProfileLoaded(true);
         if (isNew || (p && !p.onboardingCompleted)) {
           setOnboardingNeeded(true);
         }
@@ -82,6 +84,7 @@ function App() {
         setProjects([]);
         setActiveProjectId(null);
         setOnboardingNeeded(false);
+        setProfileLoaded(true);
       }
     });
     return () => unsub();
@@ -161,7 +164,7 @@ function App() {
     [activeProjectId, showToast]
   );
 
-  if (showLoading || authLoading) {
+  if (showLoading || authLoading || !profileLoaded) {
     return (
       <div className="flex h-screen flex-col items-center justify-center bg-bg-page">
         <div className="mb-6 flex h-14 w-14 items-center justify-center rounded-2xl bg-text-primary text-bg-page">

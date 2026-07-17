@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   saveOnboarding,
@@ -201,11 +201,6 @@ export function OnboardingModal({
   const [referral, setReferral] = useState<ReferralSource | null>(null);
   const [otherReferral, setOtherReferral] = useState("");
   const [saving, setSaving] = useState(false);
-  const scrollRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    scrollRef.current?.scrollTo({ top: 0, behavior: "smooth" });
-  }, [step]);
 
   const handleFinish = async () => {
     if (!name.trim() || !occupation || !referral) return;
@@ -248,7 +243,7 @@ export function OnboardingModal({
       </div>
 
       {/* Content — scrollable */}
-      <div ref={scrollRef} className="flex flex-1 justify-center overflow-y-auto px-4 pt-6 pb-12">
+      <div className="flex flex-1 justify-center overflow-y-auto px-4 pt-6 pb-16">
         <div className="w-full max-w-md">
           <AnimatePresence mode="wait">
             {/* Шаг 1: Имя */}
