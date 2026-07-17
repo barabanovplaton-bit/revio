@@ -154,7 +154,7 @@ const REFERRAL_SOURCES: {
   },
   {
     value: "search",
-    label: "Поиск (Google и т.д.)",
+    label: "Поиск",
     icon: (
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5">
         <circle cx="11" cy="11" r="7" />
@@ -242,8 +242,8 @@ export function OnboardingModal({
         </div>
       </div>
 
-      {/* Content */}
-      <div className="flex flex-1 items-center justify-center px-4">
+      {/* Content — scrollable */}
+      <div className="flex flex-1 justify-center overflow-y-auto px-4 pt-6 pb-4">
         <div className="w-full max-w-md">
           <AnimatePresence mode="wait">
             {/* Шаг 1: Имя */}
@@ -305,7 +305,7 @@ export function OnboardingModal({
               </motion.div>
             )}
 
-            {/* Шаг 2: Должность — 2 колонки, последний на всю ширину */}
+            {/* Шаг 2: Должность — 1 колонка */}
             {step === 1 && (
               <motion.div
                 key="step1"
@@ -317,7 +317,7 @@ export function OnboardingModal({
                 <h2 className="mb-1 text-center font-display text-xl font-semibold text-text-primary">
                   Чем вы занимаетесь?
                 </h2>
-                <p className="mb-6 text-center text-xs text-text-muted">
+                <p className="mb-5 text-center text-xs text-text-muted">
                   Это поможет подобрать шаблоны
                 </p>
                 <div className="space-y-2">
@@ -332,28 +332,31 @@ export function OnboardingModal({
                           : "border-border-strong bg-bg-card hover:border-text-primary/30"
                       }`}
                     >
-                      <span className="text-text-muted">{o.icon}</span>
+                      <span className="shrink-0 text-text-muted">{o.icon}</span>
                       <span className="text-text-primary">{o.label}</span>
                     </button>
                   ))}
                 </div>
                 <AnimatePresence>
                   {occupation === "other" && (
-                    <motion.input
-                      initial={{ opacity: 0, height: 0 }}
-                      animate={{ opacity: 1, height: 48 }}
-                      exit={{ opacity: 0, height: 0 }}
-                      transition={{ duration: 0.2, ease: "easeInOut" }}
-                      type="text"
-                      value={otherOccupation}
-                      onChange={(e) => setOtherOccupation(e.target.value)}
-                      placeholder="Напишите чем занимаетесь"
-                      autoFocus
-                      className="mt-2 h-12 w-full rounded-xl border border-border-strong bg-bg-input px-4 text-sm text-text-primary placeholder:text-text-muted focus:border-text-primary focus:outline-none"
-                    />
+                    <motion.div
+                      initial={{ opacity: 0, y: -8 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -8 }}
+                      transition={{ duration: 0.25, ease: "easeInOut" }}
+                    >
+                      <input
+                        type="text"
+                        value={otherOccupation}
+                        onChange={(e) => setOtherOccupation(e.target.value)}
+                        placeholder="Напишите чем занимаетесь"
+                        autoFocus
+                        className="mt-2 h-12 w-full rounded-xl border border-border-strong bg-bg-input px-4 text-sm text-text-primary placeholder:text-text-muted focus:border-text-primary focus:outline-none"
+                      />
+                    </motion.div>
                   )}
                 </AnimatePresence>
-                <div className="mt-4 flex gap-2">
+                <div className="mt-5 flex gap-2">
                   <button
                     type="button"
                     onClick={() => setStep(0)}
@@ -373,7 +376,7 @@ export function OnboardingModal({
               </motion.div>
             )}
 
-            {/* Шаг 3: Откуда узнали — 1 столбец */}
+            {/* Шаг 3: Откуда узнали — 1 колонка */}
             {step === 2 && (
               <motion.div
                 key="step2"
@@ -385,43 +388,46 @@ export function OnboardingModal({
                 <h2 className="mb-1 text-center font-display text-xl font-semibold text-text-primary">
                   Откуда вы о нас узнали?
                 </h2>
-                <p className="mb-6 text-center text-xs text-text-muted">
+                <p className="mb-5 text-center text-xs text-text-muted">
                   Это поможет нам стать лучше
                 </p>
-                <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-2">
                   {REFERRAL_SOURCES.map((r) => (
                     <button
                       key={r.value}
                       type="button"
                       onClick={() => setReferral(r.value)}
-                      className={`flex h-12 items-center gap-3 rounded-xl border px-4 text-left text-sm transition-all ${
+                      className={`flex h-12 w-full items-center gap-3 rounded-xl border px-4 text-left text-sm transition-all ${
                         referral === r.value
                           ? "border-text-primary bg-bg-card"
                           : "border-border-strong bg-bg-card hover:border-text-primary/30"
                       }`}
                     >
                       <span className="shrink-0 text-text-muted">{r.icon}</span>
-                      <span className="truncate text-text-primary">{r.label}</span>
+                      <span className="text-text-primary">{r.label}</span>
                     </button>
                   ))}
                 </div>
                 <AnimatePresence>
                   {referral === "other" && (
-                    <motion.input
-                      initial={{ opacity: 0, height: 0 }}
-                      animate={{ opacity: 1, height: 48 }}
-                      exit={{ opacity: 0, height: 0 }}
-                      transition={{ duration: 0.2, ease: "easeInOut" }}
-                      type="text"
-                      value={otherReferral}
-                      onChange={(e) => setOtherReferral(e.target.value)}
-                      placeholder="Расскажите подробнее"
-                      autoFocus
-                      className="mt-2 h-12 w-full rounded-xl border border-border-strong bg-bg-input px-4 text-sm text-text-primary placeholder:text-text-muted focus:border-text-primary focus:outline-none"
-                    />
+                    <motion.div
+                      initial={{ opacity: 0, y: -8 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -8 }}
+                      transition={{ duration: 0.25, ease: "easeInOut" }}
+                    >
+                      <input
+                        type="text"
+                        value={otherReferral}
+                        onChange={(e) => setOtherReferral(e.target.value)}
+                        placeholder="Расскажите подробнее"
+                        autoFocus
+                        className="mt-2 h-12 w-full rounded-xl border border-border-strong bg-bg-input px-4 text-sm text-text-primary placeholder:text-text-muted focus:border-text-primary focus:outline-none"
+                      />
+                    </motion.div>
                   )}
                 </AnimatePresence>
-                <div className="mt-4 flex gap-2">
+                <div className="mt-5 flex gap-2">
                   <button
                     type="button"
                     onClick={() => setStep(1)}
