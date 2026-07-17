@@ -2,7 +2,6 @@
 
 import { useState, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Upload, X, Image as ImageIcon, Loader2 } from "lucide-react";
 import { uploadImage, type UploadResult } from "@/lib/cloudinary";
 import { cn } from "@/lib/utils";
 
@@ -10,7 +9,7 @@ interface ImageUploaderProps {
   onUpload: (result: UploadResult) => void;
   onError?: (error: string) => void;
   disabled?: boolean;
-  maxSize?: number; // в MB
+  maxSize?: number;
   accept?: string;
 }
 
@@ -27,13 +26,11 @@ export function ImageUploader({
 
   const handleFile = useCallback(
     async (file: File) => {
-      // Проверка размера
       if (file.size > maxSize * 1024 * 1024) {
         onError?.(`Файл слишком большой. Максимум ${maxSize}MB`);
         return;
       }
 
-      // Проверка типа
       if (!file.type.startsWith("image/")) {
         onError?.("Только изображения");
         return;
@@ -61,23 +58,20 @@ export function ImageUploader({
     (e: React.DragEvent) => {
       e.preventDefault();
       setIsDragging(false);
-
       if (disabled) return;
-
       const file = e.dataTransfer.files[0];
-      if (file) {
-        handleFile(file);
-      }
+      if (file) handleFile(file);
     },
     [disabled, handleFile]
   );
 
-  const handleDragOver = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    if (!disabled) {
-      setIsDragging(true);
-    }
-  }, [disabled]);
+  const handleDragOver = useCallback(
+    (e: React.DragEvent) => {
+      e.preventDefault();
+      if (!disabled) setIsDragging(true);
+    },
+    [disabled]
+  );
 
   const handleDragLeave = useCallback(() => {
     setIsDragging(false);
@@ -86,9 +80,7 @@ export function ImageUploader({
   const handleInputChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0];
-      if (file) {
-        handleFile(file);
-      }
+      if (file) handleFile(file);
     },
     [handleFile]
   );
@@ -121,12 +113,24 @@ export function ImageUploader({
 
         {isUploading ? (
           <div className="flex flex-col items-center gap-3">
-            <Loader2 className="h-8 w-8 animate-spin text-text-primary" />
+            <div className="h-8 w-8 animate-spin rounded-full border-2 border-border-strong border-t-text-primary" />
             <p className="text-sm text-text-muted">Загрузка...</p>
           </div>
         ) : (
           <div className="flex flex-col items-center gap-3 px-4 text-center">
-            <Upload className="h-8 w-8 text-text-muted" />
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={1.5}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className="h-8 w-8 text-text-muted"
+            >
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+              <polyline points="17 8 12 3 7 8" />
+              <line x1="12" y1="3" x2="12" y2="15" />
+            </svg>
             <div>
               <p className="text-sm font-medium text-text-primary">
                 Перетащите изображение сюда
@@ -158,7 +162,17 @@ export function ImageUploader({
                 onClick={clearPreview}
                 className="absolute -right-2 -top-2 flex h-6 w-6 items-center justify-center rounded-full bg-bg-card border border-border-strong text-text-primary shadow-lg hover:bg-bg-cardHover"
               >
-                <X className="h-4 w-4" />
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth={2}
+                  strokeLinecap="round"
+                  className="h-4 w-4"
+                >
+                  <path d="M18 6 6 18" />
+                  <path d="m6 6 12 12" />
+                </svg>
               </button>
             </div>
           </motion.div>
@@ -192,7 +206,17 @@ export function UploadedImage({
           onClick={onRemove}
           className="absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-lg bg-bg-card/90 backdrop-blur-sm border border-border-strong text-text-primary opacity-0 transition-opacity group-hover:opacity-100 hover:bg-bg-cardHover"
         >
-          <X className="h-4 w-4" />
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth={2}
+            strokeLinecap="round"
+            className="h-4 w-4"
+          >
+            <path d="M18 6 6 18" />
+            <path d="m6 6 12 12" />
+          </svg>
         </button>
       )}
     </div>

@@ -2,9 +2,13 @@
 
 import { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { MessageSquare, X, Send, ZoomIn, ZoomOut, ChevronLeft, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { createMarker, subscribeToProjectMarkers, type Marker } from "@/lib/markers";
+import {
+  createMarker,
+  deleteMarker,
+  subscribeToProjectMarkers,
+  type Marker,
+} from "@/lib/markers";
 
 interface MarkerCanvasProps {
   imageUrls: string[];
@@ -20,7 +24,10 @@ export function MarkerCanvas({
   isLocked,
 }: MarkerCanvasProps) {
   const [markers, setMarkers] = useState<Marker[]>([]);
-  const [pendingMarker, setPendingMarker] = useState<{ x: number; y: number } | null>(null);
+  const [pendingMarker, setPendingMarker] = useState<{
+    x: number;
+    y: number;
+  } | null>(null);
   const [showGeneralForm, setShowGeneralForm] = useState(false);
   const [markerText, setMarkerText] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -29,26 +36,26 @@ export function MarkerCanvas({
   const [position, setPosition] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+  const [hoveredMarker, setHoveredMarker] = useState<string | null>(null);
+  const [markerToDelete, setMarkerToDelete] = useState<string | null>(null);
 
   const containerRef = useRef<HTMLDivElement>(null);
-  const imageRef = useRef<HTMLImageElement>(null);
+  const dragMovedRef = useRef(false);
 
-  // Подписка на метки в реалтайме
   useEffect(() => {
-    const unsub = subscribeToProjectMarkers(projectId, round, (markers) => {
-      setMarkers(markers);
+    const unsub = subscribeToProjectMarkers(projectId, round, (m) => {
+      setMarkers(m);
     });
     return () => unsub();
   }, [projectId, round]);
 
-  // Сброс зума при смене картинки
   useEffect(() => {
     setScale(1);
     setPosition({ x: 0, y: 0 });
   }, [currentIndex]);
 
-  const handleImageClick = (e: React.MouseEvent<HTMLImageElement>) => {
-    if (isLocked || scale > 1 || isDragging) return;
+  const handleImageClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (isLocked || isDragging || dragMovedRef.current) return;
 
     const rect = e.currentTarget.getBoundingClientRect();
     const x = (e.clientX - rect.left) / rect.width;
@@ -64,7 +71,6 @@ export function MarkerCanvas({
     setIsSubmitting(true);
     try {
       if (pendingMarker) {
-        // Точечный маркер
         await createMarker({
           projectId,
           round,
@@ -75,7 +81,6 @@ export function MarkerCanvas({
         });
         setPendingMarker(null);
       } else {
-        // Общий маркер
         await createMarker({
           projectId,
           round,
@@ -92,41 +97,34 @@ export function MarkerCanvas({
     }
   };
 
-  const handleCancelMarker = () => {
-    setPendingMarker(null);
-    setMarkerText("");
+  const handleDeleteMarker = async (id: string) => {
+    try {
+      await deleteMarker(id);
+      setMarkerToDelete(null);
+    } catch (error) {
+      console.error("Failed to delete marker:", error);
+    }
   };
 
-  const handleCancelGeneral = () => {
-    setShowGeneralForm(false);
-    setMarkerText("");
-  };
-
-  const handleZoomIn = () => {
-    setScale((prev) => Math.min(prev + 0.25, 3));
-  };
-
-  const handleZoomOut = () => {
-    setScale((prev) => Math.max(prev - 0.25, 1));
-  };
+  const handleZoomIn = () => setScale((p) => Math.min(p + 0.25, 3));
+  const handleZoomOut = () => setScale((p) => Math.max(p - 0.25, 1));
 
   const handleWheel = (e: React.WheelEvent) => {
     e.preventDefault();
-    if (e.deltaY < 0) {
-      handleZoomIn();
-    } else {
-      handleZoomOut();
-    }
+    if (e.deltaY < 0) handleZoomIn();
+    else handleZoomOut();
   };
 
   const handleMouseDown = (e: React.MouseEvent) => {
     if (scale <= 1) return;
     setIsDragging(true);
+    dragMovedRef.current = false;
     setDragStart({ x: e.clientX - position.x, y: e.clientY - position.y });
   };
 
   const handleMouseMove = (e: React.MouseEvent) => {
     if (!isDragging) return;
+    dragMovedRef.current = true;
     setPosition({
       x: e.clientX - dragStart.x,
       y: e.clientY - dragStart.y,
@@ -138,22 +136,22 @@ export function MarkerCanvas({
   };
 
   const handleNextImage = () => {
-    if (currentIndex < imageUrls.length - 1) {
-      setCurrentIndex((prev) => prev + 1);
-    }
+    if (currentIndex < imageUrls.length - 1) setCurrentIndex((p) => p + 1);
   };
-
   const handlePrevImage = () => {
-    if (currentIndex > 0) {
-      setCurrentIndex((prev) => prev - 1);
-    }
+    if (currentIndex > 0) setCurrentIndex((p) => p - 1);
   };
 
   const currentImageUrl = imageUrls[currentIndex];
+  const currentMarkers = markers.filter(
+    (m) => m.type === "point" && m.x !== undefined && m.y !== undefined
+  );
 
   return (
-    <div className="relative h-full w-full overflow-hidden" ref={containerRef}>
-      {/* Контейнер с зумом и паном */}
+    <div
+      className="relative h-full w-full overflow-hidden"
+      ref={containerRef}
+    >
       <div
         className="absolute inset-0 flex items-center justify-center"
         onWheel={handleWheel}
@@ -161,47 +159,86 @@ export function MarkerCanvas({
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
         onMouseLeave={handleMouseUp}
-        style={{ cursor: scale > 1 ? (isDragging ? "grabbing" : "grab") : "crosshair" }}
+        style={{
+          cursor: scale > 1 ? (isDragging ? "grabbing" : "grab") : "crosshair",
+        }}
       >
         <div
           className="relative"
           style={{
-            transform: `scale(${scale}) translate(${position.x}px, ${position.y}px)`,
+            transform: `scale(${scale}) translate(${position.x / scale}px, ${position.y / scale}px)`,
             transition: isDragging ? "none" : "transform 0.2s ease-out",
           }}
+          onClick={handleImageClick}
         >
           <img
-            ref={imageRef}
             src={currentImageUrl}
             alt="Project"
-            className="max-w-full max-h-full object-contain"
-            onClick={handleImageClick}
+            className="max-w-full max-h-[calc(100vh-8rem)] object-contain select-none"
             draggable={false}
           />
         </div>
       </div>
 
-      {/* Метки на картинке */}
-      {markers.map((marker) => (
+      {currentMarkers.map((marker) => (
         <div
           key={marker.id}
-          className="absolute cursor-pointer group"
+          className="absolute group"
           style={{
             left: `${(marker.x || 0) * 100}%`,
             top: `${(marker.y || 0) * 100}%`,
-            transform: `translate(-50%, -50%) scale(${scale})`,
+            transform: "translate(-50%, -50%)",
+            zIndex: hoveredMarker === marker.id ? 30 : 10,
           }}
         >
-          <div className="relative">
-            <div className="h-4 w-4 rounded-full bg-text-primary border-2 border-bg-page shadow-lg group-hover:scale-125 transition-transform" />
-            <div className="absolute left-6 top-1/2 -translate-y-1/2 max-w-xs bg-bg-card border border-border-strong rounded-lg px-3 py-2 shadow-xl opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
-              <p className="text-sm text-text-primary">{marker.text}</p>
-            </div>
+          <div
+            className={cn(
+              "relative flex h-6 w-6 -translate-x-1 -translate-y-1 items-center justify-center rounded-full border-2 border-white/80 shadow-lg transition-transform",
+              marker.type === "point" ? "bg-text-primary" : "bg-blue-500",
+              hoveredMarker === marker.id && "scale-125"
+            )}
+            onMouseEnter={() => setHoveredMarker(marker.id)}
+            onMouseLeave={() => setHoveredMarker(null)}
+          >
+            {marker.type === "general" && (
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="white"
+                strokeWidth={2}
+                className="h-3 w-3"
+              >
+                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+              </svg>
+            )}
           </div>
+
+          {hoveredMarker === marker.id && (
+            <div className="absolute left-8 top-1/2 z-40 -translate-y-1/2 w-64 rounded-xl border border-border-strong bg-bg-card p-3 shadow-2xl">
+              <p className="text-sm text-text-primary">{marker.text}</p>
+              {marker.type === "point" && (
+                <p className="mt-1 text-[10px] text-text-muted">
+                  ({Math.round((marker.x || 0) * 100)}%,{" "}
+                  {Math.round((marker.y || 0) * 100)}%)
+                </p>
+              )}
+              {!isLocked && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setMarkerToDelete(marker.id);
+                  }}
+                  className="mt-2 text-[10px] text-red-400 hover:text-red-300 transition-colors"
+                >
+                  Удалить
+                </button>
+              )}
+            </div>
+          )}
         </div>
       ))}
 
-      {/* Контролы зума */}
       <div className="absolute bottom-4 left-4 flex items-center gap-2 bg-bg-card/90 backdrop-blur-sm border border-border-strong rounded-xl p-2">
         <button
           type="button"
@@ -209,7 +246,18 @@ export function MarkerCanvas({
           disabled={scale <= 1}
           className="p-2 rounded-lg text-text-primary hover:bg-bg-cardHover disabled:opacity-50 transition-colors"
         >
-          <ZoomOut className="h-4 w-4" />
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth={2}
+            strokeLinecap="round"
+            className="h-4 w-4"
+          >
+            <circle cx="11" cy="11" r="8" />
+            <path d="m21 21-4.3-4.3" />
+            <path d="M8 11h6" />
+          </svg>
         </button>
         <span className="text-sm text-text-primary min-w-[3rem] text-center">
           {Math.round(scale * 100)}%
@@ -220,11 +268,22 @@ export function MarkerCanvas({
           disabled={scale >= 3}
           className="p-2 rounded-lg text-text-primary hover:bg-bg-cardHover disabled:opacity-50 transition-colors"
         >
-          <ZoomIn className="h-4 w-4" />
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth={2}
+            strokeLinecap="round"
+            className="h-4 w-4"
+          >
+            <circle cx="11" cy="11" r="8" />
+            <path d="m21 21-4.3-4.3" />
+            <path d="M11 8v6" />
+            <path d="M8 11h6" />
+          </svg>
         </button>
       </div>
 
-      {/* Контролы навигации по картинкам */}
       {imageUrls.length > 1 && (
         <>
           <button
@@ -233,7 +292,17 @@ export function MarkerCanvas({
             disabled={currentIndex === 0}
             className="absolute left-4 top-1/2 -translate-y-1/2 p-2 rounded-full bg-bg-card/90 backdrop-blur-sm border border-border-strong text-text-primary hover:bg-bg-cardHover disabled:opacity-50 transition-colors"
           >
-            <ChevronLeft className="h-5 w-5" />
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={2}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className="h-5 w-5"
+            >
+              <path d="m15 18-6-6 6-6" />
+            </svg>
           </button>
           <button
             type="button"
@@ -241,7 +310,17 @@ export function MarkerCanvas({
             disabled={currentIndex === imageUrls.length - 1}
             className="absolute right-4 top-1/2 -translate-y-1/2 p-2 rounded-full bg-bg-card/90 backdrop-blur-sm border border-border-strong text-text-primary hover:bg-bg-cardHover disabled:opacity-50 transition-colors"
           >
-            <ChevronRight className="h-5 w-5" />
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={2}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className="h-5 w-5"
+            >
+              <path d="m9 18 6-6-6-6" />
+            </svg>
           </button>
           <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-bg-card/90 backdrop-blur-sm border border-border-strong rounded-lg px-3 py-1.5 text-sm text-text-primary">
             {currentIndex + 1} / {imageUrls.length}
@@ -249,18 +328,17 @@ export function MarkerCanvas({
         </>
       )}
 
-      {/* Форма для точечного маркера */}
       <AnimatePresence>
         {pendingMarker && (
           <motion.div
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.9 }}
-            className="absolute z-10 bg-bg-card border border-border-strong rounded-xl shadow-2xl p-4 w-72"
+            className="absolute z-20 bg-bg-card border border-border-strong rounded-xl shadow-2xl p-4 w-72"
             style={{
               left: `${pendingMarker.x * 100}%`,
               top: `${pendingMarker.y * 100}%`,
-              transform: `translate(-50%, -100%) translateY(-16px) scale(${scale})`,
+              transform: "translate(-50%, -100%) translateY(-16px)",
             }}
           >
             <textarea
@@ -274,7 +352,10 @@ export function MarkerCanvas({
             <div className="mt-3 flex items-center justify-end gap-2">
               <button
                 type="button"
-                onClick={handleCancelMarker}
+                onClick={() => {
+                  setPendingMarker(null);
+                  setMarkerText("");
+                }}
                 disabled={isSubmitting}
                 className="rounded-lg border border-border-strong px-3 py-1.5 text-sm text-text-primary transition-all hover:bg-bg-cardHover disabled:opacity-50"
               >
@@ -286,49 +367,65 @@ export function MarkerCanvas({
                 disabled={!markerText.trim() || isSubmitting}
                 className="flex items-center gap-1.5 rounded-lg bg-text-primary px-3 py-1.5 text-sm font-medium text-bg-page transition-all hover:opacity-90 disabled:opacity-50"
               >
-                {isSubmitting ? (
-                  "Отправка..."
-                ) : (
-                  <>
-                    <Send className="h-3.5 w-3.5" />
-                    Отправить
-                  </>
-                )}
+                {isSubmitting ? "Отправка..." : "Отправить"}
               </button>
             </div>
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* Кнопка общего комментария */}
       {!isLocked && (
         <button
           type="button"
           onClick={() => setShowGeneralForm(true)}
-          className="absolute bottom-4 right-4 flex items-center gap-2 rounded-xl bg-text-primary px-4 py-3 text-sm font-medium text-bg-page shadow-lg transition-all hover:opacity-90"
+          className="absolute bottom-4 right-4 flex items-center gap-2 rounded-xl bg-text-primary px-4 py-3 text-sm font-medium text-bg-page shadow-lg transition-all hover:opacity-90 active:scale-[0.98]"
         >
-          <MessageSquare className="h-4 w-4" />
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth={2}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            className="h-4 w-4"
+          >
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+          </svg>
           <span className="hidden sm:inline">Общий комментарий</span>
         </button>
       )}
 
-      {/* Форма общего комментария */}
       <AnimatePresence>
         {showGeneralForm && (
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 20 }}
-            className="absolute bottom-4 right-4 z-10 bg-bg-card border border-border-strong rounded-xl shadow-2xl p-4 w-80"
+            className="absolute bottom-4 right-4 z-20 bg-bg-card border border-border-strong rounded-xl shadow-2xl p-4 w-80"
           >
             <div className="flex items-center justify-between mb-3">
-              <h3 className="font-semibold text-text-primary">Общий комментарий</h3>
+              <h3 className="font-semibold text-text-primary">
+                Общий комментарий
+              </h3>
               <button
                 type="button"
-                onClick={handleCancelGeneral}
+                onClick={() => {
+                  setShowGeneralForm(false);
+                  setMarkerText("");
+                }}
                 className="rounded-lg p-1 text-text-muted hover:bg-bg-cardHover hover:text-text-primary transition-colors"
               >
-                <X className="h-4 w-4" />
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth={2}
+                  strokeLinecap="round"
+                  className="h-4 w-4"
+                >
+                  <path d="M18 6 6 18" />
+                  <path d="m6 6 12 12" />
+                </svg>
               </button>
             </div>
             <textarea
@@ -346,15 +443,44 @@ export function MarkerCanvas({
                 disabled={!markerText.trim() || isSubmitting}
                 className="flex items-center gap-1.5 rounded-lg bg-text-primary px-4 py-2 text-sm font-medium text-bg-page transition-all hover:opacity-90 disabled:opacity-50"
               >
-                {isSubmitting ? (
-                  "Отправка..."
-                ) : (
-                  <>
-                    <Send className="h-3.5 w-3.5" />
-                    Отправить
-                  </>
-                )}
+                {isSubmitting ? "Отправка..." : "Отправить"}
               </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {markerToDelete && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm"
+          >
+            <div className="bg-bg-card border border-border-strong rounded-2xl p-6 max-w-sm w-full shadow-2xl">
+              <h2 className="text-lg font-semibold text-text-primary mb-2">
+                Удалить маркер?
+              </h2>
+              <p className="text-sm text-text-muted mb-4">
+                Это действие нельзя отменить.
+              </p>
+              <div className="flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setMarkerToDelete(null)}
+                  className="rounded-lg border border-border-strong px-4 py-2 text-sm text-text-primary transition-all hover:bg-bg-cardHover"
+                >
+                  Отмена
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleDeleteMarker(markerToDelete)}
+                  className="rounded-lg bg-red-500 px-4 py-2 text-sm font-medium text-white transition-all hover:bg-red-600"
+                >
+                  Удалить
+                </button>
+              </div>
             </div>
           </motion.div>
         )}
