@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { cn } from "@/lib/utils";
 import {
   getProject,
   updateProject,
@@ -37,6 +36,10 @@ export function ProjectHub({
   const [showUpload, setShowUpload] = useState(false);
   const [newImages, setNewImages] = useState<string[]>([]);
   const [isUploading, setIsUploading] = useState(false);
+
+  // Редактирование полей
+  const [editingField, setEditingField] = useState<string | null>(null);
+  const [editValue, setEditValue] = useState("");
 
   useEffect(() => {
     let cancelled = false;
@@ -73,6 +76,8 @@ export function ProjectHub({
     if (!project) return;
     await togglePin(projectId, !project.pinned);
     onProjectUpdated();
+    const updated = await getProject(projectId);
+    setProject(updated);
   };
 
   const handleUpload = (result: UploadResult) => {
@@ -91,6 +96,7 @@ export function ProjectHub({
       await updateProject(projectId, {
         currentRound: project.currentRound + 1,
         isLocked: false,
+        status: "in_progress",
       });
       setNewImages([]);
       setShowUpload(false);
@@ -104,9 +110,27 @@ export function ProjectHub({
     }
   };
 
+  const handleSaveField = async (field: string) => {
+    if (!project) return;
+    const data: Partial<Project> = {};
+    if (field === "name") data.name = editValue.trim() || project.name;
+    if (field === "description") data.description = editValue.trim();
+    if (field === "clientName") data.clientName = editValue.trim();
+    if (field === "clientContact") data.clientContact = editValue.trim();
+    await updateProject(projectId, data);
+    const updated = await getProject(projectId);
+    setProject(updated);
+    setEditingField(null);
+  };
+
+  const startEdit = (field: string, value: string) => {
+    setEditValue(value);
+    setEditingField(field);
+  };
+
   if (loading) {
     return (
-      <div className="flex h-full items-center justify-center">
+      <div className="flex h-full items-center justify-center bg-bg-page">
         <div className="h-8 w-8 animate-spin rounded-full border-2 border-border-strong border-t-text-primary" />
       </div>
     );
@@ -114,7 +138,7 @@ export function ProjectHub({
 
   if (!project) {
     return (
-      <div className="flex h-full flex-col items-center justify-center gap-4">
+      <div className="flex h-full flex-col items-center justify-center gap-4 bg-bg-page">
         <p className="text-sm text-text-muted">Проект не найден</p>
         <button
           onClick={onBack}
@@ -131,155 +155,269 @@ export function ProjectHub({
       ? `${window.location.origin}/review/${projectId}`
       : `/review/${projectId}`;
 
-  return (
-    <div className="flex h-full flex-col">
-      {/* Шапка проекта */}
-      <header className="shrink-0 border-b bg-bg-sidebar px-4 py-3 md:px-6">
-        <div className="flex items-center justify-between gap-3">
-          {/* Левая часть: назад + иконка + название + статус */}
-          <div className="flex min-w-0 items-center gap-3">
-            <button
-              type="button"
-              onClick={onBack}
-              className="shrink-0 rounded-lg p-1.5 text-text-muted transition-colors hover:bg-bg-cardHover hover:text-text-primary"
-              aria-label="Назад"
-            >
-              <ArrowLeftIcon className="h-5 w-5" />
-            </button>
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border bg-bg-input text-lg">
-              {project.icon || "📁"}
-            </div>
-            <div className="min-w-0">
-              <h1 className="truncate font-display text-lg font-semibold text-text-primary">
-                {project.name}
-              </h1>
-              <div className="flex items-center gap-2 text-xs text-text-muted">
-                <span
-                  className="inline-flex h-1.5 w-1.5 rounded-full"
-                  style={{
-                    backgroundColor: project.isLocked ? "#F59E0B" : "#3B82F6",
-                  }}
-                />
-                {project.isLocked ? "Ожидает правок" : "Активен"}
-                <span>•</span>
-                <span>Круг {project.currentRound}/{project.roundsTotal}</span>
-                <span>•</span>
-                <span>Осталось {project.roundsLeft}</span>
-              </div>
-            </div>
-          </div>
+  const statusConfig = {
+    waiting_for_images: { text: "Ожидает загрузки", color: "bg-yellow-500/20 text-yellow-400" },
+    in_progress: { text: "Активен", color: "bg-green-500/20 text-green-400" },
+    exhausted: { text: "Раунды закончились", color: "bg-red-500/20 text-red-400" },
+  };
+  const status = statusConfig[project.status || "waiting_for_images"];
 
-          {/* Правая часть: действия */}
+  return (
+    <div className="flex min-h-screen flex-col bg-bg-page">
+      {/* Простая шапка: стрелка + название + меню */}
+      <div className="sticky top-0 z-20 px-4 pt-3 md:px-6">
+        <header className="mx-auto flex max-w-3xl items-center gap-3 rounded-2xl border border-border-strong bg-bg-card px-4 py-3 shadow-lg">
+          <button
+            type="button"
+            onClick={onBack}
+            className="shrink-0 rounded-lg p-1.5 text-text-muted transition-colors hover:bg-bg-cardHover hover:text-text-primary"
+            aria-label="Назад"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5">
+              <path d="M19 12H5" />
+              <path d="m12 19-7-7 7-7" />
+            </svg>
+          </button>
+          <div className="min-w-0 flex-1">
+            <h1 className="truncate text-sm font-semibold text-text-primary">
+              {project.name}
+            </h1>
+          </div>
           <div className="flex shrink-0 items-center gap-1">
             <button
               type="button"
               onClick={() => setShowShare(true)}
-              className="flex items-center gap-1.5 rounded-lg border border-border-strong bg-bg-input px-3 py-1.5 text-xs font-medium text-text-primary transition-all hover:bg-bg-cardHover active:scale-[0.98]"
+              className="rounded-lg p-2 text-text-muted transition-colors hover:bg-bg-cardHover hover:text-text-primary"
+              aria-label="Поделиться"
             >
-              <ShareIcon className="h-3.5 w-3.5" />
-              <span className="hidden sm:inline">Поделиться</span>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
+                <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8" />
+                <polyline points="16,6 12,2 8,6" />
+                <line x1="12" y1="2" x2="12" y2="15" />
+              </svg>
             </button>
             <button
               type="button"
-              onClick={() => setShowSettings(true)}
+              onClick={handlePin}
               className="rounded-lg p-2 text-text-muted transition-colors hover:bg-bg-cardHover hover:text-text-primary"
-              aria-label="Настройки проекта"
+              aria-label={project.pinned ? "Открепить" : "Закрепить"}
             >
-              <SettingsIcon className="h-4 w-4" />
+              <svg viewBox="0 0 24 24" fill={project.pinned ? "currentColor" : "none"} stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
+                <path d="M12 17v5" />
+                <path d="M9 11V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v7" />
+                <path d="M5 11h14l-1.5 6H6.5L5 11z" />
+              </svg>
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowSettings(!showSettings)}
+              className="rounded-lg p-2 text-text-muted transition-colors hover:bg-bg-cardHover hover:text-text-primary"
+              aria-label="Настройки"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
+                <circle cx="12" cy="12" r="1" />
+                <circle cx="19" cy="12" r="1" />
+                <circle cx="5" cy="12" r="1" />
+              </svg>
             </button>
           </div>
-        </div>
-      </header>
-
-      {/* Контент */}
-      <div className="flex-1 overflow-y-auto">
-        <div className="mx-auto max-w-4xl px-4 py-6 md:px-8 md:py-10">
-          {/* Статус и действия */}
-          <div className="mb-6 rounded-xl border border-border-strong bg-bg-card p-4">
-            <div className="flex items-center justify-between gap-4">
-              <div>
-                <h3 className="font-medium text-text-primary">Статус проекта</h3>
-                <p className="text-sm text-text-muted">
-                  {project.isLocked
-                    ? "Ожидает новую версию (клиент отправил правки)"
-                    : "Активен - клиент может оставлять правки"}
-                </p>
-              </div>
-              {project.isLocked && (
-                <button
-                  type="button"
-                  onClick={() => setShowUpload(true)}
-                  className="rounded-xl bg-text-primary px-4 py-2 text-sm font-medium text-bg-page transition-all hover:opacity-90"
-                >
-                  Загрузить новую версию
-                </button>
-              )}
-            </div>
-          </div>
-
-          {/* Картинки */}
-          <div className="mb-6">
-            <h3 className="mb-3 font-medium text-text-primary">Загруженные изображения</h3>
-            {project.imageUrls && project.imageUrls.length > 0 ? (
-              <div className="grid grid-cols-2 gap-2">
-                {project.imageUrls.map((url, index) => (
-                  <div key={index} className="aspect-square overflow-hidden rounded-xl border border-border-strong bg-bg-input">
-                    <img
-                      src={url}
-                      alt={`Image ${index + 1}`}
-                      className="h-full w-full object-cover"
-                    />
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="text-sm text-text-muted">Нет загруженных изображений</p>
-            )}
-          </div>
-
-          {/* Информация */}
-          <div className="rounded-xl border border-border-strong bg-bg-card p-4">
-            <h3 className="mb-3 font-medium text-text-primary">Информация</h3>
-            <div className="space-y-2 text-sm">
-              <div className="flex justify-between">
-                <span className="text-text-muted">Лимит кругов:</span>
-                <span className="text-text-primary">{project.roundsTotal}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-text-muted">Осталось:</span>
-                <span className="text-text-primary">{project.roundsLeft}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-text-muted">Текущий круг:</span>
-                <span className="text-text-primary">{project.currentRound}</span>
-              </div>
-            </div>
-          </div>
-        </div>
+        </header>
       </div>
 
-      {/* Модалка загрузки новой версии */}
+      {/* Контент */}
+      <div className="mx-auto w-full max-w-3xl flex-1 px-4 py-6 md:px-6">
+        {/* Статус */}
+        <div className="mb-4 flex items-center gap-2">
+          <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ${status.color}`}>
+            {status.text}
+          </span>
+          <span className="text-xs text-text-muted">
+            Круг {project.currentRound}/{project.roundsTotal}
+          </span>
+          {project.clientName && (
+            <>
+              <span className="text-xs text-text-muted">·</span>
+              <span className="text-xs text-text-muted">{project.clientName}</span>
+            </>
+          )}
+        </div>
+
+        {/* Настройки — раскрывающийся блок */}
+        <AnimatePresence>
+          {showSettings && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: "auto", opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              className="overflow-hidden"
+            >
+              <div className="mb-4 space-y-3 rounded-xl border border-border-strong bg-bg-card p-4">
+                <p className="text-xs font-medium uppercase tracking-wide text-text-muted">
+                  Настройки проекта
+                </p>
+
+                {/* Имя */}
+                <FieldRow
+                  label="Название"
+                  value={project.name}
+                  editing={editingField === "name"}
+                  onEdit={() => startEdit("name", project.name)}
+                  editValue={editValue}
+                  onEditValueChange={setEditValue}
+                  onSave={() => handleSaveField("name")}
+                  onCancel={() => setEditingField(null)}
+                />
+
+                {/* Описание */}
+                <FieldRow
+                  label="Описание"
+                  value={project.description || "Не указано"}
+                  editing={editingField === "description"}
+                  onEdit={() => startEdit("description", project.description)}
+                  editValue={editValue}
+                  onEditValueChange={setEditValue}
+                  onSave={() => handleSaveField("description")}
+                  onCancel={() => setEditingField(null)}
+                />
+
+                {/* Имя клиента */}
+                <FieldRow
+                  label="Клиент"
+                  value={project.clientName || "Не указано"}
+                  editing={editingField === "clientName"}
+                  onEdit={() => startEdit("clientName", project.clientName)}
+                  editValue={editValue}
+                  onEditValueChange={setEditValue}
+                  onSave={() => handleSaveField("clientName")}
+                  onCancel={() => setEditingField(null)}
+                />
+
+                {/* Контакт */}
+                <FieldRow
+                  label="Контакт"
+                  value={project.clientContact || "Не указано"}
+                  editing={editingField === "clientContact"}
+                  onEdit={() => startEdit("clientContact", project.clientContact)}
+                  editValue={editValue}
+                  onEditValueChange={setEditValue}
+                  onSave={() => handleSaveField("clientContact")}
+                  onCancel={() => setEditingField(null)}
+                />
+
+                {/* Действия */}
+                <div className="flex gap-2 pt-2">
+                  <button
+                    type="button"
+                    onClick={handleArchive}
+                    className="flex-1 rounded-lg border border-border-strong px-3 py-2 text-xs font-medium text-text-primary transition-all hover:bg-bg-cardHover"
+                  >
+                    {project.archived ? "Восстановить" : "Архив"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleDelete}
+                    className="flex-1 rounded-lg border border-red-500/50 bg-red-500/10 px-3 py-2 text-xs font-medium text-red-400 transition-all hover:bg-red-500/20"
+                  >
+                    Удалить
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Картинки */}
+        <div className="mb-6">
+          <div className="mb-3 flex items-center justify-between">
+            <h3 className="text-sm font-medium text-text-primary">
+              Изображения
+            </h3>
+            <button
+              type="button"
+              onClick={() => setShowUpload(true)}
+              className="flex items-center gap-1.5 rounded-lg border border-border-strong bg-bg-input px-3 py-1.5 text-xs font-medium text-text-primary transition-all hover:bg-bg-cardHover active:scale-[0.98]"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" className="h-3.5 w-3.5">
+                <path d="M12 5v14M5 12h14" />
+              </svg>
+              Добавить
+            </button>
+          </div>
+          {project.imageUrls && project.imageUrls.length > 0 ? (
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+              {project.imageUrls.map((url, index) => (
+                <div
+                  key={index}
+                  className="aspect-square overflow-hidden rounded-xl border border-border-strong bg-bg-input"
+                >
+                  <img
+                    src={url}
+                    alt={`Image ${index + 1}`}
+                    className="h-full w-full object-cover"
+                  />
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="rounded-xl border border-dashed border-border-strong bg-bg-input/40 py-12 text-center">
+              <p className="mb-2 text-sm text-text-muted">
+                Нет загруженных изображений
+              </p>
+              <p className="text-xs text-text-muted">
+                Загрузите макеты для сбора правок
+              </p>
+            </div>
+          )}
+        </div>
+
+        {/* Ссылка для клиента */}
+        {project.status === "in_progress" && (
+          <div className="rounded-xl border border-border-strong bg-bg-card p-4">
+            <p className="mb-2 text-xs font-medium uppercase tracking-wide text-text-muted">
+              Ссылка для клиента
+            </p>
+            <div className="flex items-center gap-2">
+              <input
+                type="text"
+                readOnly
+                value={shareUrl}
+                className="min-w-0 flex-1 rounded-lg border border-border-strong bg-bg-input px-3 py-2 text-xs text-text-primary outline-none"
+              />
+              <button
+                type="button"
+                onClick={() => navigator.clipboard.writeText(shareUrl)}
+                className="shrink-0 rounded-lg bg-text-primary px-3 py-2 text-xs font-medium text-bg-page transition-all hover:opacity-90"
+              >
+                Копировать
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Модалка загрузки */}
       <AnimatePresence>
         {showUpload && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm"
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm"
             onClick={() => setShowUpload(false)}
           >
             <motion.div
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.9, opacity: 0 }}
-              className="bg-bg-card border border-border-strong rounded-2xl p-6 max-w-lg w-full shadow-2xl"
+              className="w-full max-w-lg rounded-2xl border border-border-strong bg-bg-card p-6 shadow-2xl"
               onClick={(e) => e.stopPropagation()}
             >
-              <h2 className="mb-4 text-lg font-semibold text-text-primary">
-                Загрузить новую версию
+              <h2 className="mb-2 text-lg font-semibold text-text-primary">
+                Загрузить изображения
               </h2>
               <p className="mb-4 text-sm text-text-muted">
-                После загрузки текущий круг завершится и клиент сможет снова оставлять правки.
+                Макеты для правок (макс. 5MB)
               </p>
               <div className="space-y-4">
                 <ImageUploader
@@ -323,61 +461,6 @@ export function ProjectHub({
         )}
       </AnimatePresence>
 
-      {/* Модалка настроек */}
-      <AnimatePresence>
-        {showSettings && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm"
-            onClick={() => setShowSettings(false)}
-          >
-            <motion.div
-              initial={{ scale: 0.9, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.9, opacity: 0 }}
-              className="bg-bg-card border border-border-strong rounded-2xl p-6 max-w-sm w-full shadow-2xl"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <h2 className="mb-4 text-lg font-semibold text-text-primary">
-                Настройки проекта
-              </h2>
-              <div className="space-y-2">
-                <button
-                  type="button"
-                  onClick={handlePin}
-                  className="w-full rounded-lg border border-border-strong px-4 py-3 text-left text-sm text-text-primary transition-all hover:bg-bg-cardHover"
-                >
-                  {project.pinned ? "Открепить" : "Закрепить"}
-                </button>
-                <button
-                  type="button"
-                  onClick={handleArchive}
-                  className="w-full rounded-lg border border-border-strong px-4 py-3 text-left text-sm text-text-primary transition-all hover:bg-bg-cardHover"
-                >
-                  {project.archived ? "Разархивировать" : "Архивировать"}
-                </button>
-                <button
-                  type="button"
-                  onClick={handleDelete}
-                  className="w-full rounded-lg border border-red-500/50 bg-red-500/10 px-4 py-3 text-left text-sm text-red-500 transition-all hover:bg-red-500/20"
-                >
-                  Удалить проект
-                </button>
-              </div>
-              <button
-                type="button"
-                onClick={() => setShowSettings(false)}
-                className="mt-4 w-full rounded-lg border border-border-strong px-4 py-2 text-sm text-text-primary transition-all hover:bg-bg-cardHover"
-              >
-                Закрыть
-              </button>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
       {/* Модалка "Поделиться" */}
       <AnimatePresence>
         {showShare && (
@@ -385,18 +468,18 @@ export function ProjectHub({
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm"
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm"
             onClick={() => setShowShare(false)}
           >
             <motion.div
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.9, opacity: 0 }}
-              className="bg-bg-card border border-border-strong rounded-2xl p-6 max-w-sm w-full shadow-2xl"
+              className="w-full max-w-sm rounded-2xl border border-border-strong bg-bg-card p-6 shadow-2xl"
               onClick={(e) => e.stopPropagation()}
             >
-              <h2 className="mb-4 text-lg font-semibold text-text-primary">
-                Поделиться проектом
+              <h2 className="mb-2 text-lg font-semibold text-text-primary">
+                Ссылка для клиента
               </h2>
               <p className="mb-4 text-sm text-text-muted">
                 Отправьте эту ссылку клиенту для сбора правок
@@ -406,14 +489,12 @@ export function ProjectHub({
                   type="text"
                   readOnly
                   value={shareUrl}
-                  className="flex-1 bg-transparent text-sm text-text-primary outline-none"
+                  className="min-w-0 flex-1 bg-transparent text-sm text-text-primary outline-none"
                 />
                 <button
                   type="button"
-                  onClick={() => {
-                    navigator.clipboard.writeText(shareUrl);
-                  }}
-                  className="rounded-lg bg-text-primary px-3 py-1 text-xs font-medium text-bg-page transition-all hover:opacity-90"
+                  onClick={() => navigator.clipboard.writeText(shareUrl)}
+                  className="shrink-0 rounded-lg bg-text-primary px-3 py-1 text-xs font-medium text-bg-page transition-all hover:opacity-90"
                 >
                   Копировать
                 </button>
@@ -433,62 +514,76 @@ export function ProjectHub({
   );
 }
 
-function ArrowLeftIcon({ className }: { className?: string }) {
-  return (
-    <svg
-      className={className}
-      fill="none"
-      viewBox="0 0 24 24"
-      stroke="currentColor"
-    >
-      <path
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        strokeWidth={2}
-        d="M10 19l-7-7m0 0l7-7m-7 7h18"
-      />
-    </svg>
-  );
-}
+/* ===== Компонент строки настроек ===== */
+function FieldRow({
+  label,
+  value,
+  editing,
+  onEdit,
+  editValue,
+  onEditValueChange,
+  onSave,
+  onCancel,
+}: {
+  label: string;
+  value: string;
+  editing: boolean;
+  onEdit: () => void;
+  editValue: string;
+  onEditValueChange: (v: string) => void;
+  onSave: () => void;
+  onCancel: () => void;
+}) {
+  if (editing) {
+    return (
+      <div>
+        <label className="mb-1 block text-[10px] font-medium uppercase tracking-wide text-text-muted">
+          {label}
+        </label>
+        <div className="flex gap-2">
+          <input
+            type="text"
+            value={editValue}
+            onChange={(e) => onEditValueChange(e.target.value)}
+            autoFocus
+            onKeyDown={(e) => {
+              if (e.key === "Enter") onSave();
+              if (e.key === "Escape") onCancel();
+            }}
+            className="min-h-0 flex-1 rounded-lg border border-border-strong bg-bg-input px-3 py-1.5 text-xs text-text-primary focus:border-text-primary focus:outline-none"
+          />
+          <button
+            type="button"
+            onClick={onSave}
+            className="rounded-lg bg-text-primary px-2.5 py-1.5 text-xs font-medium text-bg-page transition-all hover:opacity-90"
+          >
+            OK
+          </button>
+        </div>
+      </div>
+    );
+  }
 
-function ShareIcon({ className }: { className?: string }) {
   return (
-    <svg
-      className={className}
-      fill="none"
-      viewBox="0 0 24 24"
-      stroke="currentColor"
-    >
-      <path
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        strokeWidth={2}
-        d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"
-      />
-    </svg>
-  );
-}
-
-function SettingsIcon({ className }: { className?: string }) {
-  return (
-    <svg
-      className={className}
-      fill="none"
-      viewBox="0 0 24 24"
-      stroke="currentColor"
-    >
-      <path
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        strokeWidth={2}
-        d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
-      />
-      <path
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        strokeWidth={2}
-        d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
-      />
-    </svg>
+    <div className="flex items-center justify-between gap-2">
+      <div className="min-w-0 flex-1">
+        <span className="block text-[10px] font-medium uppercase tracking-wide text-text-muted">
+          {label}
+        </span>
+        <span className="block truncate text-xs text-text-primary">
+          {value}
+        </span>
+      </div>
+      <button
+        type="button"
+        onClick={onEdit}
+        className="shrink-0 rounded-lg p-1.5 text-text-muted transition-colors hover:bg-bg-cardHover hover:text-text-primary"
+      >
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" className="h-3.5 w-3.5">
+          <path d="M17 3a2.83 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
+          <path d="m15 5 4 4" />
+        </svg>
+      </button>
+    </div>
   );
 }

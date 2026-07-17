@@ -12,14 +12,25 @@ interface NewProjectWizardProps {
   onCreated: (projectId: string) => void;
 }
 
+const COLORS = [
+  "#E880FC",
+  "#F87171",
+  "#FB923C",
+  "#FBBF24",
+  "#34D399",
+  "#60A5FA",
+  "#C084FC",
+  "#F472B6",
+  "#94A3B8",
+  "#FFFFFF",
+];
+
 const PROJECT_ICONS: {
-  svg: React.ReactNode;
   label: string;
-  color: string;
+  svg: React.ReactNode;
 }[] = [
   {
     label: "Дизайн",
-    color: "#E880FC",
     svg: (
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" className="h-6 w-6">
         <circle cx="13.5" cy="6.5" r="2.5" />
@@ -32,7 +43,6 @@ const PROJECT_ICONS: {
   },
   {
     label: "Веб-сайт",
-    color: "#60A5FA",
     svg: (
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" className="h-6 w-6">
         <rect x="3" y="4" width="18" height="14" rx="2" />
@@ -43,7 +53,6 @@ const PROJECT_ICONS: {
   },
   {
     label: "Мобильное",
-    color: "#34D399",
     svg: (
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" className="h-6 w-6">
         <rect x="7" y="2" width="10" height="20" rx="2" />
@@ -53,7 +62,6 @@ const PROJECT_ICONS: {
   },
   {
     label: "Интерьер",
-    color: "#FBBF24",
     svg: (
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" className="h-6 w-6">
         <path d="M3 21V8l9-5 9 5v13" />
@@ -63,7 +71,6 @@ const PROJECT_ICONS: {
   },
   {
     label: "Иллюстрация",
-    color: "#F87171",
     svg: (
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" className="h-6 w-6">
         <path d="M17 3a2.83 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
@@ -73,7 +80,6 @@ const PROJECT_ICONS: {
   },
   {
     label: "Фото",
-    color: "#C084FC",
     svg: (
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" className="h-6 w-6">
         <path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z" />
@@ -83,7 +89,6 @@ const PROJECT_ICONS: {
   },
   {
     label: "Брендинг",
-    color: "#FB923C",
     svg: (
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" className="h-6 w-6">
         <path d="M12 2L2 7l10 5 10-5-10-5z" />
@@ -94,7 +99,6 @@ const PROJECT_ICONS: {
   },
   {
     label: "Видео",
-    color: "#A78BFA",
     svg: (
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" className="h-6 w-6">
         <path d="m16 13 5.223 3.482a.5.5 0 0 0 .777-.416V7.87a.5.5 0 0 0-.752-.432L16 10.5" />
@@ -104,7 +108,6 @@ const PROJECT_ICONS: {
   },
   {
     label: "Маркетинг",
-    color: "#2DD4BF",
     svg: (
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" className="h-6 w-6">
         <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
@@ -112,20 +115,7 @@ const PROJECT_ICONS: {
     ),
   },
   {
-    label: "Архитектура",
-    color: "#F472B6",
-    svg: (
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" className="h-6 w-6">
-        <path d="M4 22h16" />
-        <path d="M10 22V6a2 2 0 0 1 4 0v16" />
-        <path d="M6 2v10a2 2 0 0 0 2 2h0" />
-        <path d="M18 2v10a2 2 0 0 1-2 2h0" />
-      </svg>
-    ),
-  },
-  {
     label: "Упаковка",
-    color: "#38BDF8",
     svg: (
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" className="h-6 w-6">
         <path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z" />
@@ -136,12 +126,22 @@ const PROJECT_ICONS: {
   },
   {
     label: "Другое",
-    color: "#94A3B8",
     svg: (
-      <svg viewBox="0 0 24 24" fill="currentColor" className="h-6 w-6">
-        <circle cx="5" cy="12" r="1.5" />
-        <circle cx="12" cy="12" r="1.5" />
-        <circle cx="19" cy="12" r="1.5" />
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" className="h-6 w-6">
+        <circle cx="12" cy="12" r="10" />
+        <path d="M12 16v-4" />
+        <path d="M12 8h.01" />
+      </svg>
+    ),
+  },
+  {
+    label: "Пиар",
+    svg: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" className="h-6 w-6">
+        <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+        <circle cx="9" cy="7" r="4" />
+        <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+        <path d="M16 3.13a4 4 0 0 1 0 7.75" />
       </svg>
     ),
   },
@@ -155,8 +155,9 @@ export function NewProjectWizard({
   onCreated,
 }: NewProjectWizardProps) {
   const [step, setStep] = useState(0);
-  const [name, setName] = useState("");
+  const [color, setColor] = useState(COLORS[0]);
   const [selectedIcon, setSelectedIcon] = useState(0);
+  const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [clientName, setClientName] = useState("");
   const [clientContact, setClientContact] = useState("");
@@ -168,16 +169,21 @@ export function NewProjectWizard({
 
   if (!open) return null;
 
-  const handleClose = () => {
-    if (saving) return;
+  const reset = () => {
     setStep(0);
-    setName("");
+    setColor(COLORS[0]);
     setSelectedIcon(0);
+    setName("");
     setDescription("");
     setClientName("");
     setClientContact("");
     setRounds(3);
     setError(null);
+  };
+
+  const handleClose = () => {
+    if (saving) return;
+    reset();
     onClose();
   };
 
@@ -195,21 +201,15 @@ export function NewProjectWizard({
           clientContact: clientContact.trim(),
           roundsTotal: rounds,
           roundsLeft: rounds,
-          limitMessage: "Лимит правок исчерпан. Свяжитесь со мной для продления.",
+          limitMessage:
+            "Лимит правок исчерпан. Свяжитесь со мной для продления.",
           icon: icon.label,
-          iconColor: icon.color,
+          iconColor: color,
           status: "waiting_for_images",
         },
         ownerUid
       );
-      setStep(0);
-      setName("");
-      setSelectedIcon(0);
-      setDescription("");
-      setClientName("");
-      setClientContact("");
-      setRounds(3);
-      setError(null);
+      reset();
       onCreated(id);
     } catch (e) {
       console.error(e);
@@ -221,37 +221,11 @@ export function NewProjectWizard({
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-bg-page">
-      {/* Progress bar */}
-      <div className="shrink-0 bg-bg-page px-4 pt-4 pb-2">
-        <div className="mx-auto max-w-md">
-          <div className="mb-3 flex items-end justify-end">
-            <span className="text-xs text-text-muted">
-              {step + 1} / 3
-            </span>
-          </div>
-          <div className="flex gap-1.5">
-            {[0, 1, 2].map((i) => (
-              <div
-                key={i}
-                className="relative h-1 flex-1 overflow-hidden rounded-full bg-border-strong"
-              >
-                <motion.div
-                  className="absolute inset-y-0 left-0 bg-text-primary"
-                  initial={false}
-                  animate={{ width: i <= step ? "100%" : "0%" }}
-                  transition={{ duration: 0.3, ease: "easeOut" }}
-                />
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-
       {/* Content — scrollable */}
       <div className="flex min-h-0 flex-1 justify-center overflow-y-auto px-4 pt-6 pb-4">
         <div className="w-full max-w-md pb-2">
           <AnimatePresence mode="wait">
-            {/* Шаг 1: Имя + иконка */}
+            {/* Шаг 1: Цвет + Иконка + Название */}
             {step === 0 && (
               <motion.div
                 key="step0"
@@ -263,21 +237,44 @@ export function NewProjectWizard({
                 <h2 className="mb-1 text-center font-display text-xl font-semibold text-text-primary">
                   Новый проект
                 </h2>
-                <p className="mb-6 text-center text-xs text-text-muted">
-                  Название и иконка
+                <p className="mb-5 text-center text-xs text-text-muted">
+                  Выберите цвет и иконку
                 </p>
 
                 {/* Выбранная иконка — большая */}
-                <div className="mb-5 flex justify-center">
+                <div className="mb-4 flex justify-center">
                   <div
-                    className="flex h-20 w-20 items-center justify-center rounded-2xl"
-                    style={{ backgroundColor: `${PROJECT_ICONS[selectedIcon].color}20`, color: PROJECT_ICONS[selectedIcon].color }}
+                    className="flex h-20 w-20 items-center justify-center rounded-2xl transition-colors"
+                    style={{ color }}
                   >
                     {PROJECT_ICONS[selectedIcon].svg}
                   </div>
                 </div>
 
+                {/* Палитра цветов */}
+                <p className="mb-2 text-center text-[10px] font-medium uppercase tracking-wide text-text-muted">
+                  Цвет
+                </p>
+                <div className="mb-4 flex flex-wrap justify-center gap-2">
+                  {COLORS.map((c) => (
+                    <button
+                      key={c}
+                      type="button"
+                      onClick={() => setColor(c)}
+                      className={`h-8 w-8 rounded-full border-2 transition-all ${
+                        color === c
+                          ? "scale-110 border-text-primary"
+                          : "border-transparent hover:scale-105"
+                      }`}
+                      style={{ backgroundColor: c }}
+                    />
+                  ))}
+                </div>
+
                 {/* Сетка иконок */}
+                <p className="mb-2 text-center text-[10px] font-medium uppercase tracking-wide text-text-muted">
+                  Иконка
+                </p>
                 <div className="mb-5 grid grid-cols-6 gap-2">
                   {PROJECT_ICONS.map((icon, i) => (
                     <button
@@ -289,7 +286,7 @@ export function NewProjectWizard({
                           ? "border-text-primary bg-bg-card"
                           : "border-border-strong bg-bg-card hover:border-text-primary/30"
                       }`}
-                      style={{ color: icon.color }}
+                      style={{ color }}
                     >
                       {icon.svg}
                     </button>
@@ -297,6 +294,9 @@ export function NewProjectWizard({
                 </div>
 
                 {/* Название */}
+                <p className="mb-2 text-center text-[10px] font-medium uppercase tracking-wide text-text-muted">
+                  Название *
+                </p>
                 <input
                   type="text"
                   value={name}
@@ -362,7 +362,7 @@ export function NewProjectWizard({
               </motion.div>
             )}
 
-            {/* Шаг 3: Круги правок */}
+            {/* Шаг 3: Круги + Превью */}
             {step === 2 && (
               <motion.div
                 key="step2"
@@ -405,7 +405,10 @@ export function NewProjectWizard({
                 {userPlan === "free" && (
                   <p className="mb-4 text-center text-xs text-text-muted">
                     Free: макс. 5 кругов.{" "}
-                    <a href="/pricing" className="underline hover:text-text-primary">
+                    <a
+                      href="/pricing"
+                      className="underline hover:text-text-primary"
+                    >
                       Обновить до Pro
                     </a>
                   </p>
@@ -416,7 +419,7 @@ export function NewProjectWizard({
                   <div className="mb-3 flex items-center gap-3">
                     <div
                       className="flex h-10 w-10 items-center justify-center rounded-lg"
-                      style={{ backgroundColor: `${PROJECT_ICONS[selectedIcon].color}20`, color: PROJECT_ICONS[selectedIcon].color }}
+                      style={{ color }}
                     >
                       {PROJECT_ICONS[selectedIcon].svg}
                     </div>
@@ -425,7 +428,13 @@ export function NewProjectWizard({
                         {name || "Без названия"}
                       </div>
                       <div className="text-xs text-text-muted">
-                        {rounds} {rounds === 1 ? "круг" : rounds < 5 ? "круга" : "кругов"} правок
+                        {rounds}{" "}
+                        {rounds === 1
+                          ? "круг"
+                          : rounds < 5
+                            ? "круга"
+                            : "кругов"}{" "}
+                        правок
                       </div>
                     </div>
                   </div>
@@ -436,7 +445,15 @@ export function NewProjectWizard({
                   )}
                   {clientName && (
                     <div className="flex items-center gap-1.5 text-xs text-text-muted">
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" className="h-3.5 w-3.5">
+                      <svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth={1.5}
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        className="h-3.5 w-3.5"
+                      >
                         <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
                         <circle cx="9" cy="7" r="4" />
                       </svg>
