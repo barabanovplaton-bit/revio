@@ -241,8 +241,8 @@ export function OnboardingModal({
       </div>
 
       {/* Content — scrollable */}
-      <div ref={scrollRef} className="flex flex-1 justify-center overflow-y-auto px-4 pt-6 pb-20">
-        <div className="w-full max-w-md">
+      <div ref={scrollRef} className="flex flex-1 justify-center overflow-y-auto px-4 pt-6 pb-8">
+        <div className="w-full max-w-md pb-12">
           <AnimatePresence mode="wait">
             {/* Шаг 1: Имя */}
             {step === 0 && (
@@ -312,7 +312,6 @@ export function OnboardingModal({
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: -20 }}
                 transition={{ duration: 0.3, ease: "easeInOut" }}
-                className="flex min-h-[calc(100dvh-100px)] flex-col"
               >
                 <h2 className="mb-1 text-center font-display text-xl font-semibold text-text-primary">
                   Чем вы занимаетесь?
@@ -359,7 +358,7 @@ export function OnboardingModal({
                     </motion.div>
                   )}
                 </AnimatePresence>
-                <div className="mt-auto flex gap-2">
+                <div className="mt-5 flex gap-2">
                   <button
                     type="button"
                     onClick={() => setStep(0)}
@@ -387,7 +386,6 @@ export function OnboardingModal({
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: -20 }}
                 transition={{ duration: 0.3, ease: "easeInOut" }}
-                className="flex min-h-[calc(100dvh-100px)] flex-col"
               >
                 <h2 className="mb-1 text-center font-display text-xl font-semibold text-text-primary">
                   Откуда вы о нас узнали?
@@ -434,7 +432,7 @@ export function OnboardingModal({
                     </motion.div>
                   )}
                 </AnimatePresence>
-                <div className="mt-auto flex gap-2">
+                <div className="mt-5 flex gap-2">
                   <button
                     type="button"
                     onClick={() => setStep(1)}
