@@ -206,7 +206,7 @@ export function OnboardingModal({
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-bg-page">
       {/* Sticky progress bar */}
-      <div className="sticky top-0 z-10 bg-bg-page px-4 pt-4 pb-2">
+      <div className="shrink-0 bg-bg-page px-4 pt-4 pb-2">
         <div className="mx-auto max-w-md">
           <div className="mb-3 flex items-end justify-end">
             <span className="text-xs text-text-muted">
@@ -232,10 +232,10 @@ export function OnboardingModal({
       </div>
 
       {/* Content — scrollable */}
-      <div className="flex flex-1 justify-center overflow-y-auto px-4 pt-6 pb-12">
-        <div className="w-full max-w-md pb-16">
+      <div className="flex min-h-0 flex-1 justify-center overflow-y-auto px-4 pt-6 pb-6">
+        <div className="w-full max-w-md">
           <AnimatePresence mode="wait">
-            {/* Шаг 1: Имя */}
+            {/* Шаг 1: Имя (кнопка внутри — нет скролла) */}
             {step === 0 && (
               <motion.div
                 key="step0"
@@ -295,7 +295,7 @@ export function OnboardingModal({
               </motion.div>
             )}
 
-            {/* Шаг 2: Должность — 1 колонка */}
+            {/* Шаг 2: Должность — без кнопок (кнопки снизу) */}
             {step === 1 && (
               <motion.div
                 key="step1"
@@ -327,27 +327,10 @@ export function OnboardingModal({
                     </button>
                   ))}
                 </div>
-                <div className="mt-5 flex gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setStep(0)}
-                    className="h-12 flex-1 rounded-xl border border-border-strong bg-bg-input text-sm font-medium text-text-primary transition-all hover:bg-bg-cardHover"
-                  >
-                    Назад
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => occupation && setStep(2)}
-                    disabled={!occupation}
-                    className="h-12 flex-1 rounded-xl bg-text-primary text-sm font-medium text-bg-page transition-all hover:opacity-90 active:scale-[0.98] disabled:opacity-40"
-                  >
-                    Далее
-                  </button>
-                </div>
               </motion.div>
             )}
 
-            {/* Шаг 3: Откуда узнали — 1 колонка */}
+            {/* Шаг 3: Откуда узнали — без кнопок (кнопки снизу) */}
             {step === 2 && (
               <motion.div
                 key="step2"
@@ -379,28 +362,55 @@ export function OnboardingModal({
                     </button>
                   ))}
                 </div>
-                <div className="mt-5 flex gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setStep(1)}
-                    className="h-12 flex-1 rounded-xl border border-border-strong bg-bg-input text-sm font-medium text-text-primary transition-all hover:bg-bg-cardHover"
-                  >
-                    Назад
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleFinish}
-                    disabled={!referral || saving}
-                    className="h-12 flex-1 rounded-xl bg-text-primary text-sm font-medium text-bg-page transition-all hover:opacity-90 active:scale-[0.98] disabled:opacity-40"
-                  >
-                    {saving ? "..." : "Готово"}
-                  </button>
-                </div>
               </motion.div>
             )}
           </AnimatePresence>
         </div>
       </div>
+
+      {/* Fixed bottom bar — buttons (steps 1 & 2) */}
+      {step === 1 && (
+        <div className="shrink-0 border-t border-border-strong bg-bg-page px-4 py-4">
+          <div className="mx-auto flex max-w-md gap-2">
+            <button
+              type="button"
+              onClick={() => setStep(0)}
+              className="h-12 flex-1 rounded-xl border border-border-strong bg-bg-input text-sm font-medium text-text-primary transition-all hover:bg-bg-cardHover"
+            >
+              Назад
+            </button>
+            <button
+              type="button"
+              onClick={() => occupation && setStep(2)}
+              disabled={!occupation}
+              className="h-12 flex-1 rounded-xl bg-text-primary text-sm font-medium text-bg-page transition-all hover:opacity-90 active:scale-[0.98] disabled:opacity-40"
+            >
+              Далее
+            </button>
+          </div>
+        </div>
+      )}
+      {step === 2 && (
+        <div className="shrink-0 border-t border-border-strong bg-bg-page px-4 py-4">
+          <div className="mx-auto flex max-w-md gap-2">
+            <button
+              type="button"
+              onClick={() => setStep(1)}
+              className="h-12 flex-1 rounded-xl border border-border-strong bg-bg-input text-sm font-medium text-text-primary transition-all hover:bg-bg-cardHover"
+            >
+              Назад
+            </button>
+            <button
+              type="button"
+              onClick={handleFinish}
+              disabled={!referral || saving}
+              className="h-12 flex-1 rounded-xl bg-text-primary text-sm font-medium text-bg-page transition-all hover:opacity-90 active:scale-[0.98] disabled:opacity-40"
+            >
+              {saving ? "..." : "Готово"}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
