@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   saveOnboarding,
@@ -201,6 +201,13 @@ export function OnboardingModal({
   const [referral, setReferral] = useState<ReferralSource | null>(null);
   const [otherReferral, setOtherReferral] = useState("");
   const [saving, setSaving] = useState(false);
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  const scrollToButtons = useCallback(() => {
+    requestAnimationFrame(() => {
+      scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
+    });
+  }, []);
 
   const handleFinish = async () => {
     if (!name.trim() || !occupation || !referral) return;
@@ -243,7 +250,7 @@ export function OnboardingModal({
       </div>
 
       {/* Content — scrollable */}
-      <div className="flex flex-1 justify-center overflow-y-auto px-4 pt-6 pb-16">
+      <div ref={scrollRef} className="flex flex-1 justify-center overflow-y-auto px-4 pt-6 pb-20">
         <div className="w-full max-w-md">
           <AnimatePresence mode="wait">
             {/* Шаг 1: Имя */}
@@ -326,7 +333,10 @@ export function OnboardingModal({
                     <button
                       key={o.value}
                       type="button"
-                      onClick={() => setOccupation(o.value)}
+                      onClick={() => {
+                        setOccupation(o.value);
+                        if (occupation === "other" && o.value !== "other") scrollToButtons();
+                      }}
                       className={`flex h-12 w-full items-center gap-3 rounded-xl border px-4 text-left text-sm transition-all ${
                         occupation === o.value
                           ? "border-text-primary bg-bg-card"
@@ -397,7 +407,10 @@ export function OnboardingModal({
                     <button
                       key={r.value}
                       type="button"
-                      onClick={() => setReferral(r.value)}
+                      onClick={() => {
+                        setReferral(r.value);
+                        if (referral === "other" && r.value !== "other") scrollToButtons();
+                      }}
                       className={`flex h-12 w-full items-center gap-3 rounded-xl border px-4 text-left text-sm transition-all ${
                         referral === r.value
                           ? "border-text-primary bg-bg-card"
