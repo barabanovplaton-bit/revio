@@ -232,8 +232,8 @@ export function OnboardingModal({
       </div>
 
       {/* Content — scrollable */}
-      <div className="flex flex-1 justify-center overflow-y-auto px-4 pt-6 pb-8">
-        <div className="w-full max-w-md pb-12">
+      <div className="flex flex-1 justify-center overflow-y-auto px-4 pt-6 pb-12">
+        <div className="w-full max-w-md pb-16">
           <AnimatePresence mode="wait">
             {/* Шаг 1: Имя */}
             {step === 0 && (
