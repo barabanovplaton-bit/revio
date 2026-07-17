@@ -72,15 +72,6 @@ const OCCUPATIONS: {
     ),
   },
   {
-    value: "video-editor",
-    label: "Видеоредактор",
-    icon: (
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" className="h-6 w-6">
-        <polygon points="5 3 19 12 5 21 5 3" />
-      </svg>
-    ),
-  },
-  {
     value: "other",
     label: "Другое",
     icon: (
@@ -210,7 +201,7 @@ export function OnboardingModal({
   }, []);
 
   const handleFinish = async () => {
-    if (!name.trim() || !occupation || !referral) return;
+    if (!name.trim() || !occupation || (occupation === "other" && !otherOccupation.trim()) || !referral || (referral === "other" && !otherReferral.trim())) return;
     setSaving(true);
     await saveOnboarding(uid, {
       displayName: name.trim(),
@@ -321,6 +312,7 @@ export function OnboardingModal({
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: -20 }}
                 transition={{ duration: 0.3, ease: "easeInOut" }}
+                className="flex min-h-[calc(100dvh-100px)] flex-col"
               >
                 <h2 className="mb-1 text-center font-display text-xl font-semibold text-text-primary">
                   Чем вы занимаетесь?
@@ -367,7 +359,7 @@ export function OnboardingModal({
                     </motion.div>
                   )}
                 </AnimatePresence>
-                <div className="mt-5 flex gap-2">
+                <div className="mt-auto flex gap-2">
                   <button
                     type="button"
                     onClick={() => setStep(0)}
@@ -378,7 +370,7 @@ export function OnboardingModal({
                   <button
                     type="button"
                     onClick={() => occupation && setStep(2)}
-                    disabled={!occupation}
+                    disabled={!occupation || (occupation === "other" && !otherOccupation.trim())}
                     className="h-12 flex-1 rounded-xl bg-text-primary text-sm font-medium text-bg-page transition-all hover:opacity-90 active:scale-[0.98] disabled:opacity-40"
                   >
                     Далее
@@ -395,6 +387,7 @@ export function OnboardingModal({
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: -20 }}
                 transition={{ duration: 0.3, ease: "easeInOut" }}
+                className="flex min-h-[calc(100dvh-100px)] flex-col"
               >
                 <h2 className="mb-1 text-center font-display text-xl font-semibold text-text-primary">
                   Откуда вы о нас узнали?
@@ -441,7 +434,7 @@ export function OnboardingModal({
                     </motion.div>
                   )}
                 </AnimatePresence>
-                <div className="mt-5 flex gap-2">
+                <div className="mt-auto flex gap-2">
                   <button
                     type="button"
                     onClick={() => setStep(1)}
@@ -452,7 +445,7 @@ export function OnboardingModal({
                   <button
                     type="button"
                     onClick={handleFinish}
-                    disabled={!referral || saving}
+                    disabled={!referral || (referral === "other" && !otherReferral.trim()) || saving}
                     className="h-12 flex-1 rounded-xl bg-text-primary text-sm font-medium text-bg-page transition-all hover:opacity-90 active:scale-[0.98] disabled:opacity-40"
                   >
                     {saving ? "..." : "Готово"}

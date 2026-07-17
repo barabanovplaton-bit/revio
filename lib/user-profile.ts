@@ -16,7 +16,6 @@ export type Occupation =
   | "interior-designer"
   | "illustrator"
   | "photographer"
-  | "video-editor"
   | "other";
 
 export type ReferralSource =
