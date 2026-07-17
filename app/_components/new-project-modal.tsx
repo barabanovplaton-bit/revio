@@ -89,6 +89,7 @@ export function NewProjectModal({
           roundsLeft: Math.max(1, Number(roundsTotal) || 1),
           limitMessage: limitMessage.trim(),
           icon: emoji,
+          iconIndex: 0,
           iconColor: "#E880FC",
           status: "waiting_for_images",
         },

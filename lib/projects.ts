@@ -39,8 +39,10 @@ export interface Project {
   pinned: boolean;
   /** Архивный (не показывается в основном списке) */
   archived: boolean;
-  /** Иконка проекта */
+  /** Иконка проекта (текстовый label для обратной совместимости) */
   icon: string;
+  /** Индекс иконки в массиве PROJECT_ICONS */
+  iconIndex: number;
   /** Цвет иконки */
   iconColor: string;
   /** Статус проекта */
@@ -56,7 +58,7 @@ export async function createProject(
   data: Omit<
     Project,
     "id" | "ownerUid" | "imageUrls" | "currentRound" | "isLocked" | "pinned" | "archived" | "createdAt" | "updatedAt"
-  > & { icon?: string; iconColor?: string; status?: Project["status"] },
+  > & { icon?: string; iconIndex?: number; iconColor?: string; status?: Project["status"] },
   ownerUid: string
 ): Promise<string> {
   const docRef = await addDoc(collection(db, COLLECTION), {
@@ -74,6 +76,7 @@ export async function createProject(
     pinned: false,
     archived: false,
     icon: data.icon || "📁",
+    iconIndex: data.iconIndex ?? 0,
     iconColor: data.iconColor || "#E880FC",
     status: data.status || "waiting_for_images",
     createdAt: serverTimestamp(),

@@ -10,6 +10,10 @@ import { OnboardingModal } from "./_components/onboarding-modal";
 import { signOut, subscribeToAuth, type User } from "@/lib/auth";
 import { type UserProfile } from "@/lib/user-profile";
 import {
+  ProjectIcon,
+  getIconIndex,
+} from "@/lib/project-icons";
+import {
   subscribeToUserProjects,
   updateProject,
   togglePin,
@@ -445,7 +449,13 @@ function ProjectCard({
       onClick={onSelect}
     >
       <div className="flex items-center gap-3 px-4 py-3">
-        <span className="text-xl">{project.icon || "📁"}</span>
+        <div className="shrink-0">
+          <ProjectIcon
+            index={project.iconIndex ?? getIconIndex(project.icon)}
+            color={project.iconColor || "#E880FC"}
+            className="h-9 w-9"
+          />
+        </div>
         <div className="min-w-0 flex-1">
           {renaming ? (
             <input
@@ -473,10 +483,19 @@ function ProjectCard({
                 {project.name}
               </div>
               <div className="flex items-center gap-2 text-xs text-text-muted">
-                <StatusBadge status={project.status} />
-                <span>Круг {project.currentRound}/{project.roundsTotal}</span>
-                <span>·</span>
-                <span>{formatRelativeTime(project.updatedAt)}</span>
+                {project.description && (
+                  <span className="truncate">{project.description}</span>
+                )}
+                {!project.description && project.clientName && (
+                  <span className="truncate">{project.clientName}</span>
+                )}
+                {!project.description && !project.clientName && (
+                  <>
+                    <span>Круг {project.currentRound}/{project.roundsTotal}</span>
+                    <span>·</span>
+                    <span>{formatRelativeTime(project.updatedAt)}</span>
+                  </>
+                )}
               </div>
             </>
           )}

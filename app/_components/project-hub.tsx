@@ -13,6 +13,7 @@ import {
 } from "@/lib/projects";
 import { ImageUploader, UploadedImage } from "./image-uploader";
 import { type UploadResult } from "@/lib/cloudinary";
+import { ProjectIcon, getIconIndex } from "@/lib/project-icons";
 
 interface ProjectHubProps {
   projectId: string;
@@ -32,7 +33,6 @@ export function ProjectHub({
   const [project, setProject] = useState<Project | null>(null);
   const [loading, setLoading] = useState(true);
   const [showSettings, setShowSettings] = useState(false);
-  const [showShare, setShowShare] = useState(false);
   const [showUpload, setShowUpload] = useState(false);
   const [newImages, setNewImages] = useState<string[]>([]);
   const [isUploading, setIsUploading] = useState(false);
@@ -179,16 +179,23 @@ export function ProjectHub({
             </svg>
           </button>
           <div className="min-w-0 flex-1">
-            <h1 className="truncate text-sm font-semibold text-text-primary">
-              {project.name}
-            </h1>
+            <div className="flex items-center gap-2">
+              <ProjectIcon
+                index={project.iconIndex ?? getIconIndex(project.icon)}
+                color={project.iconColor || "#E880FC"}
+                className="h-5 w-5 shrink-0"
+              />
+              <h1 className="truncate text-sm font-semibold text-text-primary">
+                {project.name}
+              </h1>
+            </div>
           </div>
           <div className="flex shrink-0 items-center gap-1">
             <button
               type="button"
-              onClick={() => setShowShare(true)}
+              onClick={() => navigator.clipboard.writeText(shareUrl)}
               className="rounded-lg p-2 text-text-muted transition-colors hover:bg-bg-cardHover hover:text-text-primary"
-              aria-label="Поделиться"
+              aria-label="Копировать ссылку"
             >
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
                 <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8" />
@@ -226,6 +233,30 @@ export function ProjectHub({
 
       {/* Контент */}
       <div className="mx-auto w-full max-w-3xl flex-1 px-4 py-6 md:px-6">
+        {/* Ссылка для клиента — всегда видна */}
+        <div className="mb-4 rounded-xl border border-border-strong bg-bg-card p-3">
+          <div className="flex items-center gap-2">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4 shrink-0 text-text-muted">
+              <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8" />
+              <polyline points="16,6 12,2 8,6" />
+              <line x1="12" y1="2" x2="12" y2="15" />
+            </svg>
+            <input
+              type="text"
+              readOnly
+              value={shareUrl}
+              className="min-w-0 flex-1 bg-transparent text-xs text-text-muted outline-none"
+            />
+            <button
+              type="button"
+              onClick={() => navigator.clipboard.writeText(shareUrl)}
+              className="shrink-0 rounded-lg bg-text-primary px-3 py-1.5 text-xs font-medium text-bg-page transition-all hover:opacity-90 active:scale-[0.98]"
+            >
+              Копировать
+            </button>
+          </div>
+        </div>
+
         {/* Статус */}
         <div className="mb-4 flex items-center gap-2">
           <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ${status.color}`}>
@@ -370,30 +401,6 @@ export function ProjectHub({
             </div>
           )}
         </div>
-
-        {/* Ссылка для клиента */}
-        {project.status === "in_progress" && (
-          <div className="rounded-xl border border-border-strong bg-bg-card p-4">
-            <p className="mb-2 text-xs font-medium uppercase tracking-wide text-text-muted">
-              Ссылка для клиента
-            </p>
-            <div className="flex items-center gap-2">
-              <input
-                type="text"
-                readOnly
-                value={shareUrl}
-                className="min-w-0 flex-1 rounded-lg border border-border-strong bg-bg-input px-3 py-2 text-xs text-text-primary outline-none"
-              />
-              <button
-                type="button"
-                onClick={() => navigator.clipboard.writeText(shareUrl)}
-                className="shrink-0 rounded-lg bg-text-primary px-3 py-2 text-xs font-medium text-bg-page transition-all hover:opacity-90"
-              >
-                Копировать
-              </button>
-            </div>
-          </div>
-        )}
       </div>
 
       {/* Модалка загрузки */}
@@ -456,56 +463,6 @@ export function ProjectHub({
                   {isUploading ? "Загрузка..." : "Загрузить"}
                 </button>
               </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* Модалка "Поделиться" */}
-      <AnimatePresence>
-        {showShare && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm"
-            onClick={() => setShowShare(false)}
-          >
-            <motion.div
-              initial={{ scale: 0.9, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.9, opacity: 0 }}
-              className="w-full max-w-sm rounded-2xl border border-border-strong bg-bg-card p-6 shadow-2xl"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <h2 className="mb-2 text-lg font-semibold text-text-primary">
-                Ссылка для клиента
-              </h2>
-              <p className="mb-4 text-sm text-text-muted">
-                Отправьте эту ссылку клиенту для сбора правок
-              </p>
-              <div className="flex items-center gap-2 rounded-lg border border-border-strong bg-bg-input px-3 py-2">
-                <input
-                  type="text"
-                  readOnly
-                  value={shareUrl}
-                  className="min-w-0 flex-1 bg-transparent text-sm text-text-primary outline-none"
-                />
-                <button
-                  type="button"
-                  onClick={() => navigator.clipboard.writeText(shareUrl)}
-                  className="shrink-0 rounded-lg bg-text-primary px-3 py-1 text-xs font-medium text-bg-page transition-all hover:opacity-90"
-                >
-                  Копировать
-                </button>
-              </div>
-              <button
-                type="button"
-                onClick={() => setShowShare(false)}
-                className="mt-4 w-full rounded-lg border border-border-strong px-4 py-2 text-sm text-text-primary transition-all hover:bg-bg-cardHover"
-              >
-                Закрыть
-              </button>
             </motion.div>
           </motion.div>
         )}
