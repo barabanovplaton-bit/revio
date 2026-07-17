@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useCallback } from "react";
+import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   saveOnboarding,
@@ -188,20 +188,11 @@ export function OnboardingModal({
   const [step, setStep] = useState(0);
   const [name, setName] = useState(defaultName);
   const [occupation, setOccupation] = useState<Occupation | null>(null);
-  const [otherOccupation, setOtherOccupation] = useState("");
   const [referral, setReferral] = useState<ReferralSource | null>(null);
-  const [otherReferral, setOtherReferral] = useState("");
   const [saving, setSaving] = useState(false);
-  const scrollRef = useRef<HTMLDivElement>(null);
-
-  const scrollToButtons = useCallback(() => {
-    requestAnimationFrame(() => {
-      scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
-    });
-  }, []);
 
   const handleFinish = async () => {
-    if (!name.trim() || !occupation || (occupation === "other" && !otherOccupation.trim()) || !referral || (referral === "other" && !otherReferral.trim())) return;
+    if (!name.trim() || !occupation || !referral) return;
     setSaving(true);
     await saveOnboarding(uid, {
       displayName: name.trim(),
@@ -241,7 +232,7 @@ export function OnboardingModal({
       </div>
 
       {/* Content — scrollable */}
-      <div ref={scrollRef} className="flex flex-1 justify-center overflow-y-auto px-4 pt-6 pb-8">
+      <div className="flex flex-1 justify-center overflow-y-auto px-4 pt-6 pb-8">
         <div className="w-full max-w-md pb-12">
           <AnimatePresence mode="wait">
             {/* Шаг 1: Имя */}
@@ -324,10 +315,7 @@ export function OnboardingModal({
                     <button
                       key={o.value}
                       type="button"
-                      onClick={() => {
-                        setOccupation(o.value);
-                        if (occupation === "other" && o.value !== "other") scrollToButtons();
-                      }}
+                      onClick={() => setOccupation(o.value)}
                       className={`flex h-12 w-full items-center gap-3 rounded-xl border px-4 text-left text-sm transition-all ${
                         occupation === o.value
                           ? "border-text-primary bg-bg-card"
@@ -339,25 +327,6 @@ export function OnboardingModal({
                     </button>
                   ))}
                 </div>
-                <AnimatePresence>
-                  {occupation === "other" && (
-                    <motion.div
-                      initial={{ opacity: 0, y: -8 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -8 }}
-                      transition={{ duration: 0.25, ease: "easeInOut" }}
-                    >
-                      <input
-                        type="text"
-                        value={otherOccupation}
-                        onChange={(e) => setOtherOccupation(e.target.value)}
-                        placeholder="Напишите чем занимаетесь"
-                        autoFocus
-                        className="mt-2 h-12 w-full rounded-xl border border-border-strong bg-bg-input px-4 text-sm text-text-primary placeholder:text-text-muted focus:border-text-primary focus:outline-none"
-                      />
-                    </motion.div>
-                  )}
-                </AnimatePresence>
                 <div className="mt-5 flex gap-2">
                   <button
                     type="button"
@@ -369,7 +338,7 @@ export function OnboardingModal({
                   <button
                     type="button"
                     onClick={() => occupation && setStep(2)}
-                    disabled={!occupation || (occupation === "other" && !otherOccupation.trim())}
+                    disabled={!occupation}
                     className="h-12 flex-1 rounded-xl bg-text-primary text-sm font-medium text-bg-page transition-all hover:opacity-90 active:scale-[0.98] disabled:opacity-40"
                   >
                     Далее
@@ -398,10 +367,7 @@ export function OnboardingModal({
                     <button
                       key={r.value}
                       type="button"
-                      onClick={() => {
-                        setReferral(r.value);
-                        if (referral === "other" && r.value !== "other") scrollToButtons();
-                      }}
+                      onClick={() => setReferral(r.value)}
                       className={`flex h-12 w-full items-center gap-3 rounded-xl border px-4 text-left text-sm transition-all ${
                         referral === r.value
                           ? "border-text-primary bg-bg-card"
@@ -413,25 +379,6 @@ export function OnboardingModal({
                     </button>
                   ))}
                 </div>
-                <AnimatePresence>
-                  {referral === "other" && (
-                    <motion.div
-                      initial={{ opacity: 0, y: -8 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -8 }}
-                      transition={{ duration: 0.25, ease: "easeInOut" }}
-                    >
-                      <input
-                        type="text"
-                        value={otherReferral}
-                        onChange={(e) => setOtherReferral(e.target.value)}
-                        placeholder="Расскажите подробнее"
-                        autoFocus
-                        className="mt-2 h-12 w-full rounded-xl border border-border-strong bg-bg-input px-4 text-sm text-text-primary placeholder:text-text-muted focus:border-text-primary focus:outline-none"
-                      />
-                    </motion.div>
-                  )}
-                </AnimatePresence>
                 <div className="mt-5 flex gap-2">
                   <button
                     type="button"
@@ -443,7 +390,7 @@ export function OnboardingModal({
                   <button
                     type="button"
                     onClick={handleFinish}
-                    disabled={!referral || (referral === "other" && !otherReferral.trim()) || saving}
+                    disabled={!referral || saving}
                     className="h-12 flex-1 rounded-xl bg-text-primary text-sm font-medium text-bg-page transition-all hover:opacity-90 active:scale-[0.98] disabled:opacity-40"
                   >
                     {saving ? "..." : "Готово"}
