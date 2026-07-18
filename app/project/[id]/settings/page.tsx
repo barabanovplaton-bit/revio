@@ -3,9 +3,8 @@
 import { useState, useEffect, use } from "react";
 import { useRouter } from "next/navigation";
 import { subscribeToAuth, type User } from "@/lib/auth";
-import { getProject, updateProject, type Project } from "@/lib/projects";
+import { getProject, updateProject, toggleArchive, deleteProject, type Project } from "@/lib/projects";
 import { ConfirmModal } from "@/app/_components/confirm-modal";
-import { toggleArchive, deleteProject } from "@/lib/projects";
 
 export default function SettingsPage({
   params,
@@ -22,12 +21,12 @@ export default function SettingsPage({
   const [description, setDescription] = useState("");
   const [clientName, setClientName] = useState("");
   const [clientContact, setClientContact] = useState("");
+  const [roundsTotal, setRoundsTotal] = useState(3);
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
 
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [confirmArchive, setConfirmArchive] = useState(false);
-  const [confirmComplete, setConfirmComplete] = useState(false);
 
   useEffect(() => {
     const unsub = subscribeToAuth((u) => {
@@ -52,11 +51,10 @@ export default function SettingsPage({
       setDescription(p.description || "");
       setClientName(p.clientName || "");
       setClientContact(p.clientContact || "");
+      setRoundsTotal(p.roundsTotal);
       setLoading(false);
     })();
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
   }, [id, user, router]);
 
   const showToast = (msg: string) => {
@@ -68,12 +66,28 @@ export default function SettingsPage({
     if (!name.trim()) return;
     setSaving(true);
     try {
-      await updateProject(id, {
+      const update: Partial<Project> = {
         name: name.trim(),
         description: description.trim(),
         clientName: clientName.trim(),
         clientContact: clientContact.trim(),
-      });
+      };
+
+      // Handle rounds change
+      if (project && roundsTotal !== project.roundsTotal) {
+        const usedRounds = project.roundsTotal - project.roundsLeft;
+        const newLeft = Math.max(0, roundsTotal - usedRounds);
+        update.roundsTotal = roundsTotal;
+        update.roundsLeft = newLeft;
+
+        // If we ran out of rounds but now have more, reactivate
+        if (project.status === "exhausted" && newLeft > 0) {
+          update.status = "in_progress";
+          update.isLocked = false;
+        }
+      }
+
+      await updateProject(id, update);
       showToast("Сохранено");
     } catch (e) {
       console.error(e);
@@ -95,12 +109,6 @@ export default function SettingsPage({
     router.push("/");
   };
 
-  const handleComplete = async () => {
-    await toggleArchive(id, true);
-    setConfirmComplete(false);
-    router.push("/");
-  };
-
   if (loading) {
     return (
       <div className="flex h-screen items-center justify-center bg-bg-page">
@@ -118,15 +126,7 @@ export default function SettingsPage({
             onClick={() => router.push(`/project/${id}`)}
             className="shrink-0 rounded-lg p-1.5 text-text-muted transition-colors hover:bg-bg-cardHover hover:text-text-primary"
           >
-            <svg
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth={2}
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              className="h-5 w-5"
-            >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5">
               <path d="M19 12H5" />
               <path d="m12 19-7-7 7-7" />
             </svg>
@@ -139,6 +139,7 @@ export default function SettingsPage({
 
       <div className="mx-auto w-full max-w-3xl flex-1 px-4 py-6 md:px-6">
         <div className="space-y-4">
+          {/* Name */}
           <div>
             <label className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-text-muted">
               Название
@@ -151,6 +152,7 @@ export default function SettingsPage({
             />
           </div>
 
+          {/* Description */}
           <div>
             <label className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-text-muted">
               Описание
@@ -164,6 +166,7 @@ export default function SettingsPage({
             />
           </div>
 
+          {/* Client name */}
           <div>
             <label className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-text-muted">
               Имя клиента
@@ -177,6 +180,7 @@ export default function SettingsPage({
             />
           </div>
 
+          {/* Client contact */}
           <div>
             <label className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-text-muted">
               Контакт клиента
@@ -190,6 +194,42 @@ export default function SettingsPage({
             />
           </div>
 
+          {/* Rounds */}
+          <div>
+            <label className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-text-muted">
+              Кругов правок
+            </label>
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => setRoundsTotal(Math.max(1, roundsTotal - 1))}
+                disabled={roundsTotal <= 1}
+                className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-border-strong bg-bg-input text-lg font-medium text-text-primary transition-all hover:bg-bg-cardHover disabled:opacity-30"
+              >
+                −
+              </button>
+              <div className="flex h-12 flex-1 items-center justify-center rounded-xl border border-border-strong bg-bg-card">
+                <span className="font-display text-xl font-bold text-text-primary">
+                  {roundsTotal}
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setRoundsTotal(Math.min(999, roundsTotal + 1))}
+                className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-border-strong bg-bg-input text-lg font-medium text-text-primary transition-all hover:bg-bg-cardHover"
+              >
+                +
+              </button>
+            </div>
+            {project && project.roundsTotal !== roundsTotal && (
+              <p className="mt-1.5 text-xs text-text-muted">
+                Использовано: {project.roundsTotal - project.roundsLeft} из {project.roundsTotal}
+                {roundsTotal > project.roundsTotal && " · Будет добавлено "}
+              </p>
+            )}
+          </div>
+
+          {/* Save button */}
           <button
             type="button"
             onClick={handleSave}
@@ -200,6 +240,7 @@ export default function SettingsPage({
           </button>
         </div>
 
+        {/* Danger zone */}
         <div className="mt-8 space-y-3">
           <button
             type="button"
@@ -207,13 +248,6 @@ export default function SettingsPage({
             className="h-12 w-full rounded-xl border border-border-strong bg-bg-input text-sm font-medium text-text-primary transition-all hover:bg-bg-cardHover"
           >
             {project?.archived ? "Восстановить из архива" : "В архив"}
-          </button>
-          <button
-            type="button"
-            onClick={() => setConfirmComplete(true)}
-            className="h-12 w-full rounded-xl border border-green-500/50 bg-green-500/10 text-sm font-medium text-green-400 transition-all hover:bg-green-500/20"
-          >
-            Завершить проект
           </button>
           <button
             type="button"
@@ -236,36 +270,17 @@ export default function SettingsPage({
       />
       <ConfirmModal
         open={confirmArchive}
-        title={
-          project?.archived ? "Восстановить проект?" : "Архивировать проект?"
-        }
-        message={
-          project?.archived
-            ? "Проект будет возвращён в основной список."
-            : "Проект будет перемещён в архив."
-        }
+        title={project?.archived ? "Восстановить проект?" : "Архивировать проект?"}
+        message={project?.archived ? "Проект будет возвращён в основной список." : "Проект будет перемещён в архив."}
         confirmLabel={project?.archived ? "Восстановить" : "Архивировать"}
         onConfirm={handleArchive}
         onCancel={() => setConfirmArchive(false)}
       />
-      <ConfirmModal
-        open={confirmComplete}
-        title="Завершить проект?"
-        message="Проект будет перемещён в архив."
-        confirmLabel="Завершить"
-        onConfirm={handleComplete}
-        onCancel={() => setConfirmComplete(false)}
-      />
 
-      <div className="sticky bottom-0 px-4 py-4">
-        <div
-          className={`fixed inset-x-0 bottom-0 flex justify-center pb-4 transition-opacity ${
-            toast ? "opacity-100" : "opacity-0 pointer-events-none"
-          }`}
-        >
-          <div className="rounded-xl border border-border-strong bg-bg-card px-4 py-2.5 text-sm text-text-primary shadow-xl">
-            {toast}
-          </div>
+      {/* Toast */}
+      <div className="fixed bottom-0 inset-x-0 flex justify-center pb-6 pointer-events-none">
+        <div className={`rounded-xl border border-border-strong bg-bg-card px-4 py-2.5 text-sm text-text-primary shadow-xl transition-all duration-300 ${toast ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"}`}>
+          {toast}
         </div>
       </div>
     </div>

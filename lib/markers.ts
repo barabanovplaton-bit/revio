@@ -132,3 +132,29 @@ export async function deleteProjectMarkers(
   const markers = await getProjectMarkers(projectId, round);
   await Promise.all(markers.map((m) => deleteMarker(m.id)));
 }
+
+/**
+ * Подписка на ВСЕ маркеры проекта (все круги, realtime)
+ */
+export function subscribeToAllProjectMarkers(
+  projectId: string,
+  cb: (markers: Marker[]) => void
+): () => void {
+  const q = query(
+    collection(db, COLLECTION),
+    where("projectId", "==", projectId)
+  );
+  return onSnapshot(
+    q,
+    (snap) => {
+      const markers: Marker[] = [];
+      snap.forEach((d) => {
+        markers.push({ id: d.id, ...(d.data() as Omit<Marker, "id">) });
+      });
+      cb(markers);
+    },
+    (err) => {
+      console.error("subscribeToAllProjectMarkers error:", err);
+    }
+  );
+}
