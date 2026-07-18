@@ -11,10 +11,6 @@ import { OnboardingModal } from "./_components/onboarding-modal";
 import { signOut, subscribeToAuth, type User } from "@/lib/auth";
 import { type UserProfile } from "@/lib/user-profile";
 import {
-  ProjectIcon,
-  getIconIndex,
-} from "@/lib/project-icons";
-import {
   subscribeToUserProjects,
   updateProject,
   togglePin,
@@ -476,13 +472,6 @@ function ProjectCard({
       onClick={onSelect}
     >
       <div className="flex items-center gap-3 px-4 py-3">
-        <div className="shrink-0">
-          <ProjectIcon
-            index={project.iconIndex ?? getIconIndex(project.icon)}
-            color={project.iconColor || "#E880FC"}
-            className="h-9 w-9"
-          />
-        </div>
         <div className="min-w-0 flex-1">
           {renaming ? (
             <input

@@ -13,7 +13,7 @@ import {
   subscribeToProjectMarkers,
   type Marker,
 } from "@/lib/markers";
-import { ProjectIcon, getIconIndex } from "@/lib/project-icons";
+import { ConfirmModal } from "./confirm-modal";
 import { uploadImage } from "@/lib/cloudinary";
 
 interface ProjectHubProps {
@@ -40,7 +40,8 @@ export function ProjectHub({
     null
   );
   const [toast, setToast] = useState<string | null>(null);
-  const [pendingImages, setPendingImages] = useState<string[]>([]);
+  const [confirmUpload, setConfirmUpload] = useState(false);
+  const [pendingFiles, setPendingFiles] = useState<FileList | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -70,49 +71,49 @@ export function ProjectHub({
     setTimeout(() => setToast(null), 2400);
   };
 
-  const handleFileSelect = async (files: FileList | null) => {
+  const handleFileSelect = (files: FileList | null) => {
     if (!files || files.length === 0) return;
+    const valid = Array.from(files).filter(
+      (f) => f.type.startsWith("image/") && f.size <= 5 * 1024 * 1024
+    );
+    if (valid.length === 0) return;
+    setPendingFiles(files);
+    setConfirmUpload(true);
+  };
+
+  const handleConfirmUpload = async () => {
+    if (!pendingFiles || !project) return;
+    setConfirmUpload(false);
     setIsUploading(true);
 
-    for (let i = 0; i < files.length; i++) {
-      const file = files[i];
+    const uploaded: string[] = [];
+    for (let i = 0; i < pendingFiles.length; i++) {
+      const file = pendingFiles[i];
       if (!file.type.startsWith("image/")) continue;
       if (file.size > 5 * 1024 * 1024) continue;
       try {
         const result = await uploadImage(file);
-        setPendingImages((prev) => [...prev, result.url]);
+        uploaded.push(result.url);
       } catch (e) {
         console.error("Upload error:", e);
       }
     }
 
-    setIsUploading(false);
-  };
-
-  const handleRemovePendingImage = (index: number) => {
-    setPendingImages((prev) => prev.filter((_, i) => i !== index));
-  };
-
-  const handleSaveImages = async () => {
-    if (!project || pendingImages.length === 0) return;
-    setIsUploading(true);
-    try {
-      const allImages = [...(project.imageUrls || []), ...pendingImages];
+    if (uploaded.length > 0) {
+      const allImages = [...(project.imageUrls || []), ...uploaded];
       await updateProjectImages(projectId, allImages);
       await updateProject(projectId, {
         status: "in_progress",
         isLocked: false,
       });
-      setPendingImages([]);
       const updated = await getProject(projectId);
       setProject(updated);
       onProjectUpdated();
-      showToast("Изображения сохранены");
-    } catch (error) {
-      console.error("Failed to save images:", error);
-    } finally {
-      setIsUploading(false);
+      showToast(`Загружено ${uploaded.length} изображений`);
     }
+
+    setPendingFiles(null);
+    setIsUploading(false);
   };
 
   const handleUnlock = async () => {
@@ -183,12 +184,7 @@ export function ProjectHub({
   };
   const status = statusConfig[project.status || "waiting_for_images"];
 
-  const allImages = [
-    ...(project.imageUrls || []),
-    ...pendingImages,
-  ];
-
-  if (viewingImageIndex !== null && allImages[viewingImageIndex]) {
+  if (viewingImageIndex !== null && (project.imageUrls || [])[viewingImageIndex]) {
     return (
       <div className="flex h-screen flex-col bg-bg-page">
         <div className="sticky top-0 z-20 px-4 pt-3 md:px-6">
@@ -231,7 +227,7 @@ export function ProjectHub({
           <div className="mx-auto max-w-4xl">
             <div className="relative inline-block w-full">
               <img
-                src={allImages[viewingImageIndex]}
+                src={(project.imageUrls || [])[viewingImageIndex]}
                 alt={`Image ${viewingImageIndex + 1}`}
                 className="w-full rounded-xl border border-border-strong"
               />
@@ -241,7 +237,7 @@ export function ProjectHub({
                     m.type === "point" && m.x != null && m.y != null
                 )
                 .map((marker) => {
-                  const total = allImages.length;
+                  const total = (project.imageUrls || []).length;
                   const cols = total <= 3 ? total : 3;
                   const rows = Math.ceil(total / cols);
                   const imgRow = Math.floor(viewingImageIndex / cols);
@@ -314,16 +310,9 @@ export function ProjectHub({
             </svg>
           </button>
           <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-2">
-              <ProjectIcon
-                index={project.iconIndex ?? getIconIndex(project.icon)}
-                color={project.iconColor || "#E880FC"}
-                className="h-5 w-5 shrink-0"
-              />
-              <h1 className="truncate text-sm font-semibold text-text-primary">
-                {project.name}
-              </h1>
-            </div>
+            <h1 className="truncate text-sm font-semibold text-text-primary">
+              {project.name}
+            </h1>
           </div>
           <button
             type="button"
@@ -521,14 +510,13 @@ export function ProjectHub({
             </label>
           </div>
 
-          {allImages.length > 0 ? (
+          {(project.imageUrls || []).length > 0 ? (
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-              {allImages.map((url, index) => {
-                const isPending = index >= (project.imageUrls?.length || 0);
+              {(project.imageUrls || []).map((url, index) => {
                 const imageMarkers = markers.filter((m) => {
                   if (m.type !== "point" || m.x == null || m.y == null)
                     return false;
-                  const total = allImages.length;
+                  const total = (project.imageUrls || []).length;
                   const cols = total <= 3 ? total : 3;
                   const row = Math.floor(index / cols);
                   const col = index % cols;
@@ -555,13 +543,6 @@ export function ProjectHub({
                       alt={`Image ${index + 1}`}
                       className="h-full w-full object-cover"
                     />
-                    {isPending && (
-                      <div className="absolute inset-0 flex items-center justify-center bg-black/40">
-                        <span className="text-xs font-medium text-white">
-                          Новая
-                        </span>
-                      </div>
-                    )}
                     {imageMarkers.length > 0 && (
                       <div className="absolute top-2 right-2 flex h-6 w-6 items-center justify-center rounded-full bg-text-primary text-[10px] font-bold text-bg-page shadow-lg">
                         {imageMarkers.length}
@@ -586,23 +567,21 @@ export function ProjectHub({
               </p>
             </div>
           )}
-
-          {pendingImages.length > 0 && (
-            <div className="mt-3">
-              <button
-                type="button"
-                onClick={handleSaveImages}
-                disabled={isUploading}
-                className="w-full rounded-xl bg-text-primary px-4 py-3 text-sm font-medium text-bg-page transition-all hover:opacity-90 active:scale-[0.98] disabled:opacity-50"
-              >
-                {isUploading
-                  ? "Сохранение..."
-                  : `Сохранить ${pendingImages.length} изображ.`}
-              </button>
-            </div>
-          )}
         </div>
       </div>
+
+      {/* Модалка подтверждения загрузки */}
+      <ConfirmModal
+        open={confirmUpload}
+        title="Добавить изображения?"
+        message={`Будет загружено ${pendingFiles?.length || 0} изображений. После загрузки изображения нельзя будет удалить или заменить.`}
+        confirmLabel="Загрузить"
+        onConfirm={handleConfirmUpload}
+        onCancel={() => {
+          setConfirmUpload(false);
+          setPendingFiles(null);
+        }}
+      />
 
       <AnimatePresence>
         {toast && (

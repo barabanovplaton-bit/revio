@@ -57,7 +57,7 @@ const COLLECTION = "projects";
 export async function createProject(
   data: Omit<
     Project,
-    "id" | "ownerUid" | "imageUrls" | "currentRound" | "isLocked" | "pinned" | "archived" | "createdAt" | "updatedAt"
+    "id" | "ownerUid" | "imageUrls" | "currentRound" | "isLocked" | "pinned" | "archived" | "createdAt" | "updatedAt" | "icon" | "iconIndex" | "iconColor"
   > & { icon?: string; iconIndex?: number; iconColor?: string; status?: Project["status"] },
   ownerUid: string
 ): Promise<string> {
