@@ -3,11 +3,7 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { createProject } from "@/lib/projects";
-import {
-  PROJECT_COLORS,
-  PROJECT_ICONS,
-  ProjectIcon,
-} from "@/lib/project-icons";
+import { PROJECT_ICONS, PROJECT_COLORS } from "@/lib/project-icons";
 
 interface NewProjectWizardProps {
   open: boolean;
@@ -25,8 +21,6 @@ export function NewProjectWizard({
   onCreated,
 }: NewProjectWizardProps) {
   const [step, setStep] = useState(0);
-  const [color, setColor] = useState(PROJECT_COLORS[0]);
-  const [selectedIcon, setSelectedIcon] = useState(0);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [clientName, setClientName] = useState("");
@@ -41,8 +35,6 @@ export function NewProjectWizard({
 
   const reset = () => {
     setStep(0);
-    setColor(PROJECT_COLORS[0]);
-    setSelectedIcon(0);
     setName("");
     setDescription("");
     setClientName("");
@@ -62,7 +54,8 @@ export function NewProjectWizard({
     setSaving(true);
     setError(null);
     try {
-      const icon = PROJECT_ICONS[selectedIcon];
+      const colorIdx = Math.floor(Math.random() * PROJECT_COLORS.length);
+      const iconIdx = Math.floor(Math.random() * PROJECT_ICONS.length);
       const id = await createProject(
         {
           name: name.trim(),
@@ -73,9 +66,9 @@ export function NewProjectWizard({
           roundsLeft: rounds,
           limitMessage:
             "Лимит правок исчерпан. Свяжитесь со мной для продления.",
-          icon: icon.label,
-          iconIndex: selectedIcon,
-          iconColor: color,
+          icon: PROJECT_ICONS[iconIdx].label,
+          iconIndex: iconIdx,
+          iconColor: PROJECT_COLORS[colorIdx],
           status: "waiting_for_images",
         },
         ownerUid
@@ -92,11 +85,9 @@ export function NewProjectWizard({
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-bg-page">
-      {/* Content — scrollable */}
       <div className="flex min-h-0 flex-1 justify-center overflow-y-auto px-4 pt-6 pb-4">
         <div className="w-full max-w-md pb-2">
           <AnimatePresence mode="wait">
-            {/* Шаг 1: Цвет + Иконка + Название */}
             {step === 0 && (
               <motion.div
                 key="step0"
@@ -108,70 +99,13 @@ export function NewProjectWizard({
                 <h2 className="mb-1 text-center font-display text-xl font-semibold text-text-primary">
                   Новый проект
                 </h2>
-                <p className="mb-5 text-center text-xs text-text-muted">
-                  Выберите цвет и иконку
+                <p className="mb-6 text-center text-xs text-text-muted">
+                  Назовите проект
                 </p>
 
-                {/* Выбранная иконка — большая */}
-                <div className="mb-4 flex justify-center">
-                  <div className="flex h-20 w-20 items-center justify-center rounded-2xl transition-colors">
-                    <ProjectIcon
-                      index={selectedIcon}
-                      color={color}
-                      className="h-12 w-12"
-                    />
-                  </div>
-                </div>
-
-                {/* Палитра цветов */}
-                <p className="mb-2 text-center text-[10px] font-medium uppercase tracking-wide text-text-muted">
-                  Цвет
-                </p>
-                <div className="mb-4 flex flex-wrap justify-center gap-2">
-                  {PROJECT_COLORS.map((c) => (
-                    <button
-                      key={c}
-                      type="button"
-                      onClick={() => setColor(c)}
-                      className={`h-8 w-8 rounded-full border-2 transition-all ${
-                        color === c
-                          ? "scale-110 border-text-primary"
-                          : "border-transparent hover:scale-105"
-                      }`}
-                      style={{ backgroundColor: c }}
-                    />
-                  ))}
-                </div>
-
-                {/* Сетка иконок */}
-                <p className="mb-2 text-center text-[10px] font-medium uppercase tracking-wide text-text-muted">
-                  Иконка
-                </p>
-                <div className="mb-5 grid grid-cols-6 gap-2">
-                  {PROJECT_ICONS.map((_, i) => (
-                    <button
-                      key={i}
-                      type="button"
-                      onClick={() => setSelectedIcon(i)}
-                      className={`flex h-12 items-center justify-center rounded-xl border transition-all ${
-                        selectedIcon === i
-                          ? "border-text-primary bg-bg-card"
-                          : "border-border-strong bg-bg-card hover:border-text-primary/30"
-                      }`}
-                    >
-                      <ProjectIcon
-                        index={i}
-                        color={color}
-                        className="h-6 w-6"
-                      />
-                    </button>
-                  ))}
-                </div>
-
-                {/* Название */}
-                <p className="mb-2 text-center text-[10px] font-medium uppercase tracking-wide text-text-muted">
+                <label className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-text-muted">
                   Название *
-                </p>
+                </label>
                 <input
                   type="text"
                   value={name}
@@ -181,12 +115,11 @@ export function NewProjectWizard({
                   onKeyDown={(e) => {
                     if (e.key === "Enter" && name.trim()) setStep(1);
                   }}
-                  className="h-12 w-full rounded-xl border border-border-strong bg-bg-input px-4 text-center text-sm text-text-primary placeholder:text-text-muted focus:border-text-primary focus:outline-none"
+                  className="h-12 w-full rounded-xl border border-border-strong bg-bg-input px-4 text-sm text-text-primary placeholder:text-text-muted focus:border-text-primary focus:outline-none"
                 />
               </motion.div>
             )}
 
-            {/* Шаг 2: Описание + клиент */}
             {step === 1 && (
               <motion.div
                 key="step1"
@@ -237,7 +170,6 @@ export function NewProjectWizard({
               </motion.div>
             )}
 
-            {/* Шаг 3: Круги + Превью */}
             {step === 2 && (
               <motion.div
                 key="step2"
@@ -289,36 +221,26 @@ export function NewProjectWizard({
                   </p>
                 )}
 
-                {/* Превью проекта */}
                 <div className="rounded-xl border border-border-strong bg-bg-card p-4">
-                  <div className="mb-3 flex items-center gap-3">
-                    <ProjectIcon
-                      index={selectedIcon}
-                      color={color}
-                      className="h-10 w-10 shrink-0"
-                    />
-                    <div>
-                      <div className="text-sm font-medium text-text-primary">
-                        {name || "Без названия"}
-                      </div>
-                      <div className="text-xs text-text-muted">
-                        {rounds}{" "}
-                        {rounds === 1
-                          ? "круг"
-                          : rounds < 5
-                            ? "круга"
-                            : "кругов"}{" "}
-                        правок
-                      </div>
-                    </div>
+                  <div className="text-sm font-medium text-text-primary">
+                    {name || "Без названия"}
+                  </div>
+                  <div className="text-xs text-text-muted">
+                    {rounds}{" "}
+                    {rounds === 1
+                      ? "круг"
+                      : rounds < 5
+                        ? "круга"
+                        : "кругов"}{" "}
+                    правок
                   </div>
                   {description && (
-                    <p className="mb-2 text-xs text-text-muted line-clamp-2">
+                    <p className="mt-2 text-xs text-text-muted line-clamp-2">
                       {description}
                     </p>
                   )}
                   {clientName && (
-                    <div className="flex items-center gap-1.5 text-xs text-text-muted">
+                    <div className="mt-1 flex items-center gap-1.5 text-xs text-text-muted">
                       <svg
                         viewBox="0 0 24 24"
                         fill="none"
@@ -347,7 +269,6 @@ export function NewProjectWizard({
         </div>
       </div>
 
-      {/* Fixed bottom bar */}
       <div className="shrink-0 bg-bg-page px-4 py-4">
         <div className="mx-auto flex max-w-md gap-2">
           {step > 0 ? (

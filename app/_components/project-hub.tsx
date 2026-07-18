@@ -1,12 +1,11 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   getProject,
   updateProject,
-  toggleArchive,
-  deleteProject,
   updateProjectImages,
   type Project,
 } from "@/lib/projects";
@@ -14,8 +13,6 @@ import {
   subscribeToProjectMarkers,
   type Marker,
 } from "@/lib/markers";
-import { ConfirmModal } from "./confirm-modal";
-import { type UploadResult } from "@/lib/cloudinary";
 import { ProjectIcon, getIconIndex } from "@/lib/project-icons";
 import { uploadImage } from "@/lib/cloudinary";
 
@@ -34,26 +31,16 @@ export function ProjectHub({
   onProjectDeleted,
   onProjectUpdated,
 }: ProjectHubProps) {
+  const router = useRouter();
   const [project, setProject] = useState<Project | null>(null);
   const [loading, setLoading] = useState(true);
-  const [showSettings, setShowSettings] = useState(false);
-  const [showUpload, setShowUpload] = useState(false);
-  const [newImages, setNewImages] = useState<string[]>([]);
   const [isUploading, setIsUploading] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState(0);
   const [markers, setMarkers] = useState<Marker[]>([]);
   const [viewingImageIndex, setViewingImageIndex] = useState<number | null>(
     null
   );
-  const [editingField, setEditingField] = useState<string | null>(null);
-  const [editValue, setEditValue] = useState("");
   const [toast, setToast] = useState<string | null>(null);
-
-  const [confirmDelete, setConfirmDelete] = useState(false);
-  const [confirmArchive, setConfirmArchive] = useState(false);
-  const [confirmComplete, setConfirmComplete] = useState(false);
-  const [confirmUnlock, setConfirmUnlock] = useState(false);
-  const [confirmReviewed, setConfirmReviewed] = useState(false);
+  const [pendingImages, setPendingImages] = useState<string[]>([]);
 
   useEffect(() => {
     let cancelled = false;
@@ -83,84 +70,54 @@ export function ProjectHub({
     setTimeout(() => setToast(null), 2400);
   };
 
-  const handleDelete = async () => {
-    await deleteProject(projectId);
-    setConfirmDelete(false);
-    onProjectDeleted();
-  };
-
-  const handleArchive = async () => {
-    if (!project) return;
-    await toggleArchive(projectId, !project.archived);
-    setConfirmArchive(false);
-    onProjectUpdated();
-    onBack();
-  };
-
   const handleFileSelect = async (files: FileList | null) => {
     if (!files || files.length === 0) return;
     setIsUploading(true);
-    setUploadProgress(0);
-    const total = files.length;
-    const uploaded: string[] = [];
 
-    for (let i = 0; i < total; i++) {
+    for (let i = 0; i < files.length; i++) {
       const file = files[i];
       if (!file.type.startsWith("image/")) continue;
       if (file.size > 5 * 1024 * 1024) continue;
       try {
         const result = await uploadImage(file);
-        uploaded.push(result.url);
-        setUploadProgress(Math.round(((i + 1) / total) * 100));
+        setPendingImages((prev) => [...prev, result.url]);
       } catch (e) {
         console.error("Upload error:", e);
       }
     }
 
-    setNewImages((prev) => [...prev, ...uploaded]);
     setIsUploading(false);
-    setUploadProgress(0);
   };
 
-  const handleRemoveNewImage = (index: number) => {
-    setNewImages((prev) => prev.filter((_, i) => i !== index));
+  const handleRemovePendingImage = (index: number) => {
+    setPendingImages((prev) => prev.filter((_, i) => i !== index));
   };
 
-  const handleUploadNewVersion = async () => {
-    if (!project || newImages.length === 0) return;
+  const handleSaveImages = async () => {
+    if (!project || pendingImages.length === 0) return;
     setIsUploading(true);
     try {
-      await updateProjectImages(projectId, newImages);
+      const allImages = [...(project.imageUrls || []), ...pendingImages];
+      await updateProjectImages(projectId, allImages);
       await updateProject(projectId, {
-        currentRound: project.currentRound + 1,
-        roundsLeft: Math.max(0, project.roundsLeft),
-        isLocked: false,
         status: "in_progress",
+        isLocked: false,
       });
-      setNewImages([]);
-      setShowUpload(false);
+      setPendingImages([]);
       const updated = await getProject(projectId);
       setProject(updated);
       onProjectUpdated();
-      showToast("Изображения загружены");
+      showToast("Изображения сохранены");
     } catch (error) {
-      console.error("Failed to upload new version:", error);
+      console.error("Failed to save images:", error);
     } finally {
       setIsUploading(false);
     }
   };
 
-  const handleCompleteProject = async () => {
-    await toggleArchive(projectId, true);
-    setConfirmComplete(false);
-    onProjectUpdated();
-    onBack();
-  };
-
   const handleUnlock = async () => {
     if (!project) return;
     await updateProject(projectId, { isLocked: false });
-    setConfirmUnlock(false);
     const updated = await getProject(projectId);
     setProject(updated);
   };
@@ -173,34 +130,19 @@ export function ProjectHub({
         status: "in_progress",
       });
     } else {
-      await toggleArchive(projectId, true);
+      await updateProject(projectId, {
+        isLocked: false,
+        status: "exhausted",
+      });
     }
-    setConfirmReviewed(false);
-    onProjectUpdated();
-    onBack();
-  };
-
-  const handleSaveField = async (field: string) => {
-    if (!project) return;
-    const data: Partial<Project> = {};
-    if (field === "name") data.name = editValue.trim() || project.name;
-    if (field === "description") data.description = editValue.trim();
-    if (field === "clientName") data.clientName = editValue.trim();
-    if (field === "clientContact") data.clientContact = editValue.trim();
-    await updateProject(projectId, data);
     const updated = await getProject(projectId);
     setProject(updated);
-    setEditingField(null);
-  };
-
-  const startEdit = (field: string, value: string) => {
-    setEditValue(value);
-    setEditingField(field);
+    onProjectUpdated();
   };
 
   if (loading) {
     return (
-      <div className="flex h-full items-center justify-center bg-bg-page">
+      <div className="flex h-screen items-center justify-center bg-bg-page">
         <div className="h-8 w-8 animate-spin rounded-full border-2 border-border-strong border-t-text-primary" />
       </div>
     );
@@ -241,7 +183,12 @@ export function ProjectHub({
   };
   const status = statusConfig[project.status || "waiting_for_images"];
 
-  if (viewingImageIndex !== null && project.imageUrls?.[viewingImageIndex]) {
+  const allImages = [
+    ...(project.imageUrls || []),
+    ...pendingImages,
+  ];
+
+  if (viewingImageIndex !== null && allImages[viewingImageIndex]) {
     return (
       <div className="flex h-screen flex-col bg-bg-page">
         <div className="sticky top-0 z-20 px-4 pt-3 md:px-6">
@@ -266,20 +213,14 @@ export function ProjectHub({
             </button>
             <div className="min-w-0 flex-1">
               <h1 className="truncate text-sm font-semibold text-text-primary">
-                {project.name} — Изображение {viewingImageIndex + 1}
+                {project.name} — {viewingImageIndex + 1}
               </h1>
               <p className="text-xs text-text-muted">
                 {markers.filter(
                   (m) =>
                     m.type === "point" &&
                     m.x != null &&
-                    m.y != null &&
-                    Math.min(
-                      Math.floor(
-                        m.x * (project.imageUrls?.length || 1)
-                      ),
-                      (project.imageUrls?.length || 1) - 1
-                    ) === viewingImageIndex
+                    m.y != null
                 ).length}{" "}
                 меток
               </p>
@@ -290,7 +231,7 @@ export function ProjectHub({
           <div className="mx-auto max-w-4xl">
             <div className="relative inline-block w-full">
               <img
-                src={project.imageUrls[viewingImageIndex]}
+                src={allImages[viewingImageIndex]}
                 alt={`Image ${viewingImageIndex + 1}`}
                 className="w-full rounded-xl border border-border-strong"
               />
@@ -300,13 +241,22 @@ export function ProjectHub({
                     m.type === "point" && m.x != null && m.y != null
                 )
                 .map((marker) => {
-                  const markerImageIdx = Math.min(
-                    Math.floor(
-                      (marker.x || 0) * (project.imageUrls?.length || 1)
-                    ),
-                    (project.imageUrls?.length || 1) - 1
-                  );
-                  if (markerImageIdx !== viewingImageIndex) return null;
+                  const total = allImages.length;
+                  const cols = total <= 3 ? total : 3;
+                  const rows = Math.ceil(total / cols);
+                  const imgRow = Math.floor(viewingImageIndex / cols);
+                  const imgCol = viewingImageIndex % cols;
+                  const minX = imgCol / cols;
+                  const maxX = (imgCol + 1) / cols;
+                  const minY = imgRow / rows;
+                  const maxY = (imgRow + 1) / rows;
+                  if (
+                    (marker.x || 0) < minX ||
+                    (marker.x || 0) >= maxX ||
+                    (marker.y || 0) < minY ||
+                    (marker.y || 0) >= maxY
+                  )
+                    return null;
                   return (
                     <div
                       key={marker.id}
@@ -377,7 +327,7 @@ export function ProjectHub({
           </div>
           <button
             type="button"
-            onClick={() => setShowSettings(!showSettings)}
+            onClick={() => router.push(`/project/${projectId}/settings`)}
             className="shrink-0 rounded-lg p-2 text-text-muted transition-colors hover:bg-bg-cardHover hover:text-text-primary"
           >
             <svg
@@ -423,7 +373,7 @@ export function ProjectHub({
               type="button"
               onClick={() => {
                 navigator.clipboard.writeText(shareUrl);
-                showToast("Ссылка скопирована");
+                showToast("Скопировано");
               }}
               className="shrink-0 rounded-lg bg-text-primary px-3 py-1.5 text-xs font-medium text-bg-page transition-all hover:opacity-90 active:scale-[0.98]"
             >
@@ -464,26 +414,25 @@ export function ProjectHub({
         {project.isLocked && (
           <div className="mb-4 rounded-xl border border-yellow-500/30 bg-yellow-500/10 p-4">
             <p className="mb-3 text-sm text-yellow-400">
-              Клиент отправил правки. Просмотрите метки и загрузите новую
-              версию.
+              Клиент отправил правки. Просмотрите метки.
             </p>
             <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={() => setShowUpload(true)}
-                className="flex-1 rounded-lg bg-text-primary px-4 py-2 text-sm font-medium text-bg-page transition-all hover:opacity-90"
-              >
-                Загрузить новую версию
-              </button>
               {project.roundsLeft > 0 && (
                 <button
                   type="button"
-                  onClick={() => setConfirmReviewed(true)}
-                  className="rounded-lg border border-border-strong px-4 py-2 text-sm text-text-primary transition-all hover:bg-bg-cardHover"
+                  onClick={handleMarkReviewed}
+                  className="flex-1 rounded-lg bg-text-primary px-4 py-2 text-sm font-medium text-bg-page transition-all hover:opacity-90"
                 >
                   Просмотрено
                 </button>
               )}
+              <button
+                type="button"
+                onClick={handleUnlock}
+                className="rounded-lg border border-border-strong px-4 py-2 text-sm text-text-primary transition-all hover:bg-bg-cardHover"
+              >
+                Разблокировать
+              </button>
             </div>
           </div>
         )}
@@ -539,127 +488,47 @@ export function ProjectHub({
           </div>
         )}
 
-        {/* Настройки */}
-        <AnimatePresence>
-          {showSettings && (
-            <motion.div
-              initial={{ height: 0, opacity: 0 }}
-              animate={{ height: "auto", opacity: 1 }}
-              exit={{ height: 0, opacity: 0 }}
-              transition={{ duration: 0.2 }}
-              className="overflow-hidden"
-            >
-              <div className="mb-4 space-y-3 rounded-xl border border-border-strong bg-bg-card p-4">
-                <p className="text-xs font-medium uppercase tracking-wide text-text-muted">
-                  Настройки проекта
-                </p>
-
-                <FieldRow
-                  label="Название"
-                  value={project.name}
-                  editing={editingField === "name"}
-                  onEdit={() => startEdit("name", project.name)}
-                  editValue={editValue}
-                  onEditValueChange={setEditValue}
-                  onSave={() => handleSaveField("name")}
-                  onCancel={() => setEditingField(null)}
-                />
-                <FieldRow
-                  label="Описание"
-                  value={project.description || "Не указано"}
-                  editing={editingField === "description"}
-                  onEdit={() =>
-                    startEdit("description", project.description)
-                  }
-                  editValue={editValue}
-                  onEditValueChange={setEditValue}
-                  onSave={() => handleSaveField("description")}
-                  onCancel={() => setEditingField(null)}
-                />
-                <FieldRow
-                  label="Клиент"
-                  value={project.clientName || "Не указано"}
-                  editing={editingField === "clientName"}
-                  onEdit={() =>
-                    startEdit("clientName", project.clientName)
-                  }
-                  editValue={editValue}
-                  onEditValueChange={setEditValue}
-                  onSave={() => handleSaveField("clientName")}
-                  onCancel={() => setEditingField(null)}
-                />
-                <FieldRow
-                  label="Контакт"
-                  value={project.clientContact || "Не указано"}
-                  editing={editingField === "clientContact"}
-                  onEdit={() =>
-                    startEdit("clientContact", project.clientContact)
-                  }
-                  editValue={editValue}
-                  onEditValueChange={setEditValue}
-                  onSave={() => handleSaveField("clientContact")}
-                  onCancel={() => setEditingField(null)}
-                />
-
-                <div className="flex gap-2 pt-2">
-                  <button
-                    type="button"
-                    onClick={() => setConfirmArchive(true)}
-                    className="flex-1 rounded-lg border border-border-strong px-3 py-2 text-xs font-medium text-text-primary transition-all hover:bg-bg-cardHover"
-                  >
-                    {project.archived ? "Восстановить" : "Архив"}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setConfirmComplete(true)}
-                    className="flex-1 rounded-lg border border-green-500/50 bg-green-500/10 px-3 py-2 text-xs font-medium text-green-400 transition-all hover:bg-green-500/20"
-                  >
-                    Завершить
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setConfirmDelete(true)}
-                    className="flex-1 rounded-lg border border-red-500/50 bg-red-500/10 px-3 py-2 text-xs font-medium text-red-400 transition-all hover:bg-red-500/20"
-                  >
-                    Удалить
-                  </button>
-                </div>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-
         {/* Картинки */}
         <div className="mb-6">
           <div className="mb-3 flex items-center justify-between">
             <h3 className="text-sm font-medium text-text-primary">
               Изображения
             </h3>
-            <button
-              type="button"
-              onClick={() => setShowUpload(true)}
-              className="flex items-center gap-1.5 rounded-lg border border-border-strong bg-bg-input px-3 py-1.5 text-xs font-medium text-text-primary transition-all hover:bg-bg-cardHover active:scale-[0.98]"
-            >
-              <svg
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth={2}
-                strokeLinecap="round"
-                className="h-3.5 w-3.5"
-              >
-                <path d="M12 5v14M5 12h14" />
-              </svg>
-              Добавить
-            </button>
+            <label className="flex cursor-pointer items-center gap-1.5 rounded-lg border border-border-strong bg-bg-input px-3 py-1.5 text-xs font-medium text-text-primary transition-all hover:bg-bg-cardHover active:scale-[0.98]">
+              {isUploading ? (
+                <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-border-strong border-t-text-primary" />
+              ) : (
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth={2}
+                  strokeLinecap="round"
+                  className="h-3.5 w-3.5"
+                >
+                  <path d="M12 5v14M5 12h14" />
+                </svg>
+              )}
+              {isUploading ? "Загрузка..." : "Добавить"}
+              <input
+                type="file"
+                accept="image/*"
+                multiple
+                onChange={(e) => handleFileSelect(e.target.files)}
+                disabled={isUploading}
+                className="hidden"
+              />
+            </label>
           </div>
-          {project.imageUrls && project.imageUrls.length > 0 ? (
+
+          {allImages.length > 0 ? (
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-              {project.imageUrls.map((url, index) => {
+              {allImages.map((url, index) => {
+                const isPending = index >= (project.imageUrls?.length || 0);
                 const imageMarkers = markers.filter((m) => {
                   if (m.type !== "point" || m.x == null || m.y == null)
                     return false;
-                  const total = project.imageUrls!.length;
+                  const total = allImages.length;
                   const cols = total <= 3 ? total : 3;
                   const row = Math.floor(index / cols);
                   const col = index % cols;
@@ -678,7 +547,7 @@ export function ProjectHub({
                 return (
                   <div
                     key={index}
-                    className="relative aspect-square overflow-hidden rounded-xl border border-border-strong bg-bg-input cursor-pointer transition-all hover:border-text-primary/30 group"
+                    className="group relative aspect-square overflow-hidden rounded-xl border border-border-strong bg-bg-input cursor-pointer transition-all hover:border-text-primary/30"
                     onClick={() => setViewingImageIndex(index)}
                   >
                     <img
@@ -686,12 +555,19 @@ export function ProjectHub({
                       alt={`Image ${index + 1}`}
                       className="h-full w-full object-cover"
                     />
+                    {isPending && (
+                      <div className="absolute inset-0 flex items-center justify-center bg-black/40">
+                        <span className="text-xs font-medium text-white">
+                          Новая
+                        </span>
+                      </div>
+                    )}
                     {imageMarkers.length > 0 && (
                       <div className="absolute top-2 right-2 flex h-6 w-6 items-center justify-center rounded-full bg-text-primary text-[10px] font-bold text-bg-page shadow-lg">
                         {imageMarkers.length}
                       </div>
                     )}
-                    <div className="absolute inset-0 bg-black/0 transition-colors group-hover:bg-black/10 flex items-center justify-center opacity-0 group-hover:opacity-100">
+                    <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                       <span className="text-xs font-medium text-white bg-black/50 rounded-lg px-3 py-1.5">
                         Просмотр
                       </span>
@@ -710,175 +586,23 @@ export function ProjectHub({
               </p>
             </div>
           )}
+
+          {pendingImages.length > 0 && (
+            <div className="mt-3">
+              <button
+                type="button"
+                onClick={handleSaveImages}
+                disabled={isUploading}
+                className="w-full rounded-xl bg-text-primary px-4 py-3 text-sm font-medium text-bg-page transition-all hover:opacity-90 active:scale-[0.98] disabled:opacity-50"
+              >
+                {isUploading
+                  ? "Сохранение..."
+                  : `Сохранить ${pendingImages.length} изображ.`}
+              </button>
+            </div>
+          )}
         </div>
       </div>
-
-      {/* Модалка загрузки */}
-      <AnimatePresence>
-        {showUpload && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm"
-            onClick={() => {
-              if (!isUploading) setShowUpload(false);
-            }}
-          >
-            <motion.div
-              initial={{ scale: 0.9, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.9, opacity: 0 }}
-              className="w-full max-w-lg rounded-2xl border border-border-strong bg-bg-card p-6 shadow-2xl"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <h2 className="mb-2 text-lg font-semibold text-text-primary">
-                Загрузить изображения
-              </h2>
-              <p className="mb-4 text-sm text-text-muted">
-                Можно выбрать несколько файлов (макс. 5MB каждый)
-              </p>
-
-              <label className="relative flex min-h-[160px] cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed border-border-strong bg-bg-input transition-all hover:border-text-muted">
-                <input
-                  type="file"
-                  accept="image/*"
-                  multiple
-                  onChange={(e) => handleFileSelect(e.target.files)}
-                  disabled={isUploading}
-                  className="absolute inset-0 opacity-0"
-                />
-                {isUploading ? (
-                  <div className="flex flex-col items-center gap-3">
-                    <div className="h-8 w-8 animate-spin rounded-full border-2 border-border-strong border-t-text-primary" />
-                    <p className="text-sm text-text-muted">
-                      Загрузка... {uploadProgress}%
-                    </p>
-                  </div>
-                ) : (
-                  <div className="flex flex-col items-center gap-3 px-4 text-center">
-                    <svg
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth={1.5}
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      className="h-8 w-8 text-text-muted"
-                    >
-                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                      <polyline points="17 8 12 3 7 8" />
-                      <line x1="12" y1="3" x2="12" y2="15" />
-                    </svg>
-                    <p className="text-sm font-medium text-text-primary">
-                      Нажмите или перетащите файлы
-                    </p>
-                  </div>
-                )}
-              </label>
-
-              {newImages.length > 0 && (
-                <div className="mt-4 grid grid-cols-3 gap-2">
-                  {newImages.map((url, index) => (
-                    <div
-                      key={index}
-                      className="group relative aspect-square overflow-hidden rounded-xl border border-border-strong bg-bg-input"
-                    >
-                      <img
-                        src={url}
-                        alt={`Uploaded ${index + 1}`}
-                        className="h-full w-full object-cover"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => handleRemoveNewImage(index)}
-                        className="absolute right-1.5 top-1.5 flex h-6 w-6 items-center justify-center rounded-lg bg-bg-card/90 text-text-primary opacity-0 transition-opacity group-hover:opacity-100 hover:bg-bg-cardHover"
-                      >
-                        <svg
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth={2}
-                          strokeLinecap="round"
-                          className="h-3 w-3"
-                        >
-                          <path d="M18 6 6 18" />
-                          <path d="m6 6 12 12" />
-                        </svg>
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              <div className="mt-4 flex items-center justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (!isUploading) {
-                      setShowUpload(false);
-                      setNewImages([]);
-                    }
-                  }}
-                  disabled={isUploading}
-                  className="rounded-lg border border-border-strong px-4 py-2 text-sm text-text-primary transition-all hover:bg-bg-cardHover disabled:opacity-50"
-                >
-                  Отмена
-                </button>
-                <button
-                  type="button"
-                  onClick={handleUploadNewVersion}
-                  disabled={newImages.length === 0 || isUploading}
-                  className="rounded-lg bg-text-primary px-4 py-2 text-sm font-medium text-bg-page transition-all hover:opacity-90 disabled:opacity-50"
-                >
-                  {isUploading
-                    ? "Загрузка..."
-                    : `Загрузить (${newImages.length})`}
-                </button>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* Все модалки подтверждения */}
-      <ConfirmModal
-        open={confirmDelete}
-        title="Удалить проект?"
-        message="Проект будет удалён навсегда. Это действие нельзя отменить."
-        confirmLabel="Удалить"
-        danger
-        onConfirm={handleDelete}
-        onCancel={() => setConfirmDelete(false)}
-      />
-      <ConfirmModal
-        open={confirmArchive}
-        title={project.archived ? "Восстановить проект?" : "Архивировать проект?"}
-        message={
-          project.archived
-            ? "Проект будет возвращён в основной список."
-            : "Проект будет перемещён в архив."
-        }
-        confirmLabel={project.archived ? "Восстановить" : "Архивировать"}
-        onConfirm={handleArchive}
-        onCancel={() => setConfirmArchive(false)}
-      />
-      <ConfirmModal
-        open={confirmComplete}
-        title="Завершить проект?"
-        message="Проект будет перемещён в архив."
-        confirmLabel="Завершить"
-        onConfirm={handleCompleteProject}
-        onCancel={() => setConfirmComplete(false)}
-      />
-      <ConfirmModal
-        open={confirmReviewed}
-        title="Отметить как просмотренные?"
-        message="Проект будет разблокирован для дальнейшей работы."
-        confirmLabel="Да, просмотрено"
-        onConfirm={handleMarkReviewed}
-        onCancel={() => setConfirmReviewed(false)}
-      />
 
       <AnimatePresence>
         {toast && (
@@ -892,87 +616,6 @@ export function ProjectHub({
           </motion.div>
         )}
       </AnimatePresence>
-    </div>
-  );
-}
-
-function FieldRow({
-  label,
-  value,
-  editing,
-  onEdit,
-  editValue,
-  onEditValueChange,
-  onSave,
-  onCancel,
-}: {
-  label: string;
-  value: string;
-  editing: boolean;
-  onEdit: () => void;
-  editValue: string;
-  onEditValueChange: (v: string) => void;
-  onSave: () => void;
-  onCancel: () => void;
-}) {
-  if (editing) {
-    return (
-      <div>
-        <label className="mb-1 block text-[10px] font-medium uppercase tracking-wide text-text-muted">
-          {label}
-        </label>
-        <div className="flex gap-2">
-          <input
-            type="text"
-            value={editValue}
-            onChange={(e) => onEditValueChange(e.target.value)}
-            autoFocus
-            onKeyDown={(e) => {
-              if (e.key === "Enter") onSave();
-              if (e.key === "Escape") onCancel();
-            }}
-            className="min-h-0 flex-1 rounded-lg border border-border-strong bg-bg-input px-3 py-1.5 text-xs text-text-primary focus:border-text-primary focus:outline-none"
-          />
-          <button
-            type="button"
-            onClick={onSave}
-            className="rounded-lg bg-text-primary px-2.5 py-1.5 text-xs font-medium text-bg-page transition-all hover:opacity-90"
-          >
-            OK
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="flex items-center justify-between gap-2">
-      <div className="min-w-0 flex-1">
-        <span className="block text-[10px] font-medium uppercase tracking-wide text-text-muted">
-          {label}
-        </span>
-        <span className="block truncate text-xs text-text-primary">
-          {value}
-        </span>
-      </div>
-      <button
-        type="button"
-        onClick={onEdit}
-        className="shrink-0 rounded-lg p-1.5 text-text-muted transition-colors hover:bg-bg-cardHover hover:text-text-primary"
-      >
-        <svg
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth={1.5}
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          className="h-3.5 w-3.5"
-        >
-          <path d="M17 3a2.83 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
-          <path d="m15 5 4 4" />
-        </svg>
-      </button>
     </div>
   );
 }

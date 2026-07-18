@@ -16,6 +16,9 @@ import {
 } from "@/lib/project-icons";
 import {
   subscribeToUserProjects,
+  updateProject,
+  togglePin,
+  toggleArchive,
   deleteProject,
   formatRelativeTime,
   type Project,
@@ -43,6 +46,7 @@ function App() {
   const [toast, setToast] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [menuFor, setMenuFor] = useState<string | null>(null);
 
   const [confirmDelete, setConfirmDelete] = useState<{
     id: string;
@@ -156,6 +160,28 @@ function App() {
     setConfirmDelete(null);
     showToast("Проект удалён");
   }, [confirmDelete, showToast]);
+
+  const handleRenameProject = useCallback(
+    async (id: string, name: string) => {
+      await updateProject(id, { name });
+      showToast("Переименовано");
+    },
+    [showToast]
+  );
+
+  const handlePinProject = useCallback(async (id: string) => {
+    const p = projects.find((x) => x.id === id);
+    if (p) await togglePin(id, !p.pinned);
+  }, [projects]);
+
+  const handleArchiveProject = useCallback(
+    async (id: string) => {
+      const p = projects.find((x) => x.id === id);
+      if (p) await toggleArchive(id, !p.archived);
+      showToast(p?.archived ? "Восстановлено" : "В архиве");
+    },
+    [projects, showToast]
+  );
 
   if (showLoading || authLoading || !profileLoaded) {
     return (
@@ -307,64 +333,28 @@ function App() {
             ) : (
               <div className="space-y-2">
                 {activeProjects.map((p) => (
-                  <div
+                  <ProjectCard
                     key={p.id}
-                    className="group flex items-center gap-3 rounded-xl border border-border-strong bg-bg-card px-4 py-3 transition-all hover:border-text-primary/30 hover:bg-bg-cardHover cursor-pointer"
-                    onClick={() => handleSelectProject(p.id)}
-                  >
-                    <div className="shrink-0">
-                      <ProjectIcon
-                        index={p.iconIndex ?? getIconIndex(p.icon)}
-                        color={p.iconColor || "#E880FC"}
-                        className="h-9 w-9"
-                      />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="truncate text-sm font-medium text-text-primary">
-                        {p.name}
-                      </div>
-                      <div className="flex items-center gap-2 text-xs text-text-muted">
-                        {p.description && (
-                          <span className="truncate">{p.description}</span>
-                        )}
-                        {!p.description && p.clientName && (
-                          <span className="truncate">{p.clientName}</span>
-                        )}
-                        {!p.description && !p.clientName && (
-                          <>
-                            <span>
-                              Круг {p.currentRound}/{p.roundsTotal}
-                            </span>
-                            <span>·</span>
-                            <span>{formatRelativeTime(p.updatedAt)}</span>
-                          </>
-                        )}
-                      </div>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setConfirmDelete({ id: p.id, name: p.name });
-                      }}
-                      className="shrink-0 rounded-lg p-1.5 text-text-muted opacity-0 transition-all hover:bg-red-500/10 hover:text-red-400 group-hover:opacity-100"
-                      aria-label="Удалить"
-                    >
-                      <svg
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth={1.5}
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        className="h-4 w-4"
-                      >
-                        <path d="M3 6h18" />
-                        <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
-                        <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
-                      </svg>
-                    </button>
-                  </div>
+                    project={p}
+                    menuOpen={menuFor === p.id}
+                    onSelect={() => handleSelectProject(p.id)}
+                    onMenuToggle={() =>
+                      setMenuFor(menuFor === p.id ? null : p.id)
+                    }
+                    onRename={(name) => handleRenameProject(p.id, name)}
+                    onPin={() => {
+                      handlePinProject(p.id);
+                      setMenuFor(null);
+                    }}
+                    onArchive={() => {
+                      handleArchiveProject(p.id);
+                      setMenuFor(null);
+                    }}
+                    onDelete={() => {
+                      setConfirmDelete({ id: p.id, name: p.name });
+                      setMenuFor(null);
+                    }}
+                  />
                 ))}
 
                 {archivedProjects.length > 0 && (
@@ -373,48 +363,28 @@ function App() {
                       Архив
                     </div>
                     {archivedProjects.map((p) => (
-                      <div
+                      <ProjectCard
                         key={p.id}
-                        className="group flex items-center gap-3 rounded-xl border border-border-strong bg-bg-card px-4 py-3 transition-all hover:border-text-primary/30 hover:bg-bg-cardHover cursor-pointer opacity-60"
-                        onClick={() => handleSelectProject(p.id)}
-                      >
-                        <div className="shrink-0">
-                          <ProjectIcon
-                            index={p.iconIndex ?? getIconIndex(p.icon)}
-                            color={p.iconColor || "#E880FC"}
-                            className="h-9 w-9"
-                          />
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <div className="truncate text-sm font-medium text-text-primary">
-                            {p.name}
-                          </div>
-                          <div className="text-xs text-text-muted">Архив</div>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setConfirmDelete({ id: p.id, name: p.name });
-                          }}
-                          className="shrink-0 rounded-lg p-1.5 text-text-muted opacity-0 transition-all hover:bg-red-500/10 hover:text-red-400 group-hover:opacity-100"
-                          aria-label="Удалить"
-                        >
-                          <svg
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth={1.5}
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            className="h-4 w-4"
-                          >
-                            <path d="M3 6h18" />
-                            <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
-                            <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
-                          </svg>
-                        </button>
-                      </div>
+                        project={p}
+                        menuOpen={menuFor === p.id}
+                        onSelect={() => handleSelectProject(p.id)}
+                        onMenuToggle={() =>
+                          setMenuFor(menuFor === p.id ? null : p.id)
+                        }
+                        onRename={(name) => handleRenameProject(p.id, name)}
+                        onPin={() => {
+                          handlePinProject(p.id);
+                          setMenuFor(null);
+                        }}
+                        onArchive={() => {
+                          handleArchiveProject(p.id);
+                          setMenuFor(null);
+                        }}
+                        onDelete={() => {
+                          setConfirmDelete({ id: p.id, name: p.name });
+                          setMenuFor(null);
+                        }}
+                      />
                     ))}
                   </>
                 )}
@@ -472,6 +442,162 @@ function App() {
           >
             {toast}
           </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+function ProjectCard({
+  project,
+  menuOpen,
+  onSelect,
+  onMenuToggle,
+  onRename,
+  onPin,
+  onArchive,
+  onDelete,
+}: {
+  project: Project;
+  menuOpen: boolean;
+  onSelect: () => void;
+  onMenuToggle: () => void;
+  onRename: (name: string) => void;
+  onPin: () => void;
+  onArchive: () => void;
+  onDelete: () => void;
+}) {
+  const [renaming, setRenaming] = useState(false);
+  const [renameValue, setRenameValue] = useState("");
+
+  return (
+    <div
+      className="group relative rounded-xl border border-border-strong bg-bg-card transition-all hover:border-text-primary/30 hover:bg-bg-cardHover cursor-pointer"
+      onClick={onSelect}
+    >
+      <div className="flex items-center gap-3 px-4 py-3">
+        <div className="shrink-0">
+          <ProjectIcon
+            index={project.iconIndex ?? getIconIndex(project.icon)}
+            color={project.iconColor || "#E880FC"}
+            className="h-9 w-9"
+          />
+        </div>
+        <div className="min-w-0 flex-1">
+          {renaming ? (
+            <input
+              type="text"
+              value={renameValue}
+              onChange={(e) => setRenameValue(e.target.value)}
+              onClick={(e) => e.stopPropagation()}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && renameValue.trim()) {
+                  onRename(renameValue.trim());
+                  setRenaming(false);
+                }
+                if (e.key === "Escape") setRenaming(false);
+              }}
+              onBlur={() => {
+                if (renameValue.trim()) onRename(renameValue.trim());
+                setRenaming(false);
+              }}
+              autoFocus
+              className="w-full rounded border border-border-strong bg-bg-input px-2 py-1 text-sm text-text-primary focus:outline-none"
+            />
+          ) : (
+            <>
+              <div className="truncate text-sm font-medium text-text-primary">
+                {project.name}
+              </div>
+              <div className="flex items-center gap-2 text-xs text-text-muted">
+                {project.description && (
+                  <span className="truncate">{project.description}</span>
+                )}
+                {!project.description && project.clientName && (
+                  <span className="truncate">{project.clientName}</span>
+                )}
+                {!project.description && !project.clientName && (
+                  <>
+                    <span>
+                      Круг {project.currentRound}/{project.roundsTotal}
+                    </span>
+                    <span>·</span>
+                    <span>{formatRelativeTime(project.updatedAt)}</span>
+                  </>
+                )}
+              </div>
+            </>
+          )}
+        </div>
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onMenuToggle();
+          }}
+          className="shrink-0 rounded-lg p-1.5 text-text-muted opacity-0 transition-all hover:bg-bg-cardHover hover:text-text-primary group-hover:opacity-100"
+          aria-label="Меню"
+        >
+          <svg viewBox="0 0 24 24" fill="currentColor" className="h-4 w-4">
+            <circle cx="12" cy="5" r="1.5" />
+            <circle cx="12" cy="12" r="1.5" />
+            <circle cx="12" cy="19" r="1.5" />
+          </svg>
+        </button>
+      </div>
+
+      <AnimatePresence>
+        {menuOpen && (
+          <>
+            <div
+              className="fixed inset-0 z-40"
+              onClick={(e) => {
+                e.stopPropagation();
+                onMenuToggle();
+              }}
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="absolute right-2 top-full z-50 mt-1 w-44 rounded-xl border border-border-strong bg-bg-card p-1 shadow-xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <button
+                type="button"
+                onClick={onPin}
+                className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-text-primary transition-colors hover:bg-bg-cardHover"
+              >
+                {project.pinned ? "Открепить" : "Закрепить"}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setRenameValue(project.name);
+                  setRenaming(true);
+                  onMenuToggle();
+                }}
+                className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-text-primary transition-colors hover:bg-bg-cardHover"
+              >
+                Переименовать
+              </button>
+              <button
+                type="button"
+                onClick={onArchive}
+                className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-text-primary transition-colors hover:bg-bg-cardHover"
+              >
+                {project.archived ? "Восстановить" : "В архив"}
+              </button>
+              <div className="my-1 h-px bg-border-strong" />
+              <button
+                type="button"
+                onClick={onDelete}
+                className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-red-400 transition-colors hover:bg-red-500/10"
+              >
+                Удалить
+              </button>
+            </motion.div>
+          </>
         )}
       </AnimatePresence>
     </div>
