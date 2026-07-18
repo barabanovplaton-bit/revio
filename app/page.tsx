@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { BellIcon } from "./_components/bell-icon";
 import { Avatar } from "./_components/avatar";
+import { ConfirmModal } from "./_components/confirm-modal";
 import { NewProjectWizard } from "./_components/new-project-wizard";
 import { OnboardingModal } from "./_components/onboarding-modal";
 import { signOut, subscribeToAuth, type User } from "@/lib/auth";
@@ -15,9 +16,6 @@ import {
 } from "@/lib/project-icons";
 import {
   subscribeToUserProjects,
-  updateProject,
-  togglePin,
-  toggleArchive,
   deleteProject,
   formatRelativeTime,
   type Project,
@@ -40,21 +38,22 @@ function App() {
   const [profileLoaded, setProfileLoaded] = useState(false);
 
   const [projects, setProjects] = useState<Project[]>([]);
-  const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
   const [newProjectOpen, setNewProjectOpen] = useState(false);
   const [onboardingNeeded, setOnboardingNeeded] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
-  const [menuFor, setMenuFor] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [notifications, setNotifications] = useState<Notification[]>([]);
 
-  // Проверяем ?loading=true в URL
+  const [confirmDelete, setConfirmDelete] = useState<{
+    id: string;
+    name: string;
+  } | null>(null);
+
   useEffect(() => {
     if (typeof window !== "undefined") {
       const params = new URLSearchParams(window.location.search);
       if (params.get("loading") === "true") {
         setShowLoading(true);
-        // Чистим URL без перезагрузки
         window.history.replaceState({}, "", "/");
       }
     }
@@ -74,13 +73,12 @@ function App() {
       setUser(u);
       setAuthLoading(false);
       if (showLoading) {
-        // Даём загрузке показаться минимум 800мс
         await new Promise((r) => setTimeout(r, 800));
         setShowLoading(false);
       }
       if (u) {
-        const { profile: p, isNew } = await import("@/lib/user-profile").then((m) =>
-          m.getOrCreateUserProfile(u)
+        const { profile: p, isNew } = await import("@/lib/user-profile").then(
+          (m) => m.getOrCreateUserProfile(u)
         );
         setProfile(p);
         setProfileLoaded(true);
@@ -90,7 +88,6 @@ function App() {
       } else {
         setProfile(null);
         setProjects([]);
-        setActiveProjectId(null);
         setOnboardingNeeded(false);
         setProfileLoaded(true);
       }
@@ -139,69 +136,37 @@ function App() {
         goToLogin();
         return;
       }
-      setActiveProjectId(id);
+      router.push(`/project/${id}`);
     },
-    [user, goToLogin]
+    [user, goToLogin, router]
   );
 
   const handleProjectCreated = useCallback(
     (id: string) => {
       setNewProjectOpen(false);
-      setActiveProjectId(id);
+      router.push(`/project/${id}`);
       showToast("Проект создан");
     },
-    [showToast]
+    [showToast, router]
   );
 
-  const handleRenameProject = useCallback(
-    async (id: string, name: string) => {
-      await updateProject(id, { name });
-      showToast("Переименовано");
-    },
-    [showToast]
-  );
-
-  const handlePinProject = useCallback(async (id: string, pinned: boolean) => {
-    await togglePin(id, pinned);
-  }, []);
-
-  const handleArchiveProject = useCallback(
-    async (id: string, archived: boolean) => {
-      await toggleArchive(id, archived);
-      if (activeProjectId === id) setActiveProjectId(null);
-      showToast(archived ? "В архиве" : "Восстановлено");
-    },
-    [activeProjectId, showToast]
-  );
-
-  const handleDeleteProject = useCallback(
-    async (id: string) => {
-      await deleteProject(id);
-      if (activeProjectId === id) setActiveProjectId(null);
-      showToast("Проект удалён");
-    },
-    [activeProjectId, showToast]
-  );
+  const handleDeleteProject = useCallback(async () => {
+    if (!confirmDelete) return;
+    await deleteProject(confirmDelete.id);
+    setConfirmDelete(null);
+    showToast("Проект удалён");
+  }, [confirmDelete, showToast]);
 
   if (showLoading || authLoading || !profileLoaded) {
     return (
-      <div className="flex h-screen flex-col items-center justify-center bg-bg-page">
-        <div className="mb-6 flex h-14 w-14 items-center justify-center rounded-2xl bg-text-primary text-bg-page">
-          <span className="font-display text-xl font-bold">R</span>
+      <div className="flex h-screen items-center justify-center bg-bg-page">
+        <div className="flex flex-col items-center gap-4">
+          <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-text-primary text-bg-page">
+            <span className="font-display text-xl font-bold">R</span>
+          </div>
+          <div className="h-6 w-6 animate-spin rounded-full border-2 border-border-strong border-t-text-primary" />
         </div>
-        <div className="flex h-6 w-6 animate-spin rounded-full border-2 border-border-strong border-t-text-primary" />
       </div>
-    );
-  }
-
-  if (activeProjectId && user) {
-    return (
-      <ProjectView
-        projectId={activeProjectId}
-        ownerUid={user.uid}
-        onBack={() => setActiveProjectId(null)}
-        onProjectDeleted={() => setActiveProjectId(null)}
-      />
     );
   }
 
@@ -216,10 +181,8 @@ function App() {
 
   return (
     <div className="flex min-h-screen flex-col bg-bg-page">
-      {/* Floating header */}
       <div className="sticky top-0 z-20 px-4 pt-3 md:px-6">
         <header className="mx-auto flex max-w-3xl items-center justify-between rounded-2xl border border-border-strong bg-bg-card px-5 py-3 shadow-lg">
-          {/* Лого — левый край */}
           <div className="flex items-center gap-2.5">
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-text-primary text-bg-page">
               <span className="font-display text-xs font-bold">R</span>
@@ -229,7 +192,6 @@ function App() {
             </span>
           </div>
 
-          {/* Правый край: колокольчик + аватар */}
           <div className="flex items-center gap-1">
             {user && (
               <button
@@ -267,7 +229,6 @@ function App() {
         </header>
       </div>
 
-      {/* Контент */}
       <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-6 md:px-6 md:py-8">
         {!user ? (
           <div className="flex flex-col items-center justify-center py-20 text-center">
@@ -287,7 +248,6 @@ function App() {
           </div>
         ) : (
           <>
-            {/* Поиск + кнопка "Новый проект" — одинаковая высота, по сетке */}
             <div className="mb-6 flex items-center gap-3">
               <div className="relative h-10 flex-1">
                 <input
@@ -297,19 +257,38 @@ function App() {
                   placeholder="Поиск проектов..."
                   className="h-full w-full rounded-xl border border-border-strong bg-bg-input px-3 pl-10 text-sm text-text-primary placeholder:text-text-muted focus:border-text-primary focus:outline-none"
                 />
-                <SearchIcon className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-text-muted" />
+                <svg
+                  className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-text-muted"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth={1.8}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <circle cx="11" cy="11" r="7" />
+                  <path d="m21 21-4.3-4.3" />
+                </svg>
               </div>
               <button
                 type="button"
                 onClick={handleNewProject}
                 className="flex h-10 shrink-0 items-center gap-2 rounded-xl bg-text-primary px-5 text-sm font-medium text-bg-page transition-all hover:opacity-90 active:scale-[0.98]"
               >
-                <PlusIcon className="h-4 w-4" />
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth={2}
+                  strokeLinecap="round"
+                  className="h-4 w-4"
+                >
+                  <path d="M12 5v14M5 12h14" />
+                </svg>
                 Новый проект
               </button>
             </div>
 
-            {/* Список проектов */}
             {activeProjects.length === 0 && archivedProjects.length === 0 ? (
               <div className="py-20 text-center">
                 <p className="mb-4 text-sm text-text-muted">
@@ -328,30 +307,64 @@ function App() {
             ) : (
               <div className="space-y-2">
                 {activeProjects.map((p) => (
-                  <ProjectCard
+                  <div
                     key={p.id}
-                    project={p}
-                    menuOpen={menuFor === p.id}
-                    onSelect={() => handleSelectProject(p.id)}
-                    onMenuToggle={() =>
-                      setMenuFor(menuFor === p.id ? null : p.id)
-                    }
-                    onRename={(name) => handleRenameProject(p.id, name)}
-                    onPin={() => {
-                      handlePinProject(p.id, !p.pinned);
-                      setMenuFor(null);
-                    }}
-                    onArchive={() => {
-                      handleArchiveProject(p.id, true);
-                      setMenuFor(null);
-                    }}
-                    onDelete={() => {
-                      if (confirm(`Удалить «${p.name}» навсегда?`)) {
-                        handleDeleteProject(p.id);
-                      }
-                      setMenuFor(null);
-                    }}
-                  />
+                    className="group flex items-center gap-3 rounded-xl border border-border-strong bg-bg-card px-4 py-3 transition-all hover:border-text-primary/30 hover:bg-bg-cardHover cursor-pointer"
+                    onClick={() => handleSelectProject(p.id)}
+                  >
+                    <div className="shrink-0">
+                      <ProjectIcon
+                        index={p.iconIndex ?? getIconIndex(p.icon)}
+                        color={p.iconColor || "#E880FC"}
+                        className="h-9 w-9"
+                      />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate text-sm font-medium text-text-primary">
+                        {p.name}
+                      </div>
+                      <div className="flex items-center gap-2 text-xs text-text-muted">
+                        {p.description && (
+                          <span className="truncate">{p.description}</span>
+                        )}
+                        {!p.description && p.clientName && (
+                          <span className="truncate">{p.clientName}</span>
+                        )}
+                        {!p.description && !p.clientName && (
+                          <>
+                            <span>
+                              Круг {p.currentRound}/{p.roundsTotal}
+                            </span>
+                            <span>·</span>
+                            <span>{formatRelativeTime(p.updatedAt)}</span>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setConfirmDelete({ id: p.id, name: p.name });
+                      }}
+                      className="shrink-0 rounded-lg p-1.5 text-text-muted opacity-0 transition-all hover:bg-red-500/10 hover:text-red-400 group-hover:opacity-100"
+                      aria-label="Удалить"
+                    >
+                      <svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth={1.5}
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        className="h-4 w-4"
+                      >
+                        <path d="M3 6h18" />
+                        <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
+                        <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
+                      </svg>
+                    </button>
+                  </div>
                 ))}
 
                 {archivedProjects.length > 0 && (
@@ -360,30 +373,48 @@ function App() {
                       Архив
                     </div>
                     {archivedProjects.map((p) => (
-                      <ProjectCard
+                      <div
                         key={p.id}
-                        project={p}
-                        menuOpen={menuFor === p.id}
-                        onSelect={() => handleSelectProject(p.id)}
-                        onMenuToggle={() =>
-                          setMenuFor(menuFor === p.id ? null : p.id)
-                        }
-                        onRename={(name) => handleRenameProject(p.id, name)}
-                        onPin={() => {
-                          handlePinProject(p.id, !p.pinned);
-                          setMenuFor(null);
-                        }}
-                        onArchive={() => {
-                          handleArchiveProject(p.id, false);
-                          setMenuFor(null);
-                        }}
-                        onDelete={() => {
-                          if (confirm(`Удалить «${p.name}» навсегда?`)) {
-                            handleDeleteProject(p.id);
-                          }
-                          setMenuFor(null);
-                        }}
-                      />
+                        className="group flex items-center gap-3 rounded-xl border border-border-strong bg-bg-card px-4 py-3 transition-all hover:border-text-primary/30 hover:bg-bg-cardHover cursor-pointer opacity-60"
+                        onClick={() => handleSelectProject(p.id)}
+                      >
+                        <div className="shrink-0">
+                          <ProjectIcon
+                            index={p.iconIndex ?? getIconIndex(p.icon)}
+                            color={p.iconColor || "#E880FC"}
+                            className="h-9 w-9"
+                          />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="truncate text-sm font-medium text-text-primary">
+                            {p.name}
+                          </div>
+                          <div className="text-xs text-text-muted">Архив</div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setConfirmDelete({ id: p.id, name: p.name });
+                          }}
+                          className="shrink-0 rounded-lg p-1.5 text-text-muted opacity-0 transition-all hover:bg-red-500/10 hover:text-red-400 group-hover:opacity-100"
+                          aria-label="Удалить"
+                        >
+                          <svg
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth={1.5}
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            className="h-4 w-4"
+                          >
+                            <path d="M3 6h18" />
+                            <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
+                            <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
+                          </svg>
+                        </button>
+                      </div>
                     ))}
                   </>
                 )}
@@ -421,6 +452,16 @@ function App() {
         />
       )}
 
+      <ConfirmModal
+        open={!!confirmDelete}
+        title="Удалить проект?"
+        message={`Проект «${confirmDelete?.name}» будет удалён навсегда. Это действие нельзя отменить.`}
+        confirmLabel="Удалить"
+        danger
+        onConfirm={handleDeleteProject}
+        onCancel={() => setConfirmDelete(null)}
+      />
+
       <AnimatePresence>
         {toast && (
           <motion.div
@@ -434,229 +475,5 @@ function App() {
         )}
       </AnimatePresence>
     </div>
-  );
-}
-
-/* ===== Карточка проекта ===== */
-function ProjectCard({
-  project,
-  menuOpen,
-  onSelect,
-  onMenuToggle,
-  onRename,
-  onPin,
-  onArchive,
-  onDelete,
-}: {
-  project: Project;
-  menuOpen: boolean;
-  onSelect: () => void;
-  onMenuToggle: () => void;
-  onRename: (name: string) => void;
-  onPin: () => void;
-  onArchive: () => void;
-  onDelete: () => void;
-}) {
-  const [renaming, setRenaming] = useState(false);
-  const [renameValue, setRenameValue] = useState("");
-
-  return (
-    <div
-      className="group relative rounded-xl border border-border-strong bg-bg-card transition-all hover:border-text-primary/30 hover:bg-bg-cardHover"
-      onClick={onSelect}
-    >
-      <div className="flex items-center gap-3 px-4 py-3">
-        <div className="shrink-0">
-          <ProjectIcon
-            index={project.iconIndex ?? getIconIndex(project.icon)}
-            color={project.iconColor || "#E880FC"}
-            className="h-9 w-9"
-          />
-        </div>
-        <div className="min-w-0 flex-1">
-          {renaming ? (
-            <input
-              type="text"
-              value={renameValue}
-              onChange={(e) => setRenameValue(e.target.value)}
-              onClick={(e) => e.stopPropagation()}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && renameValue.trim()) {
-                  onRename(renameValue.trim());
-                  setRenaming(false);
-                }
-                if (e.key === "Escape") setRenaming(false);
-              }}
-              onBlur={() => {
-                if (renameValue.trim()) onRename(renameValue.trim());
-                setRenaming(false);
-              }}
-              autoFocus
-              className="w-full rounded border border-border-strong bg-bg-input px-2 py-1 text-sm text-text-primary focus:outline-none"
-            />
-          ) : (
-            <>
-              <div className="truncate text-sm font-medium text-text-primary">
-                {project.name}
-              </div>
-              <div className="flex items-center gap-2 text-xs text-text-muted">
-                {project.description && (
-                  <span className="truncate">{project.description}</span>
-                )}
-                {!project.description && project.clientName && (
-                  <span className="truncate">{project.clientName}</span>
-                )}
-                {!project.description && !project.clientName && (
-                  <>
-                    <span>Круг {project.currentRound}/{project.roundsTotal}</span>
-                    <span>·</span>
-                    <span>{formatRelativeTime(project.updatedAt)}</span>
-                  </>
-                )}
-              </div>
-            </>
-          )}
-        </div>
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            onMenuToggle();
-          }}
-          className="shrink-0 rounded-lg p-1.5 text-text-muted opacity-0 transition-all hover:bg-bg-cardHover hover:text-text-primary group-hover:opacity-100"
-          aria-label="Меню"
-        >
-          <DotsIcon className="h-4 w-4" />
-        </button>
-      </div>
-
-      <AnimatePresence>
-        {menuOpen && (
-          <motion.div
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.95 }}
-            className="absolute right-2 top-full z-50 mt-1 w-44 rounded-xl border border-border-strong bg-bg-card p-1 shadow-xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <button
-              type="button"
-              onClick={onPin}
-              className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-text-primary transition-colors hover:bg-bg-cardHover"
-            >
-              {project.pinned ? "Открепить" : "Закрепить"}
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setRenameValue(project.name);
-                setRenaming(true);
-                onMenuToggle();
-              }}
-              className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-text-primary transition-colors hover:bg-bg-cardHover"
-            >
-              Переименовать
-            </button>
-            <button
-              type="button"
-              onClick={onArchive}
-              className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-text-primary transition-colors hover:bg-bg-cardHover"
-            >
-              {project.archived ? "Восстановить" : "В архив"}
-            </button>
-            <div className="my-1 h-px bg-border-strong" />
-            <button
-              type="button"
-              onClick={onDelete}
-              className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-red-400 transition-colors hover:bg-red-500/10"
-            >
-              Удалить
-            </button>
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </div>
-  );
-}
-
-/* ===== ProjectView ===== */
-function ProjectView({
-  projectId,
-  ownerUid,
-  onBack,
-  onProjectDeleted,
-}: {
-  projectId: string;
-  ownerUid: string;
-  onBack: () => void;
-  onProjectDeleted: () => void;
-}) {
-  const [hub, setHub] = useState<any>(null);
-
-  useEffect(() => {
-    import("./_components/project-hub").then((mod) => {
-      setHub(() => mod.ProjectHub);
-    });
-  }, []);
-
-  if (!hub) {
-    return (
-      <div className="flex h-screen items-center justify-center bg-bg-page">
-        <div className="h-8 w-8 animate-spin rounded-full border-2 border-border-strong border-t-text-primary" />
-      </div>
-    );
-  }
-
-  const Hub = hub;
-  return (
-    <Hub
-      projectId={projectId}
-      ownerUid={ownerUid}
-      onBack={onBack}
-      onProjectDeleted={onProjectDeleted}
-      onProjectUpdated={() => {}}
-    />
-  );
-}
-
-/* ===== Иконки ===== */
-function SearchIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="11" cy="11" r="7" />
-      <path d="m21 21-4.3-4.3" />
-    </svg>
-  );
-}
-
-function DotsIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 24 24" fill="currentColor">
-      <circle cx="12" cy="5" r="1.5" />
-      <circle cx="12" cy="12" r="1.5" />
-      <circle cx="12" cy="19" r="1.5" />
-    </svg>
-  );
-}
-
-function PlusIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round">
-      <path d="M12 5v14M5 12h14" />
-    </svg>
-  );
-}
-
-function StatusBadge({ status }: { status: Project["status"] }) {
-  const config = {
-    waiting_for_images: { text: "Ожидает", color: "bg-yellow-500/20 text-yellow-400" },
-    in_progress: { text: "В работе", color: "bg-green-500/20 text-green-400" },
-    exhausted: { text: "Раунды закончились", color: "bg-red-500/20 text-red-400" },
-  };
-  const { text, color } = config[status] || config.waiting_for_images;
-  return (
-    <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium ${color}`}>
-      {text}
-    </span>
   );
 }

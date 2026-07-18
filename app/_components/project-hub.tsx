@@ -5,7 +5,6 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   getProject,
   updateProject,
-  togglePin,
   toggleArchive,
   deleteProject,
   updateProjectImages,
@@ -15,9 +14,10 @@ import {
   subscribeToProjectMarkers,
   type Marker,
 } from "@/lib/markers";
-import { ImageUploader, UploadedImage } from "./image-uploader";
+import { ConfirmModal } from "./confirm-modal";
 import { type UploadResult } from "@/lib/cloudinary";
 import { ProjectIcon, getIconIndex } from "@/lib/project-icons";
+import { uploadImage } from "@/lib/cloudinary";
 
 interface ProjectHubProps {
   projectId: string;
@@ -40,10 +40,20 @@ export function ProjectHub({
   const [showUpload, setShowUpload] = useState(false);
   const [newImages, setNewImages] = useState<string[]>([]);
   const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
   const [markers, setMarkers] = useState<Marker[]>([]);
-  const [viewingImageIndex, setViewingImageIndex] = useState<number | null>(null);
+  const [viewingImageIndex, setViewingImageIndex] = useState<number | null>(
+    null
+  );
   const [editingField, setEditingField] = useState<string | null>(null);
   const [editValue, setEditValue] = useState("");
+  const [toast, setToast] = useState<string | null>(null);
+
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [confirmArchive, setConfirmArchive] = useState(false);
+  const [confirmComplete, setConfirmComplete] = useState(false);
+  const [confirmUnlock, setConfirmUnlock] = useState(false);
+  const [confirmReviewed, setConfirmReviewed] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -68,34 +78,48 @@ export function ProjectHub({
     return () => unsub();
   }, [projectId, project?.currentRound]);
 
+  const showToast = (msg: string) => {
+    setToast(msg);
+    setTimeout(() => setToast(null), 2400);
+  };
+
   const handleDelete = async () => {
-    if (
-      !confirm(
-        `Удалить проект «${project?.name}» навсегда? Все данные будут потеряны.`
-      )
-    )
-      return;
     await deleteProject(projectId);
+    setConfirmDelete(false);
     onProjectDeleted();
   };
 
   const handleArchive = async () => {
     if (!project) return;
     await toggleArchive(projectId, !project.archived);
+    setConfirmArchive(false);
     onProjectUpdated();
     onBack();
   };
 
-  const handlePin = async () => {
-    if (!project) return;
-    await togglePin(projectId, !project.pinned);
-    onProjectUpdated();
-    const updated = await getProject(projectId);
-    setProject(updated);
-  };
+  const handleFileSelect = async (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+    setIsUploading(true);
+    setUploadProgress(0);
+    const total = files.length;
+    const uploaded: string[] = [];
 
-  const handleUpload = (result: UploadResult) => {
-    setNewImages((prev) => [...prev, result.url]);
+    for (let i = 0; i < total; i++) {
+      const file = files[i];
+      if (!file.type.startsWith("image/")) continue;
+      if (file.size > 5 * 1024 * 1024) continue;
+      try {
+        const result = await uploadImage(file);
+        uploaded.push(result.url);
+        setUploadProgress(Math.round(((i + 1) / total) * 100));
+      } catch (e) {
+        console.error("Upload error:", e);
+      }
+    }
+
+    setNewImages((prev) => [...prev, ...uploaded]);
+    setIsUploading(false);
+    setUploadProgress(0);
   };
 
   const handleRemoveNewImage = (index: number) => {
@@ -118,6 +142,7 @@ export function ProjectHub({
       const updated = await getProject(projectId);
       setProject(updated);
       onProjectUpdated();
+      showToast("Изображения загружены");
     } catch (error) {
       console.error("Failed to upload new version:", error);
     } finally {
@@ -126,10 +151,8 @@ export function ProjectHub({
   };
 
   const handleCompleteProject = async () => {
-    if (!project) return;
-    if (!confirm("Завершить проект? Он будет перемещён в архив."))
-      return;
     await toggleArchive(projectId, true);
+    setConfirmComplete(false);
     onProjectUpdated();
     onBack();
   };
@@ -137,14 +160,13 @@ export function ProjectHub({
   const handleUnlock = async () => {
     if (!project) return;
     await updateProject(projectId, { isLocked: false });
+    setConfirmUnlock(false);
     const updated = await getProject(projectId);
     setProject(updated);
   };
 
   const handleMarkReviewed = async () => {
     if (!project) return;
-    if (!confirm("Отметить как просмотренные?"))
-      return;
     if (project.roundsLeft > 0) {
       await updateProject(projectId, {
         isLocked: false,
@@ -153,6 +175,7 @@ export function ProjectHub({
     } else {
       await toggleArchive(projectId, true);
     }
+    setConfirmReviewed(false);
     onProjectUpdated();
     onBack();
   };
@@ -218,18 +241,6 @@ export function ProjectHub({
   };
   const status = statusConfig[project.status || "waiting_for_images"];
 
-  const markersByImage: Record<number, Marker[]> = {};
-  markers.forEach((m) => {
-    if (m.type === "point" && m.x !== undefined) {
-      const idx = Math.min(
-        Math.floor(m.x * (project.imageUrls?.length || 1)),
-        (project.imageUrls?.length || 1) - 1
-      );
-      if (!markersByImage[idx]) markersByImage[idx] = [];
-      markersByImage[idx].push(m);
-    }
-  });
-
   if (viewingImageIndex !== null && project.imageUrls?.[viewingImageIndex]) {
     return (
       <div className="flex h-screen flex-col bg-bg-page">
@@ -261,7 +272,8 @@ export function ProjectHub({
                 {markers.filter(
                   (m) =>
                     m.type === "point" &&
-                    m.x !== undefined &&
+                    m.x != null &&
+                    m.y != null &&
                     Math.min(
                       Math.floor(
                         m.x * (project.imageUrls?.length || 1)
@@ -285,20 +297,16 @@ export function ProjectHub({
               {markers
                 .filter(
                   (m) =>
-                    m.type === "point" &&
-                    m.x !== undefined &&
-                    m.y !== undefined
+                    m.type === "point" && m.x != null && m.y != null
                 )
                 .map((marker) => {
                   const markerImageIdx = Math.min(
                     Math.floor(
-                      (marker.x || 0) *
-                        (project.imageUrls?.length || 1)
+                      (marker.x || 0) * (project.imageUrls?.length || 1)
                     ),
                     (project.imageUrls?.length || 1) - 1
                   );
-                  if (markerImageIdx !== viewingImageIndex)
-                    return null;
+                  if (markerImageIdx !== viewingImageIndex) return null;
                   return (
                     <div
                       key={marker.id}
@@ -341,7 +349,6 @@ export function ProjectHub({
             type="button"
             onClick={onBack}
             className="shrink-0 rounded-lg p-1.5 text-text-muted transition-colors hover:bg-bg-cardHover hover:text-text-primary"
-            aria-label="Назад"
           >
             <svg
               viewBox="0 0 24 24"
@@ -368,73 +375,29 @@ export function ProjectHub({
               </h1>
             </div>
           </div>
-          <div className="flex shrink-0 items-center gap-1">
-            <button
-              type="button"
-              onClick={() => navigator.clipboard.writeText(shareUrl)}
-              className="rounded-lg p-2 text-text-muted transition-colors hover:bg-bg-cardHover hover:text-text-primary"
-              aria-label="Копировать ссылку"
+          <button
+            type="button"
+            onClick={() => setShowSettings(!showSettings)}
+            className="shrink-0 rounded-lg p-2 text-text-muted transition-colors hover:bg-bg-cardHover hover:text-text-primary"
+          >
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={1.5}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className="h-4 w-4"
             >
-              <svg
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth={1.5}
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                className="h-4 w-4"
-              >
-                <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8" />
-                <polyline points="16,6 12,2 8,6" />
-                <line x1="12" y1="2" x2="12" y2="15" />
-              </svg>
-            </button>
-            <button
-              type="button"
-              onClick={handlePin}
-              className="rounded-lg p-2 text-text-muted transition-colors hover:bg-bg-cardHover hover:text-text-primary"
-              aria-label={project.pinned ? "Открепить" : "Закрепить"}
-            >
-              <svg
-                viewBox="0 0 24 24"
-                fill={project.pinned ? "currentColor" : "none"}
-                stroke="currentColor"
-                strokeWidth={1.5}
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                className="h-4 w-4"
-              >
-                <path d="M12 17v5" />
-                <path d="M9 11V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v7" />
-                <path d="M5 11h14l-1.5 6H6.5L5 11z" />
-              </svg>
-            </button>
-            <button
-              type="button"
-              onClick={() => setShowSettings(!showSettings)}
-              className="rounded-lg p-2 text-text-muted transition-colors hover:bg-bg-cardHover hover:text-text-primary"
-              aria-label="Настройки"
-            >
-              <svg
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth={1.5}
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                className="h-4 w-4"
-              >
-                <circle cx="12" cy="12" r="1" />
-                <circle cx="19" cy="12" r="1" />
-                <circle cx="5" cy="12" r="1" />
-              </svg>
-            </button>
-          </div>
+              <circle cx="12" cy="12" r="3" />
+              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+            </svg>
+          </button>
         </header>
       </div>
 
       <div className="mx-auto w-full max-w-3xl flex-1 px-4 py-6 md:px-6">
-        {/* Клиентская ссылка */}
+        {/* Ссылка для клиента */}
         <div className="mb-4 rounded-xl border border-border-strong bg-bg-card p-3">
           <div className="flex items-center gap-2">
             <svg
@@ -460,6 +423,7 @@ export function ProjectHub({
               type="button"
               onClick={() => {
                 navigator.clipboard.writeText(shareUrl);
+                showToast("Ссылка скопирована");
               }}
               className="shrink-0 rounded-lg bg-text-primary px-3 py-1.5 text-xs font-medium text-bg-page transition-all hover:opacity-90 active:scale-[0.98]"
             >
@@ -468,7 +432,7 @@ export function ProjectHub({
           </div>
         </div>
 
-        {/* Статус + метки */}
+        {/* Статус */}
         <div className="mb-4 flex items-center gap-2 flex-wrap">
           <span
             className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ${status.color}`}
@@ -514,7 +478,7 @@ export function ProjectHub({
               {project.roundsLeft > 0 && (
                 <button
                   type="button"
-                  onClick={handleMarkReviewed}
+                  onClick={() => setConfirmReviewed(true)}
                   className="rounded-lg border border-border-strong px-4 py-2 text-sm text-text-primary transition-all hover:bg-bg-cardHover"
                 >
                   Просмотрено
@@ -524,7 +488,7 @@ export function ProjectHub({
           </div>
         )}
 
-        {/* Блок «Показать метки» */}
+        {/* Метки клиента */}
         {project.isLocked && markers.length > 0 && (
           <div className="mb-4 rounded-xl border border-border-strong bg-bg-card p-4">
             <h3 className="mb-3 text-sm font-medium text-text-primary">
@@ -600,7 +564,6 @@ export function ProjectHub({
                   onSave={() => handleSaveField("name")}
                   onCancel={() => setEditingField(null)}
                 />
-
                 <FieldRow
                   label="Описание"
                   value={project.description || "Не указано"}
@@ -613,7 +576,6 @@ export function ProjectHub({
                   onSave={() => handleSaveField("description")}
                   onCancel={() => setEditingField(null)}
                 />
-
                 <FieldRow
                   label="Клиент"
                   value={project.clientName || "Не указано"}
@@ -626,7 +588,6 @@ export function ProjectHub({
                   onSave={() => handleSaveField("clientName")}
                   onCancel={() => setEditingField(null)}
                 />
-
                 <FieldRow
                   label="Контакт"
                   value={project.clientContact || "Не указано"}
@@ -643,21 +604,21 @@ export function ProjectHub({
                 <div className="flex gap-2 pt-2">
                   <button
                     type="button"
-                    onClick={handleArchive}
+                    onClick={() => setConfirmArchive(true)}
                     className="flex-1 rounded-lg border border-border-strong px-3 py-2 text-xs font-medium text-text-primary transition-all hover:bg-bg-cardHover"
                   >
                     {project.archived ? "Восстановить" : "Архив"}
                   </button>
                   <button
                     type="button"
-                    onClick={handleCompleteProject}
+                    onClick={() => setConfirmComplete(true)}
                     className="flex-1 rounded-lg border border-green-500/50 bg-green-500/10 px-3 py-2 text-xs font-medium text-green-400 transition-all hover:bg-green-500/20"
                   >
-                    Завершить проект
+                    Завершить
                   </button>
                   <button
                     type="button"
-                    onClick={handleDelete}
+                    onClick={() => setConfirmDelete(true)}
                     className="flex-1 rounded-lg border border-red-500/50 bg-red-500/10 px-3 py-2 text-xs font-medium text-red-400 transition-all hover:bg-red-500/20"
                   >
                     Удалить
@@ -730,7 +691,7 @@ export function ProjectHub({
                         {imageMarkers.length}
                       </div>
                     )}
-                    <div className="absolute inset-0 bg-black/0 transition-colors group-hover:bg-black/10 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                    <div className="absolute inset-0 bg-black/0 transition-colors group-hover:bg-black/10 flex items-center justify-center opacity-0 group-hover:opacity-100">
                       <span className="text-xs font-medium text-white bg-black/50 rounded-lg px-3 py-1.5">
                         Просмотр
                       </span>
@@ -760,7 +721,9 @@ export function ProjectHub({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm"
-            onClick={() => setShowUpload(false)}
+            onClick={() => {
+              if (!isUploading) setShowUpload(false);
+            }}
           >
             <motion.div
               initial={{ scale: 0.9, opacity: 0 }}
@@ -773,31 +736,90 @@ export function ProjectHub({
                 Загрузить изображения
               </h2>
               <p className="mb-4 text-sm text-text-muted">
-                Макеты для правок (макс. 5MB)
+                Можно выбрать несколько файлов (макс. 5MB каждый)
               </p>
-              <div className="space-y-4">
-                <ImageUploader
-                  onUpload={handleUpload}
+
+              <label className="relative flex min-h-[160px] cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed border-border-strong bg-bg-input transition-all hover:border-text-muted">
+                <input
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  onChange={(e) => handleFileSelect(e.target.files)}
                   disabled={isUploading}
-                  maxSize={5}
+                  className="absolute inset-0 opacity-0"
                 />
-                {newImages.length > 0 && (
-                  <div className="grid grid-cols-2 gap-2">
-                    {newImages.map((url, index) => (
-                      <UploadedImage
-                        key={index}
-                        url={url}
-                        onRemove={() => handleRemoveNewImage(index)}
-                        canRemove={!isUploading}
-                      />
-                    ))}
+                {isUploading ? (
+                  <div className="flex flex-col items-center gap-3">
+                    <div className="h-8 w-8 animate-spin rounded-full border-2 border-border-strong border-t-text-primary" />
+                    <p className="text-sm text-text-muted">
+                      Загрузка... {uploadProgress}%
+                    </p>
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center gap-3 px-4 text-center">
+                    <svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth={1.5}
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      className="h-8 w-8 text-text-muted"
+                    >
+                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                      <polyline points="17 8 12 3 7 8" />
+                      <line x1="12" y1="3" x2="12" y2="15" />
+                    </svg>
+                    <p className="text-sm font-medium text-text-primary">
+                      Нажмите или перетащите файлы
+                    </p>
                   </div>
                 )}
-              </div>
+              </label>
+
+              {newImages.length > 0 && (
+                <div className="mt-4 grid grid-cols-3 gap-2">
+                  {newImages.map((url, index) => (
+                    <div
+                      key={index}
+                      className="group relative aspect-square overflow-hidden rounded-xl border border-border-strong bg-bg-input"
+                    >
+                      <img
+                        src={url}
+                        alt={`Uploaded ${index + 1}`}
+                        className="h-full w-full object-cover"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveNewImage(index)}
+                        className="absolute right-1.5 top-1.5 flex h-6 w-6 items-center justify-center rounded-lg bg-bg-card/90 text-text-primary opacity-0 transition-opacity group-hover:opacity-100 hover:bg-bg-cardHover"
+                      >
+                        <svg
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth={2}
+                          strokeLinecap="round"
+                          className="h-3 w-3"
+                        >
+                          <path d="M18 6 6 18" />
+                          <path d="m6 6 12 12" />
+                        </svg>
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
               <div className="mt-4 flex items-center justify-end gap-2">
                 <button
                   type="button"
-                  onClick={() => setShowUpload(false)}
+                  onClick={() => {
+                    if (!isUploading) {
+                      setShowUpload(false);
+                      setNewImages([]);
+                    }
+                  }}
                   disabled={isUploading}
                   className="rounded-lg border border-border-strong px-4 py-2 text-sm text-text-primary transition-all hover:bg-bg-cardHover disabled:opacity-50"
                 >
@@ -809,10 +831,64 @@ export function ProjectHub({
                   disabled={newImages.length === 0 || isUploading}
                   className="rounded-lg bg-text-primary px-4 py-2 text-sm font-medium text-bg-page transition-all hover:opacity-90 disabled:opacity-50"
                 >
-                  {isUploading ? "Загрузка..." : "Загрузить"}
+                  {isUploading
+                    ? "Загрузка..."
+                    : `Загрузить (${newImages.length})`}
                 </button>
               </div>
             </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Все модалки подтверждения */}
+      <ConfirmModal
+        open={confirmDelete}
+        title="Удалить проект?"
+        message="Проект будет удалён навсегда. Это действие нельзя отменить."
+        confirmLabel="Удалить"
+        danger
+        onConfirm={handleDelete}
+        onCancel={() => setConfirmDelete(false)}
+      />
+      <ConfirmModal
+        open={confirmArchive}
+        title={project.archived ? "Восстановить проект?" : "Архивировать проект?"}
+        message={
+          project.archived
+            ? "Проект будет возвращён в основной список."
+            : "Проект будет перемещён в архив."
+        }
+        confirmLabel={project.archived ? "Восстановить" : "Архивировать"}
+        onConfirm={handleArchive}
+        onCancel={() => setConfirmArchive(false)}
+      />
+      <ConfirmModal
+        open={confirmComplete}
+        title="Завершить проект?"
+        message="Проект будет перемещён в архив."
+        confirmLabel="Завершить"
+        onConfirm={handleCompleteProject}
+        onCancel={() => setConfirmComplete(false)}
+      />
+      <ConfirmModal
+        open={confirmReviewed}
+        title="Отметить как просмотренные?"
+        message="Проект будет разблокирован для дальнейшей работы."
+        confirmLabel="Да, просмотрено"
+        onConfirm={handleMarkReviewed}
+        onCancel={() => setConfirmReviewed(false)}
+      />
+
+      <AnimatePresence>
+        {toast && (
+          <motion.div
+            initial={{ opacity: 0, y: 20, x: "-50%" }}
+            animate={{ opacity: 1, y: 0, x: "-50%" }}
+            exit={{ opacity: 0, y: 20, x: "-50%" }}
+            className="fixed bottom-6 left-1/2 z-50 rounded-xl border border-border-strong bg-bg-card px-4 py-2.5 text-sm text-text-primary shadow-xl"
+          >
+            {toast}
           </motion.div>
         )}
       </AnimatePresence>
