@@ -43,6 +43,7 @@ export function ProjectHub({
   const [previewUrls, setPreviewUrls] = useState<string[]>([]);
   const [confirmUpload, setConfirmUpload] = useState(false);
   const [isDraggingOver, setIsDraggingOver] = useState(false);
+  const [uploadedUrls, setUploadedUrls] = useState<string[] | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Image viewer
@@ -125,6 +126,7 @@ export function ProjectHub({
     if (pendingFiles.length === 0 || !project) return;
     setConfirmUpload(false);
     setIsUploading(true);
+    document.body.style.overflow = "hidden";
 
     const uploaded: string[] = [];
     for (const file of pendingFiles) {
@@ -143,22 +145,12 @@ export function ProjectHub({
           imageUrls: uploaded,
           status: "in_progress",
         });
-        setProject({
-          ...project,
-          imageUrls: uploaded,
-          status: "in_progress",
-        });
       } else {
-        await updateProject(projectId, {
-          imageUrls: uploaded,
-          status: "in_progress",
-        });
-        setProject({
-          ...project,
-          imageUrls: uploaded,
-          status: "in_progress",
-        });
+        await uploadNewPackage(projectId, uploaded, project.currentRound);
       }
+      // Save uploaded URLs separately to display after clearing pending
+      setUploadedUrls(uploaded);
+      setProject((prev) => prev ? { ...prev, imageUrls: uploaded, status: "in_progress" } : prev);
       showToast("Пакет загружен (" + uploaded.length + " изображений)");
     }
 
@@ -166,12 +158,10 @@ export function ProjectHub({
     setPendingFiles([]);
     setPreviewUrls([]);
     setIsUploading(false);
+    document.body.style.overflow = "";
   };
 
   const handleCancelUpload = () => {
-    previewUrls.forEach((u) => URL.revokeObjectURL(u));
-    setPendingFiles([]);
-    setPreviewUrls([]);
     setConfirmUpload(false);
   };
 
@@ -334,7 +324,7 @@ export function ProjectHub({
           </button>
           <div className="min-w-0 flex-1">
             <h1 className="truncate text-sm font-semibold text-text-primary">{project.name}</h1>
-            {hasImages && (
+            {(hasImages || uploadedUrls) && (
               <p className="text-xs text-text-muted">
                 Круг {project.currentRound}/{project.roundsTotal} ·{' '}
                 {project.isLocked
@@ -440,7 +430,7 @@ export function ProjectHub({
         )}
 
         {/* ===== HAS IMAGES ===== */}
-        {hasImages && !hasPending && (
+        {(hasImages || uploadedUrls) && !hasPending && (
           <>
             {/* Share link */}
             <div className="mb-4 rounded-xl border border-border-strong bg-bg-card p-3">
@@ -459,17 +449,17 @@ export function ProjectHub({
 
             {/* Status */}
             <div className="mb-4 flex items-center gap-2 flex-wrap">
-              <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ${
+              <span className={"inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium " + (
                 project.status === "exhausted" ? "bg-red-500/20 text-red-400"
                   : project.isLocked ? "bg-yellow-500/20 text-yellow-400"
                     : "bg-green-500/20 text-green-400"
-              }`}>
+              )}>
                 {project.status === "exhausted" ? "Все круги использованы"
                   : project.isLocked ? "Клиент отправил правки"
                     : "Активен"}
               </span>
               <span className="text-xs text-text-muted">
-                Круг {project.currentRound}/{project.roundsTotal} · Осталось {project.roundsLeft} · {project.extraRoundsAdded > 0 && `Доп: +${project.extraRoundsAdded} · `}Статус: {project.status === "waiting_for_images" ? "Ждём загрузки" : project.isLocked ? "Ожидание от клиента" : project.status === "exhausted" ? "Завершён" : "Ожидание от клиента"}
+                Круг {project.currentRound}/{project.roundsTotal} · Осталось {project.roundsLeft}{project.extraRoundsAdded > 0 ? " · Доп: +" + project.extraRoundsAdded : ""} · Статус: {project.status === "waiting_for_images" ? "Ждём загрузки" : project.isLocked ? "Ожидание от клиента" : project.status === "exhausted" ? "Завершён" : "Ожидание от клиента"}
               </span>
               {project.clientName && (
                 <span className="text-xs text-text-muted">· {project.clientName}</span>
@@ -518,10 +508,10 @@ export function ProjectHub({
             {/* Images list (single column) */}
             <div className="mb-6">
               <h3 className="mb-3 text-sm font-medium text-text-primary">
-                Изображения ({imageCount})
+                Изображения ({(uploadedUrls || project.imageUrls || []).length})
               </h3>
               <div className="space-y-2">
-                {project.imageUrls!.map((url, index) => {
+                {(uploadedUrls || project.imageUrls || []).map((url, index) => {
                   const imgMarkers = markers.filter((m) => {
                     if (m.type !== "point" || m.x == null || m.y == null) return false;
                     const total = imageCount;

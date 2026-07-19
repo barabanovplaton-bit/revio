@@ -143,7 +143,6 @@ function App() {
 
   const handleProjectCreated = useCallback(
     (id: string) => {
-      setNewProjectOpen(false);
       router.push(`/project/${id}`);
       showToast("Проект создан");
     },
