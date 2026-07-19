@@ -324,8 +324,11 @@ export function ProjectHub({
             <h1 className="truncate text-sm font-semibold text-text-primary">{project.name}</h1>
             {hasImages && (
               <p className="text-xs text-text-muted">
-                Круг {project.currentRound}/{project.roundsTotal}
-                {project.isLocked && " · ожидает действий"}
+                Круг {project.currentRound}/{project.roundsTotal} ·{' '}
+                {project.isLocked
+                  ? "Ожидание правок от клиента"
+                  : "Клиент отправил правки"}
+                {project.extraRoundsAdded > 0 && ` · Доп: +${project.extraRoundsAdded}`}
               </p>
             )}
           </div>
@@ -380,39 +383,33 @@ export function ProjectHub({
               </label>
             </div>
 
-            <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
+            <div className="space-y-2">
               {previewUrls.map((url, index) => (
-                <div key={index} className="group relative aspect-square overflow-hidden rounded-xl border border-border-strong bg-bg-input">
-                  <img src={url} alt="" className="h-full w-full object-cover" />
-
+                <div key={index} className="group flex items-center gap-3 rounded-xl border border-border-strong bg-bg-card p-2 transition-all hover:border-text-primary/30">
                   {/* Order number */}
-                  <div className="absolute top-1.5 left-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-black/60 text-[10px] font-bold text-white">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-text-primary text-sm font-bold text-bg-page">
                     {index + 1}
                   </div>
-
+                  {/* Thumbnail */}
+                  <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-lg border border-border-strong bg-bg-input">
+                    <img src={url} alt="" className="h-full w-full object-cover" />
+                  </div>
                   {/* Actions */}
-                  <div className="absolute top-1.5 right-1.5 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <div className="flex flex-1 items-center justify-end gap-1">
+                    {/* Move up/down */}
+                    <button onClick={(e) => { e.stopPropagation(); movePreview(index, index - 1); }} disabled={index === 0} className="flex h-8 w-8 items-center justify-center rounded-lg text-text-muted hover:bg-bg-cardHover hover:text-text-primary disabled:opacity-20">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-4 w-4"><path d="m18 15-6-6-6 6"/></svg>
+                    </button>
+                    <button onClick={(e) => { e.stopPropagation(); movePreview(index, index + 1); }} disabled={index === pendingFiles.length - 1} className="flex h-8 w-8 items-center justify-center rounded-lg text-text-muted hover:bg-bg-cardHover hover:text-text-primary disabled:opacity-20">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-4 w-4"><path d="m6 9 6 6 6-6"/></svg>
+                    </button>
                     {/* Fullscreen */}
-                    <button onClick={(e) => { e.stopPropagation(); setFullscreenIndex(index); }} className="flex h-6 w-6 items-center justify-center rounded-full bg-black/60 text-white hover:bg-black/80">
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-3 w-3">
-                        <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3" />
-                      </svg>
+                    <button onClick={(e) => { e.stopPropagation(); setFullscreenIndex(index); }} className="flex h-8 w-8 items-center justify-center rounded-lg text-text-muted hover:bg-bg-cardHover hover:text-text-primary">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-4 w-4"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>
                     </button>
                     {/* Delete */}
-                    <button onClick={(e) => { e.stopPropagation(); removePreview(index); }} className="flex h-6 w-6 items-center justify-center rounded-full bg-red-500/80 text-white hover:bg-red-500">
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-3 w-3">
-                        <path d="M18 6 6 18M6 6l12 12" />
-                      </svg>
-                    </button>
-                  </div>
-
-                  {/* Drag handle */}
-                  <div className="absolute bottom-1.5 left-1/2 -translate-x-1/2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button onClick={(e) => { e.stopPropagation(); movePreview(index, index - 1); }} disabled={index === 0} className="flex h-5 w-5 items-center justify-center rounded bg-black/60 text-white hover:bg-black/80 disabled:opacity-30">
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-3 w-3"><path d="m15 18-6-6 6-6" /></svg>
-                    </button>
-                    <button onClick={(e) => { e.stopPropagation(); movePreview(index, index + 1); }} disabled={index === pendingFiles.length - 1} className="flex h-5 w-5 items-center justify-center rounded bg-black/60 text-white hover:bg-black/80 disabled:opacity-30">
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-3 w-3"><path d="m9 18 6-6-6-6" /></svg>
+                    <button onClick={(e) => { e.stopPropagation(); removePreview(index); }} className="flex h-8 w-8 items-center justify-center rounded-lg text-red-400 hover:text-red-300">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-4 w-4"><path d="M18 6 6 18M6 6l12 12"/></svg>
                     </button>
                   </div>
                 </div>
@@ -459,13 +456,25 @@ export function ProjectHub({
                   : project.isLocked ? "Клиент отправил правки"
                     : "Активен"}
               </span>
+              <span className="text-xs text-text-muted">
+                Круг {project.currentRound}/{project.roundsTotal} · Осталось {project.roundsLeft} · {project.extraRoundsAdded > 0 && `Доп: +${project.extraRoundsAdded} · `}Статус: {project.status === "waiting_for_images" ? "Ждём загрузки" : project.isLocked ? "Ожидание от клиента" : project.status === "exhausted" ? "Завершён" : "Ожидание от клиента"}
+              </span>
               {project.clientName && (
-                <>
-                  <span className="text-xs text-text-muted">·</span>
-                  <span className="text-xs text-text-muted">{project.clientName}</span>
-                </>
+                <span className="text-xs text-text-muted">· {project.clientName}</span>
               )}
             </div>
+
+            {/* Open холст button (when images present) */}
+            {hasImages && (
+              <div className="mb-4">
+                <button type="button" onClick={() => setViewingImageIndex(0)} className="w-full rounded-xl border border-border-strong bg-bg-card px-4 py-3 text-sm font-medium text-text-primary transition-all hover:bg-bg-cardHover">
+                  <span className="flex items-center justify-center gap-2">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="h-5 w-5"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg>
+                    Открыть холст
+                  </span>
+                </button>
+              </div>
+            )}
 
             {/* Client submitted — action needed */}
             {project.isLocked && project.roundsLeft > 0 && (
@@ -494,12 +503,12 @@ export function ProjectHub({
               </div>
             )}
 
-            {/* Images grid */}
+            {/* Images list (single column) */}
             <div className="mb-6">
               <h3 className="mb-3 text-sm font-medium text-text-primary">
                 Изображения ({imageCount})
               </h3>
-              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+              <div className="space-y-2">
                 {project.imageUrls!.map((url, index) => {
                   const imgMarkers = markers.filter((m) => {
                     if (m.type !== "point" || m.x == null || m.y == null) return false;
@@ -515,15 +524,30 @@ export function ProjectHub({
                     return m.x >= minX && m.x < maxX && m.y >= minY && m.y < maxY;
                   });
                   return (
-                    <div key={index} className="group relative aspect-square overflow-hidden rounded-xl border border-border-strong bg-bg-input cursor-pointer transition-all hover:border-text-primary/30" onClick={() => setViewingImageIndex(index)}>
-                      <img src={url} alt="" className="h-full w-full object-cover" />
-                      {imgMarkers.length > 0 && (
-                        <div className="absolute top-2 right-2 flex h-6 w-6 items-center justify-center rounded-full bg-text-primary text-[10px] font-bold text-bg-page shadow-lg">
-                          {imgMarkers.length}
-                        </div>
-                      )}
-                      <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                        <span className="text-xs font-medium text-white bg-black/50 rounded-lg px-3 py-1.5">Просмотр</span>
+                    <div key={index} className="group relative flex items-center gap-3 rounded-xl border border-border-strong bg-bg-card p-2 transition-all hover:border-text-primary/30 cursor-pointer" onClick={() => setViewingImageIndex(index)}>
+                      {/* Number */}
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-text-primary text-sm font-bold text-bg-page">
+                        {index + 1}
+                      </div>
+                      {/* Thumbnail */}
+                      <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-lg border border-border-strong bg-bg-input">
+                        <img src={url} alt="" className="h-full w-full object-cover" />
+                      </div>
+                      {/* Markers count */}
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm text-text-primary truncate">{project.name} — {index + 1}</p>
+                        {imgMarkers.length > 0 && (
+                          <p className="text-xs text-text-muted">{imgMarkers.length} меток</p>
+                        )}
+                      </div>
+                      {/* Actions */}
+                      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => e.stopPropagation()}>
+                        {/* Fullscreen */}
+                        <button onClick={() => setFullscreenIndex(index)} className="flex h-8 w-8 items-center justify-center rounded-lg text-text-muted hover:bg-bg-cardHover hover:text-text-primary">
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-4 w-4"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>
+                        </button>
+                        {/* View */}
+                        <span className="text-xs font-medium text-text-primary px-2 py-1 rounded-lg bg-bg-input/80">Просмотр</span>
                       </div>
                     </div>
                   );
@@ -618,7 +642,7 @@ export function ProjectHub({
       <ConfirmModal
         open={confirmUpload}
         title="Загрузить пакет?"
-        message={`Будет загружено ${pendingFiles.length} изображений. После загрузки изображения будут заморожены и не смогут быть изменены.`}
+        message={`Будет загружено ${pendingFiles.length} изображений. После загрузки они станут частью проекта. Для замены — загрузите новый пакет.`}
         confirmLabel="Загрузить"
         onConfirm={handleConfirmUpload}
         onCancel={handleCancelUpload}

@@ -39,6 +39,8 @@ export interface Project {
   /** Лимит кругов правок */
   roundsTotal: number;
   roundsLeft: number;
+  /** Сколько дополнительных кругов добавлено */
+  extraRoundsAdded: number;
   /** Текст при исчерпании лимита */
   limitMessage: string;
   /** Заблокирован ли проект (клиент отправил правки) */
@@ -57,9 +59,9 @@ const COLLECTION = "projects";
 
 /** Создать проект. Возвращает id нового проекта. */
 export async function createProject(
-  data: Omit<
+  data:   Omit<
     Project,
-    "id" | "ownerUid" | "imageUrls" | "packageHistory" | "currentRound" | "isLocked" | "pinned" | "archived" | "createdAt" | "updatedAt"
+    "id" | "ownerUid" | "imageUrls" | "packageHistory" | "currentRound" | "extraRoundsAdded" | "isLocked" | "pinned" | "archived" | "createdAt" | "updatedAt"
   > & { status?: Project["status"] },
   ownerUid: string
 ): Promise<string> {
@@ -74,6 +76,7 @@ export async function createProject(
     currentRound: 1,
     roundsTotal: data.roundsTotal,
     roundsLeft: data.roundsTotal,
+    extraRoundsAdded: 0,
     limitMessage: data.limitMessage,
     isLocked: false,
     pinned: false,
@@ -161,6 +164,20 @@ export async function updateProjectImages(
   imageUrls: string[]
 ): Promise<void> {
   await updateProject(id, { imageUrls });
+}
+
+/** Добавить дополнительные круги правок */
+export async function addExtraRounds(
+  id: string,
+  count: number
+): Promise<void> {
+  const project = await getProject(id);
+  if (!project) return;
+  await updateProject(id, {
+    roundsTotal: project.roundsTotal + count,
+    roundsLeft: project.roundsLeft + count,
+    extraRoundsAdded: (project.extraRoundsAdded || 0) + count,
+  });
 }
 
 /**

@@ -78,7 +78,7 @@ export function NewProjectWizard({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-bg-page">
+    <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-bg-page pb-24">
       <div className="flex w-full max-w-sm flex-col items-center px-6">
         <AnimatePresence mode="wait">
           {step === 0 && (

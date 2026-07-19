@@ -3,7 +3,14 @@
 import { useState, useEffect, use } from "react";
 import { useRouter } from "next/navigation";
 import { subscribeToAuth, type User } from "@/lib/auth";
-import { getProject, updateProject, toggleArchive, deleteProject, type Project } from "@/lib/projects";
+import {
+  getProject,
+  updateProject,
+  toggleArchive,
+  deleteProject,
+  addExtraRounds,
+  type Project,
+} from "@/lib/projects";
 import { ConfirmModal } from "@/app/_components/confirm-modal";
 
 export default function SettingsPage({
@@ -24,9 +31,21 @@ export default function SettingsPage({
   const [roundsTotal, setRoundsTotal] = useState(3);
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+  const [userPlan, setUserPlan] = useState<"free" | "pro">("free");
+  const [confirmExtraRounds, setConfirmExtraRounds] = useState(false);
+  const [extraRoundsCount, setExtraRoundsCount] = useState(1);
 
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [confirmArchive, setConfirmArchive] = useState(false);
+
+  const hasFirstPackage =
+    project && project.imageUrls && project.imageUrls.length > 0;
+  const minRounds = hasFirstPackage
+    ? project!.roundsTotal - project!.roundsLeft
+    : 1;
+  const usedRounds = project
+    ? project.roundsTotal - project.roundsLeft
+    : 0;
 
   useEffect(() => {
     const unsub = subscribeToAuth((u) => {
@@ -73,14 +92,12 @@ export default function SettingsPage({
         clientContact: clientContact.trim(),
       };
 
-      // Handle rounds change
-      if (project && roundsTotal !== project.roundsTotal) {
-        const usedRounds = project.roundsTotal - project.roundsLeft;
+      // Handle rounds change (only before first package)
+      if (project && roundsTotal !== project.roundsTotal && !hasFirstPackage) {
         const newLeft = Math.max(0, roundsTotal - usedRounds);
         update.roundsTotal = roundsTotal;
         update.roundsLeft = newLeft;
 
-        // If we ran out of rounds but now have more, reactivate
         if (project.status === "exhausted" && newLeft > 0) {
           update.status = "in_progress";
           update.isLocked = false;
@@ -94,6 +111,17 @@ export default function SettingsPage({
     } finally {
       setSaving(false);
     }
+  };
+
+  const handleAddExtraRounds = async () => {
+    setConfirmExtraRounds(false);
+    await addExtraRounds(id, extraRoundsCount);
+    const p = await getProject(id);
+    if (p) {
+      setProject(p);
+      setRoundsTotal(p.roundsTotal);
+    }
+    showToast(`Добавлено ${extraRoundsCount} доп. кругов`);
   };
 
   const handleDelete = async () => {
@@ -197,41 +225,98 @@ export default function SettingsPage({
           {/* Rounds */}
           <div>
             <label className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-text-muted">
-              Кругов правок
+              Круги правок
             </label>
-            <div className="flex items-center gap-3">
-              <button
-                type="button"
-                onClick={() => {
-                  if (!project) return;
-                  const usedRounds = project.roundsTotal - project.roundsLeft;
-                  setRoundsTotal(Math.max(usedRounds, roundsTotal - 1));
-                }}
-                disabled={roundsTotal <= (project ? project.roundsTotal - project.roundsLeft : 1)}
-                className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-border-strong bg-bg-input text-lg font-medium text-text-primary transition-all hover:bg-bg-cardHover disabled:opacity-30"
-              >
-                −
-              </button>
-              <div className="flex h-12 flex-1 items-center justify-center rounded-xl border border-border-strong bg-bg-card">
-                <span className="font-display text-xl font-bold text-text-primary">
-                  {roundsTotal}
-                </span>
+
+            {hasFirstPackage ? (
+              // Rounds are locked after first package — only show info
+              <div className="rounded-xl border border-border-strong bg-bg-card p-4">
+                <div className="mb-3 flex items-center gap-3">
+                  <div className="flex h-12 flex-1 items-center justify-center rounded-xl border border-border-strong bg-bg-input">
+                    <span className="font-display text-xl font-bold text-text-primary">
+                      {roundsTotal}
+                    </span>
+                  </div>
+                </div>
+                <p className="text-xs text-text-muted">
+                  Основные круги: {roundsTotal - (project?.extraRoundsAdded || 0)} ·
+                  Дополнительные: {project?.extraRoundsAdded || 0} · Использовано: {usedRounds}
+                </p>
+                <p className="mt-2 text-xs text-yellow-400">
+                  Круги правок нельзя изменить после начала проекта
+                </p>
               </div>
-              <button
-                type="button"
-                onClick={() => setRoundsTotal(Math.min(999, roundsTotal + 1))}
-                className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-border-strong bg-bg-input text-lg font-medium text-text-primary transition-all hover:bg-bg-cardHover"
-              >
-                +
-              </button>
-            </div>
-            {project && (
-              <p className="mt-1.5 text-xs text-text-muted">
-                Использовано: {project.roundsTotal - project.roundsLeft} из {project.roundsTotal}
-                {roundsTotal > project.roundsTotal && " · Будет добавлено "}
-              </p>
+            ) : (
+              // Before first package: can adjust rounds
+              <div>
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setRoundsTotal(Math.max(1, roundsTotal - 1))}
+                    disabled={roundsTotal <= 1}
+                    className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-border-strong bg-bg-input text-lg font-medium text-text-primary transition-all hover:bg-bg-cardHover disabled:opacity-30"
+                  >
+                    −
+                  </button>
+                  <div className="flex h-12 flex-1 items-center justify-center rounded-xl border border-border-strong bg-bg-card">
+                    <span className="font-display text-xl font-bold text-text-primary">
+                      {roundsTotal}
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setRoundsTotal(Math.min(5, roundsTotal + 1))}
+                    disabled={roundsTotal >= 5}
+                    className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-border-strong bg-bg-input text-lg font-medium text-text-primary transition-all hover:bg-bg-cardHover disabled:opacity-30"
+                  >
+                    +
+                  </button>
+                </div>
+                <p className="mt-1.5 text-xs text-text-muted">
+                  Можно менять только до загрузки первого пакета
+                </p>
+              </div>
             )}
-          </div>
+
+            {/* Extra rounds: always available to add */}
+            <div className="mt-3 rounded-xl border border-dashed border-border-strong bg-bg-input/30 p-3">
+              <label className="mb-2 block text-xs font-medium uppercase tracking-wide text-text-muted">
+                Дополнительные круги
+              </label>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setExtraRoundsCount(Math.max(1, extraRoundsCount - 1))}
+                  disabled={extraRoundsCount <= 1}
+                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-border-strong bg-bg-input text-base font-medium text-text-primary transition-all hover:bg-bg-cardHover disabled:opacity-30"
+                >
+                  −
+                </button>
+                <div className="flex h-10 flex-1 items-center justify-center rounded-lg border border-border-strong bg-bg-card">
+                  <span className="font-display text-xl font-bold text-text-primary">
+                    {extraRoundsCount}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setExtraRoundsCount(Math.min(10, extraRoundsCount + 1))}
+                  disabled={extraRoundsCount >= 10}
+                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-border-strong bg-bg-input text-base font-medium text-text-primary transition-all hover:bg-bg-cardHover disabled:opacity-30"
+                >
+                  +
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setConfirmExtraRounds(true)}
+                  className="h-10 rounded-lg bg-text-primary px-4 text-sm font-medium text-bg-page transition-all hover:opacity-90 active:scale-[0.98]"
+                >
+                  Добавить
+                </button>
+              </div>
+              <p className="mt-1.5 text-xs text-text-muted">
+                Можно добавить в любой момент. Основные круги не меняются.
+              </p>
+            </div>
 
           {/* Save button */}
           <button
@@ -279,6 +364,15 @@ export default function SettingsPage({
         confirmLabel={project?.archived ? "Восстановить" : "Архивировать"}
         onConfirm={handleArchive}
         onCancel={() => setConfirmArchive(false)}
+      />
+
+      <ConfirmModal
+        open={confirmExtraRounds}
+        title="Добавить дополнительные правки?"
+        message={`Будет добавлено ${extraRoundsCount} дополнительных кругов правок. Основные круги не меняются.`}
+        confirmLabel="Добавить"
+        onConfirm={handleAddExtraRounds}
+        onCancel={() => setConfirmExtraRounds(false)}
       />
 
       {/* Toast */}
