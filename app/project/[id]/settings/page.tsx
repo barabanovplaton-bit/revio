@@ -11,6 +11,7 @@ import {
   addExtraRounds,
   type Project,
 } from "@/lib/projects";
+import { getUserProfile } from "@/lib/user-profile";
 import { ConfirmModal } from "@/app/_components/confirm-modal";
 
 export default function SettingsPage({
@@ -68,6 +69,10 @@ export default function SettingsPage({
       setClientName(p.clientName || "");
       setClientContact(p.clientContact || "");
       setRoundsTotal(p.roundsTotal);
+      const profile = await getUserProfile(user.uid);
+      if (profile && !cancelled) {
+        setUserPlan(profile.plan);
+      }
       setLoading(false);
     })();
     return () => { cancelled = true; };
@@ -225,9 +230,11 @@ export default function SettingsPage({
                   <span className="font-display text-xl font-bold text-text-primary">{extraRoundsCount}</span>
                 </div>
                 <button type="button" onClick={() => setExtraRoundsCount(Math.min(10, extraRoundsCount + 1))} disabled={extraRoundsCount >= 10} className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-border-strong bg-bg-input text-base font-medium text-text-primary transition-all hover:bg-bg-cardHover disabled:opacity-30">+</button>
-                <button type="button" onClick={() => setConfirmExtraRounds(true)} className="h-10 rounded-lg bg-text-primary px-4 text-sm font-medium text-bg-page transition-all hover:opacity-90 active:scale-[0.98]">Добавить</button>
+                <button type="button" onClick={() => setConfirmExtraRounds(true)} disabled={userPlan === "free" && roundsTotal + extraRoundsCount > 5} className={"h-10 rounded-lg px-4 text-sm font-medium transition-all active:scale-[0.98] " + (userPlan === "free" && roundsTotal + extraRoundsCount > 5 ? "bg-gray-500/50 text-gray-400 cursor-not-allowed" : "bg-text-primary text-bg-page hover:opacity-90")}>Добавить</button>
               </div>
-              <p className="mt-1.5 text-xs text-text-muted">Можно добавить в любой момент. Основные круги не меняются.</p>
+              <p className="mt-1.5 text-xs text-text-muted">
+                Можно добавить в любой момент. Основные круги не меняются.{userPlan === "free" && roundsTotal + extraRoundsCount > 5 ? <span className="text-yellow-400"> Бесплатный тариф: максимум 5 кругов всего.</span> : userPlan === "free" ? <span> Бесплатный тариф: всего будет {roundsTotal + extraRoundsCount} из 5.</span> : null}
+              </p>
             </div>
 
             {/* Save button */}

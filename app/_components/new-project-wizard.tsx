@@ -67,8 +67,8 @@ export function NewProjectWizard({
         },
         ownerUid
       );
-      reset();
       onCreated(id);
+      reset();
     } catch (e) {
       console.error(e);
       setError("Не удалось создать проект. Попробуй ещё раз.");

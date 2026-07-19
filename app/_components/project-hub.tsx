@@ -143,11 +143,23 @@ export function ProjectHub({
           imageUrls: uploaded,
           status: "in_progress",
         });
+        setProject({
+          ...project,
+          imageUrls: uploaded,
+          status: "in_progress",
+        });
       } else {
-        await uploadNewPackage(projectId, uploaded, project.currentRound);
+        await updateProject(projectId, {
+          imageUrls: uploaded,
+          status: "in_progress",
+        });
+        setProject({
+          ...project,
+          imageUrls: uploaded,
+          status: "in_progress",
+        });
       }
-      await refreshProject();
-      showToast(`Пакет загружен (${uploaded.length} изображений)`);
+      showToast("Пакет загружен (" + uploaded.length + " изображений)");
     }
 
     previewUrls.forEach((u) => URL.revokeObjectURL(u));
@@ -387,7 +399,7 @@ export function ProjectHub({
               {previewUrls.map((url, index) => (
                 <div key={index} className="group flex items-center gap-3 rounded-xl border border-border-strong bg-bg-card p-2 transition-all hover:border-text-primary/30">
                   {/* Order number */}
-                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-text-primary text-sm font-bold text-bg-page">
+                  <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-text-primary text-sm font-bold text-bg-page">
                     {index + 1}
                   </div>
                   {/* Thumbnail */}
@@ -526,7 +538,7 @@ export function ProjectHub({
                   return (
                     <div key={index} className="group relative flex items-center gap-3 rounded-xl border border-border-strong bg-bg-card p-2 transition-all hover:border-text-primary/30 cursor-pointer" onClick={() => setViewingImageIndex(index)}>
                       {/* Number */}
-                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-text-primary text-sm font-bold text-bg-page">
+                      <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-text-primary text-sm font-bold text-bg-page">
                         {index + 1}
                       </div>
                       {/* Thumbnail */}
