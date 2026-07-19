@@ -17,6 +17,12 @@ import {
 } from "firebase/firestore";
 import { db } from "./firebase";
 
+export interface ProjectPackage {
+  round: number;
+  imageUrls: string[];
+  createdAt: Timestamp | null;
+}
+
 export interface Project {
   id: string;
   ownerUid: string;
@@ -24,8 +30,10 @@ export interface Project {
   description: string;
   clientName: string;
   clientContact: string;
-  /** Массив URL картинок (Cloudinary) */
+  /** Текущий пакет картинок (Cloudinary) */
   imageUrls: string[];
+  /** История пакетов (старые загрузки) */
+  packageHistory: ProjectPackage[];
   /** Текущий круг правок */
   currentRound: number;
   /** Лимит кругов правок */
@@ -35,16 +43,10 @@ export interface Project {
   limitMessage: string;
   /** Заблокирован ли проект (клиент отправил правки) */
   isLocked: boolean;
-  /** Закреплённый проект (показывается сверху в сайдбаре) */
+  /** Закреплённый проект */
   pinned: boolean;
-  /** Архивный (не показывается в основном списке) */
+  /** Архивный */
   archived: boolean;
-  /** Иконка проекта (текстовый label для обратной совместимости) */
-  icon: string;
-  /** Индекс иконки в массиве PROJECT_ICONS */
-  iconIndex: number;
-  /** Цвет иконки */
-  iconColor: string;
   /** Статус проекта */
   status: "waiting_for_images" | "in_progress" | "exhausted";
   createdAt: Timestamp | null;
@@ -57,8 +59,8 @@ const COLLECTION = "projects";
 export async function createProject(
   data: Omit<
     Project,
-    "id" | "ownerUid" | "imageUrls" | "currentRound" | "isLocked" | "pinned" | "archived" | "createdAt" | "updatedAt" | "icon" | "iconIndex" | "iconColor"
-  > & { icon?: string; iconIndex?: number; iconColor?: string; status?: Project["status"] },
+    "id" | "ownerUid" | "imageUrls" | "packageHistory" | "currentRound" | "isLocked" | "pinned" | "archived" | "createdAt" | "updatedAt"
+  > & { status?: Project["status"] },
   ownerUid: string
 ): Promise<string> {
   const docRef = await addDoc(collection(db, COLLECTION), {
@@ -68,6 +70,7 @@ export async function createProject(
     clientName: data.clientName || "",
     clientContact: data.clientContact || "",
     imageUrls: [],
+    packageHistory: [],
     currentRound: 1,
     roundsTotal: data.roundsTotal,
     roundsLeft: data.roundsTotal,
@@ -75,9 +78,6 @@ export async function createProject(
     isLocked: false,
     pinned: false,
     archived: false,
-    icon: data.icon || "📁",
-    iconIndex: data.iconIndex ?? 0,
-    iconColor: data.iconColor || "#E880FC",
     status: data.status || "waiting_for_images",
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
@@ -161,6 +161,33 @@ export async function updateProjectImages(
   imageUrls: string[]
 ): Promise<void> {
   await updateProject(id, { imageUrls });
+}
+
+/**
+ * Загрузить новый пакет: текущие картинки уходят в историю, новые становятся актуальными
+ */
+export async function uploadNewPackage(
+  id: string,
+  newImageUrls: string[],
+  currentRound: number
+): Promise<void> {
+  const project = await getProject(id);
+  if (!project) return;
+
+  const history = project.packageHistory || [];
+  // Сохраняем текущий пакет в историю (если есть картинки)
+  if (project.imageUrls && project.imageUrls.length > 0) {
+    history.push({
+      round: currentRound,
+      imageUrls: project.imageUrls,
+      createdAt: project.updatedAt,
+    });
+  }
+
+  await updateProject(id, {
+    imageUrls: newImageUrls,
+    packageHistory: history,
+  });
 }
 
 /** Форматирование относительного времени. */

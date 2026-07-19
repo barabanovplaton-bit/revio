@@ -6,7 +6,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   getProject,
   updateProject,
-  updateProjectImages,
+  uploadNewPackage,
   type Project,
 } from "@/lib/projects";
 import {
@@ -51,7 +51,9 @@ export function ProjectHub({
   // Feedback packets
   const [selectedPacket, setSelectedPacket] = useState<number | null>(null);
 
-  // Refresh project from DB
+  // Fullscreen preview
+  const [fullscreenIndex, setFullscreenIndex] = useState<number | null>(null);
+
   const refreshProject = useCallback(async () => {
     const p = await getProject(projectId);
     setProject(p);
@@ -69,7 +71,6 @@ export function ProjectHub({
     return () => { cancelled = true; };
   }, [projectId]);
 
-  // Subscribe to ALL markers for this project
   useEffect(() => {
     const unsub = subscribeToAllProjectMarkers(projectId, (m) => setMarkers(m));
     return () => unsub();
@@ -80,21 +81,19 @@ export function ProjectHub({
     setTimeout(() => setToast(null), 2400);
   };
 
-  // --- Upload flow ---
+  // --- File handling ---
   const handleFiles = (files: FileList | null) => {
     if (!files || files.length === 0) return;
     const valid = Array.from(files).filter(
-      (f) => f.type.startsWith("image/") && f.size <= 5 * 1024 * 1024
+      (f) => f.type.startsWith("image/") && f.size <= 10 * 1024 * 1024
     );
     if (valid.length === 0) {
-      showToast("Только изображения до 5 МБ");
+      showToast("Только изображения до 10 МБ");
       return;
     }
-    // Generate previews
     const urls = valid.map((f) => URL.createObjectURL(f));
-    setPendingFiles(valid);
-    setPreviewUrls(urls);
-    setConfirmUpload(true);
+    setPendingFiles((prev) => [...prev, ...valid]);
+    setPreviewUrls((prev) => [...prev, ...urls]);
   };
 
   const handleDrop = useCallback((e: React.DragEvent) => {
@@ -103,6 +102,25 @@ export function ProjectHub({
     handleFiles(e.dataTransfer.files);
   }, []);
 
+  const removePreview = (index: number) => {
+    URL.revokeObjectURL(previewUrls[index]);
+    setPendingFiles((prev) => prev.filter((_, i) => i !== index));
+    setPreviewUrls((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const movePreview = (from: number, to: number) => {
+    if (to < 0 || to >= pendingFiles.length) return;
+    const newFiles = [...pendingFiles];
+    const newUrls = [...previewUrls];
+    const [f] = newFiles.splice(from, 1);
+    const [u] = newUrls.splice(from, 1);
+    newFiles.splice(to, 0, f);
+    newUrls.splice(to, 0, u);
+    setPendingFiles(newFiles);
+    setPreviewUrls(newUrls);
+  };
+
+  // --- Upload ---
   const handleConfirmUpload = async () => {
     if (pendingFiles.length === 0 || !project) return;
     setConfirmUpload(false);
@@ -119,13 +137,19 @@ export function ProjectHub({
     }
 
     if (uploaded.length > 0) {
-      await updateProjectImages(projectId, uploaded);
-      await updateProject(projectId, { status: "in_progress" });
+      const isFirstUpload = !project.imageUrls || project.imageUrls.length === 0;
+      if (isFirstUpload) {
+        await updateProject(projectId, {
+          imageUrls: uploaded,
+          status: "in_progress",
+        });
+      } else {
+        await uploadNewPackage(projectId, uploaded, project.currentRound);
+      }
       await refreshProject();
-      showToast(`Загружено ${uploaded.length} изображений`);
+      showToast(`Пакет загружен (${uploaded.length} изображений)`);
     }
 
-    // Cleanup
     previewUrls.forEach((u) => URL.revokeObjectURL(u));
     setPendingFiles([]);
     setPreviewUrls([]);
@@ -139,12 +163,6 @@ export function ProjectHub({
     setConfirmUpload(false);
   };
 
-  const removePreview = (index: number) => {
-    URL.revokeObjectURL(previewUrls[index]);
-    setPendingFiles((prev) => prev.filter((_, i) => i !== index));
-    setPreviewUrls((prev) => prev.filter((_, i) => i !== index));
-  };
-
   // --- Next round ---
   const handleStartNextRound = async () => {
     if (!project) return;
@@ -156,15 +174,7 @@ export function ProjectHub({
     showToast(`Круг ${project.currentRound + 1} начат`);
   };
 
-  // --- Mark as reviewed ---
-  const handleMarkReviewed = async () => {
-    if (!project) return;
-    const newStatus = project.roundsLeft > 0 ? "in_progress" : "exhausted";
-    await updateProject(projectId, { isLocked: false, status: newStatus });
-    await refreshProject();
-  };
-
-  // --- Loading / Error states ---
+  // --- Loading/Error ---
   if (loading) {
     return (
       <div className="flex h-screen items-center justify-center bg-bg-page">
@@ -177,10 +187,7 @@ export function ProjectHub({
     return (
       <div className="flex h-full flex-col items-center justify-center gap-4 bg-bg-page">
         <p className="text-sm text-text-muted">Проект не найден</p>
-        <button
-          onClick={onBack}
-          className="rounded-xl bg-text-primary px-4 py-2 text-sm font-medium text-bg-page"
-        >
+        <button onClick={onBack} className="rounded-xl bg-text-primary px-4 py-2 text-sm font-medium text-bg-page">
           Назад к проектам
         </button>
       </div>
@@ -189,8 +196,9 @@ export function ProjectHub({
 
   const imageCount = project.imageUrls?.length || 0;
   const hasImages = imageCount > 0;
+  const hasPending = pendingFiles.length > 0;
 
-  // Group markers by round → feedback packets
+  // Feedback packets
   const packets: { round: number; markers: Marker[] }[] = [];
   if (hasImages) {
     const roundMap = new Map<number, Marker[]>();
@@ -210,44 +218,56 @@ export function ProjectHub({
       ? `${window.location.origin}/review/${projectId}`
       : `/review/${projectId}`;
 
-  // Image viewer mode
+  // --- Fullscreen preview ---
+  if (fullscreenIndex !== null) {
+    const allUrls = hasPending ? previewUrls : (project.imageUrls || []);
+    const url = allUrls[fullscreenIndex];
+    if (url) {
+      return (
+        <div className="fixed inset-0 z-50 flex flex-col bg-black">
+          <div className="flex items-center justify-between px-4 py-3">
+            <button
+              onClick={() => setFullscreenIndex(null)}
+              className="rounded-lg p-2 text-white/70 hover:text-white"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-5 w-5">
+                <path d="M18 6 6 18M6 6l12 12" />
+              </svg>
+            </button>
+            <span className="text-sm text-white/70">
+              {fullscreenIndex + 1} / {allUrls.length}
+            </span>
+            <div className="w-9" />
+          </div>
+          <div className="flex-1 flex items-center justify-center p-4 overflow-auto">
+            <img src={url} alt="" className="max-h-full max-w-full object-contain" />
+          </div>
+        </div>
+      );
+    }
+  }
+
+  // --- Image viewer mode (with markers) ---
   if (viewingImageIndex !== null && project.imageUrls?.[viewingImageIndex]) {
     return (
       <div className="flex h-screen flex-col bg-bg-page">
         <div className="sticky top-0 z-20 px-4 pt-3 md:px-6">
           <header className="mx-auto flex max-w-4xl items-center gap-3 rounded-2xl border border-border-strong bg-bg-card px-4 py-3 shadow-lg">
-            <button
-              type="button"
-              onClick={() => setViewingImageIndex(null)}
-              className="shrink-0 rounded-lg p-1.5 text-text-muted transition-colors hover:bg-bg-cardHover hover:text-text-primary"
-            >
+            <button type="button" onClick={() => setViewingImageIndex(null)} className="shrink-0 rounded-lg p-1.5 text-text-muted transition-colors hover:bg-bg-cardHover hover:text-text-primary">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5">
-                <path d="M19 12H5" />
-                <path d="m12 19-7-7 7-7" />
+                <path d="M19 12H5" /><path d="m12 19-7-7 7-7" />
               </svg>
             </button>
             <div className="min-w-0 flex-1">
               <h1 className="truncate text-sm font-semibold text-text-primary">
-                {project.name} — изображение {viewingImageIndex + 1} из {imageCount}
+                {project.name} — {viewingImageIndex + 1} / {imageCount}
               </h1>
-              <p className="text-xs text-text-muted">
-                {markers.filter((m) => m.type === "point" && m.x != null && m.y != null).length} меток всего
-              </p>
             </div>
-            {/* Nav arrows */}
             <div className="flex items-center gap-1">
-              <button
-                onClick={() => setViewingImageIndex(Math.max(0, viewingImageIndex - 1))}
-                disabled={viewingImageIndex === 0}
-                className="rounded-lg p-1.5 text-text-muted hover:bg-bg-cardHover disabled:opacity-30"
-              >
+              <button onClick={() => setViewingImageIndex(Math.max(0, viewingImageIndex - 1))} disabled={viewingImageIndex === 0} className="rounded-lg p-1.5 text-text-muted hover:bg-bg-cardHover disabled:opacity-30">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-4 w-4"><path d="m15 18-6-6 6-6" /></svg>
               </button>
-              <button
-                onClick={() => setViewingImageIndex(Math.min(imageCount - 1, viewingImageIndex + 1))}
-                disabled={viewingImageIndex === imageCount - 1}
-                className="rounded-lg p-1.5 text-text-muted hover:bg-bg-cardHover disabled:opacity-30"
-              >
+              <button onClick={() => setViewingImageIndex(Math.min(imageCount - 1, viewingImageIndex + 1))} disabled={viewingImageIndex === imageCount - 1} className="rounded-lg p-1.5 text-text-muted hover:bg-bg-cardHover disabled:opacity-30">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-4 w-4"><path d="m9 18 6-6-6-6" /></svg>
               </button>
             </div>
@@ -256,12 +276,7 @@ export function ProjectHub({
         <div className="flex-1 overflow-auto p-4">
           <div className="mx-auto max-w-4xl">
             <div className="relative inline-block w-full">
-              <img
-                src={project.imageUrls[viewingImageIndex]}
-                alt={`Image ${viewingImageIndex + 1}`}
-                className="w-full rounded-xl border border-border-strong"
-              />
-              {/* Show markers for current round on this image */}
+              <img src={project.imageUrls[viewingImageIndex]} alt="" className="w-full rounded-xl border border-border-strong" />
               {markers
                 .filter((m) => m.type === "point" && m.round === project.currentRound && m.x != null && m.y != null)
                 .map((marker) => {
@@ -294,20 +309,15 @@ export function ProjectHub({
     );
   }
 
-  // --- MAIN VIEW ---
+  // === MAIN VIEW ===
   return (
     <div className="flex min-h-screen flex-col bg-bg-page">
       {/* Header */}
       <div className="sticky top-0 z-20 px-4 pt-3 md:px-6">
         <header className="mx-auto flex max-w-3xl items-center gap-3 rounded-2xl border border-border-strong bg-bg-card px-4 py-3 shadow-lg">
-          <button
-            type="button"
-            onClick={onBack}
-            className="shrink-0 rounded-lg p-1.5 text-text-muted transition-colors hover:bg-bg-cardHover hover:text-text-primary"
-          >
+          <button type="button" onClick={onBack} className="shrink-0 rounded-lg p-1.5 text-text-muted transition-colors hover:bg-bg-cardHover hover:text-text-primary">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5">
-              <path d="M19 12H5" />
-              <path d="m12 19-7-7 7-7" />
+              <path d="M19 12H5" /><path d="m12 19-7-7 7-7" />
             </svg>
           </button>
           <div className="min-w-0 flex-1">
@@ -315,15 +325,11 @@ export function ProjectHub({
             {hasImages && (
               <p className="text-xs text-text-muted">
                 Круг {project.currentRound}/{project.roundsTotal}
-                {project.isLocked && " — ожидает действий"}
+                {project.isLocked && " · ожидает действий"}
               </p>
             )}
           </div>
-          <button
-            type="button"
-            onClick={() => router.push(`/project/${projectId}/settings`)}
-            className="shrink-0 rounded-lg p-2 text-text-muted transition-colors hover:bg-bg-cardHover hover:text-text-primary"
-          >
+          <button type="button" onClick={() => router.push(`/project/${projectId}/settings`)} className="shrink-0 rounded-lg p-2 text-text-muted transition-colors hover:bg-bg-cardHover hover:text-text-primary">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
               <circle cx="12" cy="12" r="3" />
               <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
@@ -334,14 +340,14 @@ export function ProjectHub({
 
       <div className="mx-auto w-full max-w-3xl flex-1 px-4 py-6 md:px-6">
 
-        {/* ===== EMPTY STATE: Dropzone ===== */}
-        {!hasImages && (
+        {/* ===== EMPTY STATE: no images, no pending ===== */}
+        {!hasImages && !hasPending && (
           <div
             onDragOver={(e) => { e.preventDefault(); setIsDraggingOver(true); }}
             onDragLeave={() => setIsDraggingOver(false)}
             onDrop={handleDrop}
             onClick={() => fileInputRef.current?.click()}
-            className={`flex cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed py-20 text-center transition-all ${
+            className={`flex cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed py-24 text-center transition-all ${
               isDraggingOver
                 ? "border-text-primary bg-text-primary/5"
                 : "border-border-strong bg-bg-input/30 hover:border-text-primary/50 hover:bg-bg-input/60"
@@ -352,25 +358,80 @@ export function ProjectHub({
               <polyline points="17,8 12,3 7,8" />
               <line x1="12" y1="3" x2="12" y2="15" />
             </svg>
-            <p className="mb-1 text-sm font-medium text-text-primary">
-              Нажмите или перетащите макеты
-            </p>
-            <p className="text-xs text-text-muted">
-              PNG, JPG или WebP до 5 МБ
-            </p>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*"
-              multiple
-              onChange={(e) => handleFiles(e.target.files)}
-              className="hidden"
-            />
+            <p className="mb-1 text-sm font-medium text-text-primary">Перетащите или нажмите для выбора макетов</p>
+            <p className="text-xs text-text-muted">PNG, JPG или WebP до 10 МБ</p>
+            <input ref={fileInputRef} type="file" accept="image/*" multiple onChange={(e) => handleFiles(e.target.files)} className="hidden" />
           </div>
         )}
 
-        {/* ===== HAS IMAGES: Show content ===== */}
-        {hasImages && (
+        {/* ===== PENDING FILES: thumbnails grid ===== */}
+        {hasPending && (
+          <div className="mb-6">
+            <div className="mb-3 flex items-center justify-between">
+              <h3 className="text-sm font-medium text-text-primary">
+                Новый пакет ({pendingFiles.length})
+              </h3>
+              <label className="flex cursor-pointer items-center gap-1.5 rounded-lg border border-border-strong bg-bg-input px-3 py-1.5 text-xs font-medium text-text-primary transition-all hover:bg-bg-cardHover">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" className="h-3.5 w-3.5">
+                  <path d="M12 5v14M5 12h14" />
+                </svg>
+                Добавить ещё
+                <input type="file" accept="image/*" multiple onChange={(e) => handleFiles(e.target.files)} className="hidden" />
+              </label>
+            </div>
+
+            <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
+              {previewUrls.map((url, index) => (
+                <div key={index} className="group relative aspect-square overflow-hidden rounded-xl border border-border-strong bg-bg-input">
+                  <img src={url} alt="" className="h-full w-full object-cover" />
+
+                  {/* Order number */}
+                  <div className="absolute top-1.5 left-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-black/60 text-[10px] font-bold text-white">
+                    {index + 1}
+                  </div>
+
+                  {/* Actions */}
+                  <div className="absolute top-1.5 right-1.5 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    {/* Fullscreen */}
+                    <button onClick={(e) => { e.stopPropagation(); setFullscreenIndex(index); }} className="flex h-6 w-6 items-center justify-center rounded-full bg-black/60 text-white hover:bg-black/80">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-3 w-3">
+                        <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3" />
+                      </svg>
+                    </button>
+                    {/* Delete */}
+                    <button onClick={(e) => { e.stopPropagation(); removePreview(index); }} className="flex h-6 w-6 items-center justify-center rounded-full bg-red-500/80 text-white hover:bg-red-500">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-3 w-3">
+                        <path d="M18 6 6 18M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </div>
+
+                  {/* Drag handle */}
+                  <div className="absolute bottom-1.5 left-1/2 -translate-x-1/2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button onClick={(e) => { e.stopPropagation(); movePreview(index, index - 1); }} disabled={index === 0} className="flex h-5 w-5 items-center justify-center rounded bg-black/60 text-white hover:bg-black/80 disabled:opacity-30">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-3 w-3"><path d="m15 18-6-6 6-6" /></svg>
+                    </button>
+                    <button onClick={(e) => { e.stopPropagation(); movePreview(index, index + 1); }} disabled={index === pendingFiles.length - 1} className="flex h-5 w-5 items-center justify-center rounded bg-black/60 text-white hover:bg-black/80 disabled:opacity-30">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-3 w-3"><path d="m9 18 6-6-6-6" /></svg>
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Upload button */}
+            <button
+              type="button"
+              onClick={() => setConfirmUpload(true)}
+              className="mt-4 w-full rounded-xl bg-text-primary px-4 py-3 text-sm font-medium text-bg-page transition-all hover:opacity-90 active:scale-[0.98]"
+            >
+              Загрузить пакет ({pendingFiles.length} изображений)
+            </button>
+          </div>
+        )}
+
+        {/* ===== HAS IMAGES ===== */}
+        {hasImages && !hasPending && (
           <>
             {/* Share link */}
             <div className="mb-4 rounded-xl border border-border-strong bg-bg-card p-3">
@@ -380,38 +441,22 @@ export function ProjectHub({
                   <polyline points="16,6 12,2 8,6" />
                   <line x1="12" y1="2" x2="12" y2="15" />
                 </svg>
-                <input
-                  type="text"
-                  readOnly
-                  value={shareUrl}
-                  className="min-w-0 flex-1 bg-transparent text-xs text-text-muted outline-none"
-                />
-                <button
-                  type="button"
-                  onClick={() => {
-                    navigator.clipboard.writeText(shareUrl);
-                    showToast("Скопировано");
-                  }}
-                  className="shrink-0 rounded-lg bg-text-primary px-3 py-1.5 text-xs font-medium text-bg-page transition-all hover:opacity-90 active:scale-[0.98]"
-                >
+                <input type="text" readOnly value={shareUrl} className="min-w-0 flex-1 bg-transparent text-xs text-text-muted outline-none" />
+                <button type="button" onClick={() => { navigator.clipboard.writeText(shareUrl); showToast("Скопировано"); }} className="shrink-0 rounded-lg bg-text-primary px-3 py-1.5 text-xs font-medium text-bg-page transition-all hover:opacity-90 active:scale-[0.98]">
                   Копировать
                 </button>
               </div>
             </div>
 
-            {/* Status badge */}
+            {/* Status */}
             <div className="mb-4 flex items-center gap-2 flex-wrap">
               <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ${
-                project.status === "exhausted"
-                  ? "bg-red-500/20 text-red-400"
-                  : project.isLocked
-                    ? "bg-yellow-500/20 text-yellow-400"
+                project.status === "exhausted" ? "bg-red-500/20 text-red-400"
+                  : project.isLocked ? "bg-yellow-500/20 text-yellow-400"
                     : "bg-green-500/20 text-green-400"
               }`}>
-                {project.status === "exhausted"
-                  ? "Все круги использованы"
-                  : project.isLocked
-                    ? "Ожидает ваших действий"
+                {project.status === "exhausted" ? "Все круги использованы"
+                  : project.isLocked ? "Клиент отправил правки"
                     : "Активен"}
               </span>
               {project.clientName && (
@@ -422,36 +467,29 @@ export function ProjectHub({
               )}
             </div>
 
-            {/* Action: client submitted feedback */}
+            {/* Client submitted — action needed */}
             {project.isLocked && project.roundsLeft > 0 && (
               <div className="mb-4 rounded-xl border border-yellow-500/30 bg-yellow-500/10 p-4">
                 <p className="mb-3 text-sm font-medium text-yellow-400">
-                  Клиент отправил правки по кругу {project.currentRound}
+                  Клиент отправил правки (круг {project.currentRound})
                 </p>
                 <div className="flex gap-2">
-                  <button
-                    type="button"
-                    onClick={handleStartNextRound}
-                    className="flex-1 rounded-lg bg-text-primary px-4 py-2.5 text-sm font-medium text-bg-page transition-all hover:opacity-90"
-                  >
-                    Начать круг {project.currentRound + 1}
+                  <button type="button" onClick={() => fileInputRef.current?.click()} className="flex-1 rounded-lg bg-text-primary px-4 py-2.5 text-sm font-medium text-bg-page transition-all hover:opacity-90">
+                    Загрузить новый пакет
                   </button>
-                  <button
-                    type="button"
-                    onClick={handleMarkReviewed}
-                    className="rounded-lg border border-border-strong px-4 py-2.5 text-sm text-text-primary transition-all hover:bg-bg-cardHover"
-                  >
-                    Просмотрено
+                  <button type="button" onClick={handleStartNextRound} className="rounded-lg border border-border-strong px-4 py-2.5 text-sm text-text-primary transition-all hover:bg-bg-cardHover">
+                    Пропустить
                   </button>
                 </div>
+                <input ref={fileInputRef} type="file" accept="image/*" multiple onChange={(e) => handleFiles(e.target.files)} className="hidden" />
               </div>
             )}
 
-            {/* All rounds exhausted */}
+            {/* Exhausted */}
             {project.status === "exhausted" && (
               <div className="mb-4 rounded-xl border border-red-500/30 bg-red-500/10 p-4">
                 <p className="text-sm text-red-400">
-                  Все {project.roundsTotal} кругов правок использованы. Ссылка для клиента деактивирована.
+                  Все {project.roundsTotal} кругов правок использованы.
                 </p>
               </div>
             )}
@@ -477,12 +515,8 @@ export function ProjectHub({
                     return m.x >= minX && m.x < maxX && m.y >= minY && m.y < maxY;
                   });
                   return (
-                    <div
-                      key={index}
-                      className="group relative aspect-square overflow-hidden rounded-xl border border-border-strong bg-bg-input cursor-pointer transition-all hover:border-text-primary/30"
-                      onClick={() => setViewingImageIndex(index)}
-                    >
-                      <img src={url} alt={`Image ${index + 1}`} className="h-full w-full object-cover" />
+                    <div key={index} className="group relative aspect-square overflow-hidden rounded-xl border border-border-strong bg-bg-input cursor-pointer transition-all hover:border-text-primary/30" onClick={() => setViewingImageIndex(index)}>
+                      <img src={url} alt="" className="h-full w-full object-cover" />
                       {imgMarkers.length > 0 && (
                         <div className="absolute top-2 right-2 flex h-6 w-6 items-center justify-center rounded-full bg-text-primary text-[10px] font-bold text-bg-page shadow-lg">
                           {imgMarkers.length}
@@ -497,6 +531,28 @@ export function ProjectHub({
               </div>
             </div>
 
+            {/* Package history */}
+            {project.packageHistory && project.packageHistory.length > 0 && (
+              <div className="mb-6">
+                <h3 className="mb-3 text-sm font-medium text-text-primary">
+                  Предыдущие пакеты ({project.packageHistory.length})
+                </h3>
+                <div className="space-y-2">
+                  {project.packageHistory.slice().reverse().map((pkg, i) => (
+                    <div key={i} className="flex items-center justify-between rounded-xl border border-border-strong bg-bg-card px-4 py-3">
+                      <div>
+                        <span className="text-sm font-medium text-text-primary">Пакет #{pkg.round}</span>
+                        <span className="ml-2 text-xs text-text-muted">{pkg.imageUrls.length} изображений</span>
+                      </div>
+                      <span className="text-xs text-text-muted">
+                        {pkg.createdAt?.toDate?.().toLocaleDateString("ru-RU") || ""}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {/* Feedback packets */}
             {packets.length > 0 && (
               <div className="mb-6">
@@ -506,66 +562,40 @@ export function ProjectHub({
                 <div className="space-y-2">
                   {packets.map((packet) => (
                     <div key={packet.round} className="rounded-xl border border-border-strong bg-bg-card">
-                      <button
-                        type="button"
-                        onClick={() => setSelectedPacket(selectedPacket === packet.round ? null : packet.round)}
-                        className="flex w-full items-center justify-between px-4 py-3 text-left"
-                      >
+                      <button type="button" onClick={() => setSelectedPacket(selectedPacket === packet.round ? null : packet.round)} className="flex w-full items-center justify-between px-4 py-3 text-left">
                         <div>
-                          <span className="text-sm font-medium text-text-primary">
-                            Пакет #{packet.round}
-                          </span>
+                          <span className="text-sm font-medium text-text-primary">Правка #{packet.round}</span>
                           <span className="ml-2 text-xs text-text-muted">
                             {packet.markers.length} {packet.markers.length === 1 ? "метка" : "меток"}
                           </span>
                         </div>
-                        <svg
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth={2}
-                          className={`h-4 w-4 text-text-muted transition-transform ${selectedPacket === packet.round ? "rotate-180" : ""}`}
-                        >
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className={`h-4 w-4 text-text-muted transition-transform ${selectedPacket === packet.round ? "rotate-180" : ""}`}>
                           <path d="m6 9 6 6 6-6" />
                         </svg>
                       </button>
                       <AnimatePresence>
                         {selectedPacket === packet.round && (
-                          <motion.div
-                            initial={{ height: 0, opacity: 0 }}
-                            animate={{ height: "auto", opacity: 1 }}
-                            exit={{ height: 0, opacity: 0 }}
-                            className="overflow-hidden"
-                          >
+                          <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
                             <div className="border-t border-border-strong px-4 py-3 space-y-2">
-                              {packet.markers
-                                .filter((m) => m.type === "point")
-                                .map((m) => (
-                                  <div key={m.id} className="flex items-start gap-3 rounded-lg bg-bg-input/50 p-3">
-                                    <div className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-text-primary text-[10px] font-bold text-bg-page">#</div>
-                                    <div className="min-w-0 flex-1">
-                                      <p className="text-sm text-text-primary">{m.text}</p>
-                                      <p className="text-[10px] text-text-muted">
-                                        ({Math.round((m.x || 0) * 100)}%, {Math.round((m.y || 0) * 100)}%)
-                                      </p>
-                                    </div>
+                              {packet.markers.filter((m) => m.type === "point").map((m) => (
+                                <div key={m.id} className="flex items-start gap-3 rounded-lg bg-bg-input/50 p-3">
+                                  <div className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-text-primary text-[10px] font-bold text-bg-page">#</div>
+                                  <div className="min-w-0 flex-1">
+                                    <p className="text-sm text-text-primary">{m.text}</p>
+                                    <p className="text-[10px] text-text-muted">({Math.round((m.x || 0) * 100)}%, {Math.round((m.y || 0) * 100)}%)</p>
                                   </div>
-                                ))}
-                              {packet.markers
-                                .filter((m) => m.type === "general")
-                                .map((m) => (
-                                  <div key={m.id} className="flex items-start gap-3 rounded-lg bg-blue-500/10 p-3">
-                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="mt-0.5 h-4 w-4 shrink-0 text-blue-400">
-                                      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-                                    </svg>
-                                    <div className="min-w-0 flex-1">
-                                      <p className="text-sm text-text-primary">{m.text}</p>
-                                    </div>
+                                </div>
+                              ))}
+                              {packet.markers.filter((m) => m.type === "general").map((m) => (
+                                <div key={m.id} className="flex items-start gap-3 rounded-lg bg-blue-500/10 p-3">
+                                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="mt-0.5 h-4 w-4 shrink-0 text-blue-400">
+                                    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+                                  </svg>
+                                  <div className="min-w-0 flex-1">
+                                    <p className="text-sm text-text-primary">{m.text}</p>
                                   </div>
-                                ))}
-                              {packet.markers.length === 0 && (
-                                <p className="text-xs text-text-muted">Нет меток в этом пакете</p>
-                              )}
+                                </div>
+                              ))}
                             </div>
                           </motion.div>
                         )}
@@ -579,10 +609,15 @@ export function ProjectHub({
         )}
       </div>
 
+      {/* Hidden file input for "load new package" flow */}
+      {!hasImages && !hasPending && (
+        <input ref={fileInputRef} type="file" accept="image/*" multiple onChange={(e) => handleFiles(e.target.files)} className="hidden" />
+      )}
+
       {/* Upload confirmation modal */}
       <ConfirmModal
         open={confirmUpload}
-        title="Загрузить изображения?"
+        title="Загрузить пакет?"
         message={`Будет загружено ${pendingFiles.length} изображений. После загрузки изображения будут заморожены и не смогут быть изменены.`}
         confirmLabel="Загрузить"
         onConfirm={handleConfirmUpload}
@@ -602,12 +637,7 @@ export function ProjectHub({
       {/* Toast */}
       <AnimatePresence>
         {toast && (
-          <motion.div
-            initial={{ opacity: 0, y: 20, x: "-50%" }}
-            animate={{ opacity: 1, y: 0, x: "-50%" }}
-            exit={{ opacity: 0, y: 20, x: "-50%" }}
-            className="fixed bottom-6 left-1/2 z-50 rounded-xl border border-border-strong bg-bg-card px-4 py-2.5 text-sm text-text-primary shadow-xl"
-          >
+          <motion.div initial={{ opacity: 0, y: 20, x: "-50%" }} animate={{ opacity: 1, y: 0, x: "-50%" }} exit={{ opacity: 0, y: 20, x: "-50%" }} className="fixed bottom-6 left-1/2 z-50 rounded-xl border border-border-strong bg-bg-card px-4 py-2.5 text-sm text-text-primary shadow-xl">
             {toast}
           </motion.div>
         )}

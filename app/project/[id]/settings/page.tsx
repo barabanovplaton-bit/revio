@@ -202,8 +202,12 @@ export default function SettingsPage({
             <div className="flex items-center gap-3">
               <button
                 type="button"
-                onClick={() => setRoundsTotal(Math.max(1, roundsTotal - 1))}
-                disabled={roundsTotal <= 1}
+                onClick={() => {
+                  if (!project) return;
+                  const usedRounds = project.roundsTotal - project.roundsLeft;
+                  setRoundsTotal(Math.max(usedRounds, roundsTotal - 1));
+                }}
+                disabled={roundsTotal <= (project ? project.roundsTotal - project.roundsLeft : 1)}
                 className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-border-strong bg-bg-input text-lg font-medium text-text-primary transition-all hover:bg-bg-cardHover disabled:opacity-30"
               >
                 −
@@ -221,7 +225,7 @@ export default function SettingsPage({
                 +
               </button>
             </div>
-            {project && project.roundsTotal !== roundsTotal && (
+            {project && (
               <p className="mt-1.5 text-xs text-text-muted">
                 Использовано: {project.roundsTotal - project.roundsLeft} из {project.roundsTotal}
                 {roundsTotal > project.roundsTotal && " · Будет добавлено "}

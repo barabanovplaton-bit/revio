@@ -78,8 +78,8 @@ export function NewProjectWizard({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col items-center bg-bg-page">
-      <div className="flex min-h-0 w-full max-w-md flex-1 flex-col items-center overflow-y-auto px-6 pt-10 pb-4">
+    <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-bg-page">
+      <div className="flex w-full max-w-sm flex-col items-center px-6">
         <AnimatePresence mode="wait">
           {step === 0 && (
             <motion.div
@@ -87,7 +87,7 @@ export function NewProjectWizard({
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: -20 }}
-              transition={{ duration: 0.3, ease: "easeInOut" }}
+              transition={{ duration: 0.25, ease: "easeInOut" }}
               className="w-full"
             >
               <h2 className="mb-1 text-center font-display text-xl font-semibold text-text-primary">
@@ -120,7 +120,7 @@ export function NewProjectWizard({
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: -20 }}
-              transition={{ duration: 0.3, ease: "easeInOut" }}
+              transition={{ duration: 0.25, ease: "easeInOut" }}
               className="w-full"
             >
               <h2 className="mb-1 text-center font-display text-xl font-semibold text-text-primary">
@@ -171,7 +171,7 @@ export function NewProjectWizard({
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: -20 }}
-              transition={{ duration: 0.3, ease: "easeInOut" }}
+              transition={{ duration: 0.25, ease: "easeInOut" }}
               className="w-full"
             >
               <h2 className="mb-1 text-center font-display text-xl font-semibold text-text-primary">
@@ -181,7 +181,7 @@ export function NewProjectWizard({
                 Сколько раундов правок доступно клиенту
               </p>
 
-              <div className="mb-6 flex items-center justify-center gap-4">
+              <div className="mb-4 flex items-center justify-center gap-4">
                 <button
                   type="button"
                   onClick={() => setRounds(Math.max(1, rounds - 1))}
@@ -217,31 +217,6 @@ export function NewProjectWizard({
                 </p>
               )}
 
-              <div className="rounded-xl border border-border-strong bg-bg-card p-4">
-                <div className="text-center text-sm font-medium text-text-primary">
-                  {name || "Без названия"}
-                </div>
-                <div className="text-center text-xs text-text-muted">
-                  {rounds}{" "}
-                  {rounds === 1
-                    ? "круг"
-                    : rounds < 5
-                      ? "круга"
-                      : "кругов"}{" "}
-                  правок
-                </div>
-                {description && (
-                  <p className="mt-2 text-center text-xs text-text-muted line-clamp-2">
-                    {description}
-                  </p>
-                )}
-                {clientName && (
-                  <div className="mt-1 text-center text-xs text-text-muted">
-                    {clientName}
-                  </div>
-                )}
-              </div>
-
               {error && (
                 <div className="mt-4 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-center text-xs text-red-400">
                   {error}
@@ -252,8 +227,9 @@ export function NewProjectWizard({
         </AnimatePresence>
       </div>
 
-      <div className="shrink-0 bg-bg-page px-6 py-4">
-        <div className="mx-auto flex max-w-md gap-2">
+      {/* Bottom buttons — full width, equal size */}
+      <div className="fixed bottom-0 inset-x-0 px-6 pb-6 pt-4 bg-bg-page">
+        <div className="mx-auto flex max-w-sm gap-2">
           {step > 0 ? (
             <button
               type="button"
