@@ -40,9 +40,6 @@ export default function SettingsPage({
 
   const hasFirstPackage =
     project && project.imageUrls && project.imageUrls.length > 0;
-  const minRounds = hasFirstPackage
-    ? project!.roundsTotal - project!.roundsLeft
-    : 1;
   const usedRounds = project
     ? project.roundsTotal - project.roundsLeft
     : 0;
@@ -92,7 +89,6 @@ export default function SettingsPage({
         clientContact: clientContact.trim(),
       };
 
-      // Handle rounds change (only before first package)
       if (project && roundsTotal !== project.roundsTotal && !hasFirstPackage) {
         const newLeft = Math.max(0, roundsTotal - usedRounds);
         update.roundsTotal = roundsTotal;
@@ -121,7 +117,7 @@ export default function SettingsPage({
       setProject(p);
       setRoundsTotal(p.roundsTotal);
     }
-    showToast(`Добавлено ${extraRoundsCount} доп. кругов`);
+    showToast("Добавлено " + extraRoundsCount + " доп. кругов");
   };
 
   const handleDelete = async () => {
@@ -149,77 +145,44 @@ export default function SettingsPage({
     <div className="flex min-h-screen flex-col bg-bg-page">
       <div className="sticky top-0 z-20 px-4 pt-3 md:px-6">
         <header className="mx-auto flex max-w-3xl items-center gap-3 rounded-2xl border border-border-strong bg-bg-card px-4 py-3 shadow-lg">
-          <button
-            type="button"
-            onClick={() => router.push(`/project/${id}`)}
-            className="shrink-0 rounded-lg p-1.5 text-text-muted transition-colors hover:bg-bg-cardHover hover:text-text-primary"
-          >
+          <button type="button" onClick={() => router.push("/project/" + id)} className="shrink-0 rounded-lg p-1.5 text-text-muted transition-colors hover:bg-bg-cardHover hover:text-text-primary">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5">
               <path d="M19 12H5" />
               <path d="m12 19-7-7 7-7" />
             </svg>
           </button>
-          <h1 className="text-sm font-semibold text-text-primary">
-            Настройки проекта
-          </h1>
+          <h1 className="text-sm font-semibold text-text-primary">Настройки проекта</h1>
         </header>
       </div>
 
       <div className="mx-auto w-full max-w-3xl flex-1 px-4 py-6 md:px-6">
         <div className="space-y-4">
-          {/* Name */}
           <div>
             <label className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-text-muted">
               Название
             </label>
-            <input
-              type="text"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              className="h-12 w-full rounded-xl border border-border-strong bg-bg-input px-4 text-sm text-text-primary placeholder:text-text-muted focus:border-text-primary focus:outline-none"
-            />
+            <input type="text" value={name} onChange={(e) => setName(e.target.value)} className="h-12 w-full rounded-xl border border-border-strong bg-bg-input px-4 text-sm text-text-primary placeholder:text-text-muted focus:border-text-primary focus:outline-none" />
           </div>
 
-          {/* Description */}
           <div>
             <label className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-text-muted">
               Описание
             </label>
-            <textarea
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="Пара слов о проекте"
-              rows={3}
-              className="w-full resize-none rounded-xl border border-border-strong bg-bg-input px-4 py-3 text-sm text-text-primary placeholder:text-text-muted focus:border-text-primary focus:outline-none"
-            />
+            <textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Пара слов о проекте" rows={3} className="w-full resize-none rounded-xl border border-border-strong bg-bg-input px-4 py-3 text-sm text-text-primary placeholder:text-text-muted focus:border-text-primary focus:outline-none" />
           </div>
 
-          {/* Client name */}
           <div>
             <label className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-text-muted">
               Имя клиента
             </label>
-            <input
-              type="text"
-              value={clientName}
-              onChange={(e) => setClientName(e.target.value)}
-              placeholder="Имя клиента"
-              className="h-12 w-full rounded-xl border border-border-strong bg-bg-input px-4 text-sm text-text-primary placeholder:text-text-muted focus:border-text-primary focus:outline-none"
-            />
+            <input type="text" value={clientName} onChange={(e) => setClientName(e.target.value)} placeholder="Имя клиента" className="h-12 w-full rounded-xl border border-border-strong bg-bg-input px-4 text-sm text-text-primary placeholder:text-text-muted focus:border-text-primary focus:outline-none" />
           </div>
 
-          {/* Client contact */}
           <div>
             <label className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-text-muted">
               Контакт клиента
             </label>
-            <input
-              type="text"
-              value={clientContact}
-              onChange={(e) => setClientContact(e.target.value)}
-              placeholder="Email, Telegram, WhatsApp..."
-              className="h-12 w-full rounded-xl border border-border-strong bg-bg-input px-4 text-sm text-text-primary placeholder:text-text-muted focus:border-text-primary focus:outline-none"
-            />
+            <input type="text" value={clientContact} onChange={(e) => setClientContact(e.target.value)} placeholder="Email, Telegram, WhatsApp..." className="h-12 w-full rounded-xl border border-border-strong bg-bg-input px-4 text-sm text-text-primary placeholder:text-text-muted focus:border-text-primary focus:outline-none" />
           </div>
 
           {/* Rounds */}
@@ -229,155 +192,68 @@ export default function SettingsPage({
             </label>
 
             {hasFirstPackage ? (
-              // Rounds are locked after first package — only show info
               <div className="rounded-xl border border-border-strong bg-bg-card p-4">
                 <div className="mb-3 flex items-center gap-3">
                   <div className="flex h-12 flex-1 items-center justify-center rounded-xl border border-border-strong bg-bg-input">
-                    <span className="font-display text-xl font-bold text-text-primary">
-                      {roundsTotal}
-                    </span>
+                    <span className="font-display text-xl font-bold text-text-primary">{roundsTotal}</span>
                   </div>
                 </div>
                 <p className="text-xs text-text-muted">
-                  Основные круги: {roundsTotal - (project?.extraRoundsAdded || 0)} ·
-                  Дополнительные: {project?.extraRoundsAdded || 0} · Использовано: {usedRounds}
+                  Основные: {roundsTotal - (project?.extraRoundsAdded || 0)} &middot; Доп: {project?.extraRoundsAdded || 0} &middot; Использовано: {usedRounds}
                 </p>
-                <p className="mt-2 text-xs text-yellow-400">
-                  Круги правок нельзя изменить после начала проекта
-                </p>
+                <p className="mt-2 text-xs text-yellow-400">Круги нельзя изменить после начала проекта</p>
               </div>
             ) : (
-              // Before first package: can adjust rounds
               <div>
                 <div className="flex items-center gap-3">
-                  <button
-                    type="button"
-                    onClick={() => setRoundsTotal(Math.max(1, roundsTotal - 1))}
-                    disabled={roundsTotal <= 1}
-                    className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-border-strong bg-bg-input text-lg font-medium text-text-primary transition-all hover:bg-bg-cardHover disabled:opacity-30"
-                  >
-                    −
-                  </button>
+                  <button type="button" onClick={() => setRoundsTotal(Math.max(1, roundsTotal - 1))} disabled={roundsTotal <= 1} className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-border-strong bg-bg-input text-lg font-medium text-text-primary transition-all hover:bg-bg-cardHover disabled:opacity-30">&minus;</button>
                   <div className="flex h-12 flex-1 items-center justify-center rounded-xl border border-border-strong bg-bg-card">
-                    <span className="font-display text-xl font-bold text-text-primary">
-                      {roundsTotal}
-                    </span>
+                    <span className="font-display text-xl font-bold text-text-primary">{roundsTotal}</span>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => setRoundsTotal(Math.min(5, roundsTotal + 1))}
-                    disabled={roundsTotal >= 5}
-                    className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-border-strong bg-bg-input text-lg font-medium text-text-primary transition-all hover:bg-bg-cardHover disabled:opacity-30"
-                  >
-                    +
-                  </button>
+                  <button type="button" onClick={() => setRoundsTotal(Math.min(5, roundsTotal + 1))} disabled={roundsTotal >= 5} className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-border-strong bg-bg-input text-lg font-medium text-text-primary transition-all hover:bg-bg-cardHover disabled:opacity-30">+</button>
                 </div>
-                <p className="mt-1.5 text-xs text-text-muted">
-                  Можно менять только до загрузки первого пакета
-                </p>
+                <p className="mt-1.5 text-xs text-text-muted">Можно менять только до загрузки первого пакета</p>
               </div>
             )}
 
-            {/* Extra rounds: always available to add */}
+            {/* Extra rounds */}
             <div className="mt-3 rounded-xl border border-dashed border-border-strong bg-bg-input/30 p-3">
-              <label className="mb-2 block text-xs font-medium uppercase tracking-wide text-text-muted">
-                Дополнительные круги
-              </label>
+              <label className="mb-2 block text-xs font-medium uppercase tracking-wide text-text-muted">Дополнительные круги</label>
               <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => setExtraRoundsCount(Math.max(1, extraRoundsCount - 1))}
-                  disabled={extraRoundsCount <= 1}
-                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-border-strong bg-bg-input text-base font-medium text-text-primary transition-all hover:bg-bg-cardHover disabled:opacity-30"
-                >
-                  −
-                </button>
+                <button type="button" onClick={() => setExtraRoundsCount(Math.max(1, extraRoundsCount - 1))} disabled={extraRoundsCount <= 1} className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-border-strong bg-bg-input text-base font-medium text-text-primary transition-all hover:bg-bg-cardHover disabled:opacity-30">&minus;</button>
                 <div className="flex h-10 flex-1 items-center justify-center rounded-lg border border-border-strong bg-bg-card">
-                  <span className="font-display text-xl font-bold text-text-primary">
-                    {extraRoundsCount}
-                  </span>
+                  <span className="font-display text-xl font-bold text-text-primary">{extraRoundsCount}</span>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => setExtraRoundsCount(Math.min(10, extraRoundsCount + 1))}
-                  disabled={extraRoundsCount >= 10}
-                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-border-strong bg-bg-input text-base font-medium text-text-primary transition-all hover:bg-bg-cardHover disabled:opacity-30"
-                >
-                  +
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setConfirmExtraRounds(true)}
-                  className="h-10 rounded-lg bg-text-primary px-4 text-sm font-medium text-bg-page transition-all hover:opacity-90 active:scale-[0.98]"
-                >
-                  Добавить
-                </button>
+                <button type="button" onClick={() => setExtraRoundsCount(Math.min(10, extraRoundsCount + 1))} disabled={extraRoundsCount >= 10} className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-border-strong bg-bg-input text-base font-medium text-text-primary transition-all hover:bg-bg-cardHover disabled:opacity-30">+</button>
+                <button type="button" onClick={() => setConfirmExtraRounds(true)} className="h-10 rounded-lg bg-text-primary px-4 text-sm font-medium text-bg-page transition-all hover:opacity-90 active:scale-[0.98]">Добавить</button>
               </div>
-              <p className="mt-1.5 text-xs text-text-muted">
-                Можно добавить в любой момент. Основные круги не меняются.
-              </p>
+              <p className="mt-1.5 text-xs text-text-muted">Можно добавить в любой момент. Основные круги не меняются.</p>
             </div>
 
-          {/* Save button */}
-          <button
-            type="button"
-            onClick={handleSave}
-            disabled={saving || !name.trim()}
-            className="h-12 w-full rounded-xl bg-text-primary text-sm font-medium text-bg-page transition-all hover:opacity-90 active:scale-[0.98] disabled:opacity-50"
-          >
-            {saving ? "Сохранение..." : "Сохранить"}
-          </button>
-        </div>
+            {/* Save button */}
+            <button type="button" onClick={handleSave} disabled={saving || !name.trim()} className="h-12 w-full rounded-xl bg-text-primary text-sm font-medium text-bg-page transition-all hover:opacity-90 active:scale-[0.98] disabled:opacity-50">
+              {saving ? "Сохранение..." : "Сохранить"}
+            </button>
+          </div>
 
-        {/* Danger zone */}
-        <div className="mt-8 space-y-3">
-          <button
-            type="button"
-            onClick={() => setConfirmArchive(true)}
-            className="h-12 w-full rounded-xl border border-border-strong bg-bg-input text-sm font-medium text-text-primary transition-all hover:bg-bg-cardHover"
-          >
-            {project?.archived ? "Восстановить из архива" : "В архив"}
-          </button>
-          <button
-            type="button"
-            onClick={() => setConfirmDelete(true)}
-            className="h-12 w-full rounded-xl border border-red-500/50 bg-red-500/10 text-sm font-medium text-red-400 transition-all hover:bg-red-500/20"
-          >
-            Удалить проект
-          </button>
+          {/* Danger zone */}
+          <div className="mt-8 space-y-3">
+            <button type="button" onClick={() => setConfirmArchive(true)} className="h-12 w-full rounded-xl border border-border-strong bg-bg-input text-sm font-medium text-text-primary transition-all hover:bg-bg-cardHover">
+              {project?.archived ? "Восстановить из архива" : "В архив"}
+            </button>
+            <button type="button" onClick={() => setConfirmDelete(true)} className="h-12 w-full rounded-xl border border-red-500/50 bg-red-500/10 text-sm font-medium text-red-400 transition-all hover:bg-red-500/20">
+              Удалить проект
+            </button>
+          </div>
         </div>
       </div>
 
-      <ConfirmModal
-        open={confirmDelete}
-        title="Удалить проект?"
-        message="Проект будет удалён навсегда. Это действие нельзя отменить."
-        confirmLabel="Удалить"
-        danger
-        onConfirm={handleDelete}
-        onCancel={() => setConfirmDelete(false)}
-      />
-      <ConfirmModal
-        open={confirmArchive}
-        title={project?.archived ? "Восстановить проект?" : "Архивировать проект?"}
-        message={project?.archived ? "Проект будет возвращён в основной список." : "Проект будет перемещён в архив."}
-        confirmLabel={project?.archived ? "Восстановить" : "Архивировать"}
-        onConfirm={handleArchive}
-        onCancel={() => setConfirmArchive(false)}
-      />
+      <ConfirmModal open={confirmDelete} title="Удалить проект?" message="Проект будет удалён навсегда. Это действие нельзя отменить." confirmLabel="Удалить" danger onConfirm={handleDelete} onCancel={() => setConfirmDelete(false)} />
+      <ConfirmModal open={confirmArchive} title={project?.archived ? "Восстановить проект?" : "Архивировать проект?"} message={project?.archived ? "Проект будет возвращён в основной список." : "Проект будет перемещён в архив."} confirmLabel={project?.archived ? "Восстановить" : "Архивировать"} onConfirm={handleArchive} onCancel={() => setConfirmArchive(false)} />
+      <ConfirmModal open={confirmExtraRounds} title="Добавить дополнительные правки?" message={"Будет добавлено "+extraRoundsCount+" дополнительных кругов правок. Основные круги не меняются."} confirmLabel="Добавить" onConfirm={handleAddExtraRounds} onCancel={() => setConfirmExtraRounds(false)} />
 
-      <ConfirmModal
-        open={confirmExtraRounds}
-        title="Добавить дополнительные правки?"
-        message={`Будет добавлено ${extraRoundsCount} дополнительных кругов правок. Основные круги не меняются.`}
-        confirmLabel="Добавить"
-        onConfirm={handleAddExtraRounds}
-        onCancel={() => setConfirmExtraRounds(false)}
-      />
-
-      {/* Toast */}
       <div className="fixed bottom-0 inset-x-0 flex justify-center pb-6 pointer-events-none">
-        <div className={`rounded-xl border border-border-strong bg-bg-card px-4 py-2.5 text-sm text-text-primary shadow-xl transition-all duration-300 ${toast ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"}`}>
+        <div className={"rounded-xl border border-border-strong bg-bg-card px-4 py-2.5 text-sm text-text-primary shadow-xl transition-all duration-300 " + (toast ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4")}>
           {toast}
         </div>
       </div>
