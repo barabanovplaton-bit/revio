@@ -1,11 +1,11 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
-import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   getProject,
   updateProject,
+  deleteProject,
   type Project,
 } from "@/lib/projects";
 import {
@@ -14,7 +14,9 @@ import {
   type Marker,
 } from "@/lib/markers";
 import { ConfirmModal } from "./confirm-modal";
-import { uploadImage } from "@/lib/cloudinary";
+import { uploadImageWithRetry, prepareImageFile } from "@/lib/cloudinary";
+
+const MAX_IMAGES_PER_PROJECT = 10;
 
 interface ProjectHubProps {
   projectId: string;
@@ -31,7 +33,6 @@ export function ProjectHub({
   onProjectDeleted,
   onProjectUpdated,
 }: ProjectHubProps) {
-  const router = useRouter();
   const [project, setProject] = useState<Project | null>(null);
   const [loading, setLoading] = useState(true);
   const [markers, setMarkers] = useState<Marker[]>([]);
@@ -39,12 +40,23 @@ export function ProjectHub({
 
   // Upload state
   const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<{ done: number; total: number } | null>(null);
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
   const [previewUrls, setPreviewUrls] = useState<string[]>([]);
   const [confirmUpload, setConfirmUpload] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const [isDraggingOver, setIsDraggingOver] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Rename in header
+  const [renaming, setRenaming] = useState(false);
+  const [renameValue, setRenameValue] = useState("");
+
+  // Drag & drop reorder (desktop only; touch uses arrows)
+  const [isTouch, setIsTouch] = useState(false);
+  const [dragIndex, setDragIndex] = useState<number | null>(null);
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
 
   // Image viewer
   const [viewingImageIndex, setViewingImageIndex] = useState<number | null>(null);
@@ -53,6 +65,14 @@ export function ProjectHub({
   // Fullscreen preview
   const [fullscreenIndex, setFullscreenIndex] = useState<number | null>(null);
   const [replaceConfirm, setReplaceConfirm] = useState(false);
+
+  useEffect(() => {
+    setIsTouch(
+      typeof window !== "undefined" &&
+        (window.matchMedia("(pointer: coarse)").matches ||
+          "ontouchstart" in window)
+    );
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -88,16 +108,60 @@ export function ProjectHub({
     setTimeout(() => setToast(null), 2400);
   };
 
+  // --- Rename ---
+  const startRename = () => {
+    setRenameValue(project?.name || "");
+    setRenaming(true);
+  };
+
+  const commitRename = async () => {
+    const name = renameValue.trim();
+    setRenaming(false);
+    if (!name || !project || name === project.name) return;
+    try {
+      await updateProject(projectId, { name });
+      const fresh = await getProject(projectId);
+      if (fresh) setProject(fresh);
+      onProjectUpdated();
+      showToast("Переименовано");
+    } catch (e) {
+      console.error(e);
+      showToast("Не удалось переименовать");
+    }
+  };
+
+  // --- Delete ---
+  const handleDelete = async () => {
+    setConfirmDelete(false);
+    await deleteProject(projectId);
+    onProjectDeleted();
+  };
+
   // --- File handling ---
   const handleFiles = (files: FileList | null) => {
     if (!files || files.length === 0) return;
-    const valid = Array.from(files).filter(
-      (f) => f.type.startsWith("image/") && f.size <= 10 * 1024 * 1024
+    const currentCount = project?.imageUrls?.length || 0;
+    const replacing = currentCount > 0;
+
+    let valid = Array.from(files).filter(
+      (f) => f.type.startsWith("image/") && f.size <= 20 * 1024 * 1024
     );
     if (valid.length === 0) {
-      showToast("Только изображения до 10 МБ");
+      showToast("Только изображения до 20 МБ");
       return;
     }
+
+    const base = replacing ? 0 : currentCount;
+    const room = MAX_IMAGES_PER_PROJECT - base;
+    if (room <= 0) {
+      showToast(`Максимум ${MAX_IMAGES_PER_PROJECT} изображений на проект`);
+      return;
+    }
+    if (valid.length > room) {
+      valid = valid.slice(0, room);
+      showToast(`Максимум ${MAX_IMAGES_PER_PROJECT} изображений на проект`);
+    }
+
     const urls = valid.map((f) => URL.createObjectURL(f));
     setPendingFiles((prev) => [...prev, ...valid]);
     setPreviewUrls((prev) => [...prev, ...urls]);
@@ -108,7 +172,8 @@ export function ProjectHub({
     e.preventDefault();
     setIsDraggingOver(false);
     handleFiles(e.dataTransfer.files);
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [project]);
 
   const removePreview = (index: number) => {
     URL.revokeObjectURL(previewUrls[index]);
@@ -134,19 +199,24 @@ export function ProjectHub({
     setConfirmUpload(false);
     setIsUploading(true);
     setUploadError(null);
+    setUploadProgress({ done: 0, total: pendingFiles.length });
     document.body.style.overflow = "hidden";
 
     const uploaded: string[] = [];
-    let failed = 0;
-    for (const file of pendingFiles) {
+    const failedNames: string[] = [];
+    for (let i = 0; i < pendingFiles.length; i++) {
+      const file = pendingFiles[i];
+      setUploadProgress({ done: i, total: pendingFiles.length });
       try {
-        const result = await uploadImage(file);
+        const prepared = await prepareImageFile(file);
+        const result = await uploadImageWithRetry(prepared, 3);
         uploaded.push(result.url);
       } catch (e) {
-        console.error("Upload error:", e);
-        failed++;
+        console.error("Upload error:", file.name, e);
+        failedNames.push(file.name);
       }
     }
+    setUploadProgress({ done: pendingFiles.length, total: pendingFiles.length });
 
     if (uploaded.length > 0) {
       const replacing = (project?.imageUrls?.length || 0) > 0;
@@ -163,17 +233,24 @@ export function ProjectHub({
       previewUrls.forEach((u) => URL.revokeObjectURL(u));
       setPendingFiles([]);
       setPreviewUrls([]);
-      showToast(
-        failed > 0
-          ? "Загружено " + uploaded.length + ", не удалось: " + failed
-          : replacing
+      if (failedNames.length > 0) {
+        showToast(
+          replacing
+            ? `Макеты заменены (${uploaded.length}), не загрузилось: ${failedNames.join(", ")}`
+            : `Загружено ${uploaded.length} из ${pendingFiles.length}, не загрузилось: ${failedNames.join(", ")}`
+        );
+      } else {
+        showToast(
+          replacing
             ? "Макеты заменены"
-            : "Пакет загружен (" + uploaded.length + " изображений)"
-      );
+            : `Пакет загружен (${uploaded.length} изображений)`
+        );
+      }
     } else {
       setUploadError("Не удалось загрузить изображения. Попробуй ещё раз.");
     }
 
+    setUploadProgress(null);
     setIsUploading(false);
     document.body.style.overflow = "";
   };
@@ -348,18 +425,60 @@ export function ProjectHub({
               <path d="M19 12H5" /><path d="m12 19-7-7 7-7" />
             </svg>
           </button>
-          <div className="min-w-0 flex-1">
-            <h1 className="truncate text-sm font-semibold text-text-primary">{project.name}</h1>
+          <div className="group flex min-w-0 flex-1 items-center gap-1.5">
+            {renaming ? (
+              <input
+                type="text"
+                value={renameValue}
+                onChange={(e) => setRenameValue(e.target.value)}
+                onClick={(e) => e.stopPropagation()}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") commitRename();
+                  if (e.key === "Escape") setRenaming(false);
+                }}
+                onBlur={commitRename}
+                autoFocus
+                className="w-full rounded-lg border border-border-strong bg-bg-input px-2 py-1 text-sm font-semibold text-text-primary focus:border-text-primary focus:outline-none"
+              />
+            ) : (
+              <>
+                <h1
+                  className="truncate text-sm font-semibold text-text-primary cursor-pointer hover:text-text-secondary transition-colors"
+                  onClick={startRename}
+                  title="Нажмите, чтобы переименовать"
+                >
+                  {project.name}
+                </h1>
+                <button
+                  type="button"
+                  onClick={startRename}
+                  className="shrink-0 rounded-md p-1 text-text-muted opacity-0 transition-all hover:text-text-primary group-hover:opacity-100"
+                  title="Переименовать"
+                >
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" className="h-3.5 w-3.5">
+                    <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
+                  </svg>
+                </button>
+              </>
+            )}
             {hasImages && (
-              <p className="text-xs text-text-muted">
+              <p className="hidden sm:block text-xs text-text-muted">
                 {markers.length} {markers.length === 1 ? "правка" : markers.length > 0 && markers.length < 5 ? "правки" : "правок"}
               </p>
             )}
           </div>
-          <button type="button" onClick={() => router.push(`/project/${projectId}/settings`)} className="shrink-0 rounded-lg p-2 text-text-muted transition-colors hover:bg-bg-cardHover hover:text-text-primary">
+          <button
+            type="button"
+            onClick={() => setConfirmDelete(true)}
+            className="shrink-0 rounded-lg p-2 text-text-muted transition-colors hover:bg-red-500/10 hover:text-red-400"
+            title="Удалить проект"
+          >
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
-              <circle cx="12" cy="12" r="3" />
-              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+              <path d="M3 6h18" />
+              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" />
+              <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+              <line x1="10" y1="11" x2="10" y2="17" />
+              <line x1="14" y1="11" x2="14" y2="17" />
             </svg>
           </button>
         </header>
@@ -386,7 +505,7 @@ export function ProjectHub({
               <line x1="12" y1="3" x2="12" y2="15" />
             </svg>
             <p className="mb-1 text-sm font-medium text-text-primary">Перетащите или нажмите для выбора макетов</p>
-            <p className="text-xs text-text-muted">PNG, JPG или WebP до 10 МБ</p>
+            <p className="text-xs text-text-muted">PNG, JPG или WebP, до {MAX_IMAGES_PER_PROJECT} изображений</p>
             <input ref={fileInputRef} type="file" accept="image/*" multiple onChange={(e) => handleFiles(e.target.files)} className="hidden" />
           </div>
         )}
@@ -409,7 +528,26 @@ export function ProjectHub({
 
             <div className="space-y-2">
               {previewUrls.map((url, index) => (
-                <div key={index} className="group flex items-center gap-3 rounded-xl border border-border-strong bg-bg-card p-2 transition-all hover:border-text-primary/30">
+                <div
+                  key={index}
+                  draggable={!isTouch}
+                  onDragStart={(e) => { setDragIndex(index); e.dataTransfer.effectAllowed = "move"; }}
+                  onDragOver={(e) => { if (dragIndex !== null) { e.preventDefault(); setDragOverIndex(index); } }}
+                  onDrop={(e) => { e.preventDefault(); if (dragIndex !== null && dragIndex !== index) movePreview(dragIndex, index); setDragIndex(null); setDragOverIndex(null); }}
+                  onDragEnd={() => { setDragIndex(null); setDragOverIndex(null); }}
+                  className={`group flex items-center gap-3 rounded-xl border bg-bg-card p-2 transition-all cursor-grab active:cursor-grabbing ${
+                    dragOverIndex === index && dragIndex !== null && dragIndex !== index
+                      ? "border-text-primary opacity-60"
+                      : "border-border-strong hover:border-text-primary/30"
+                  }`}
+                >
+                  {!isTouch && (
+                    <svg viewBox="0 0 24 24" fill="currentColor" className="h-4 w-4 shrink-0 text-text-muted">
+                      <circle cx="9" cy="6" r="1.5" /><circle cx="15" cy="6" r="1.5" />
+                      <circle cx="9" cy="12" r="1.5" /><circle cx="15" cy="12" r="1.5" />
+                      <circle cx="9" cy="18" r="1.5" /><circle cx="15" cy="18" r="1.5" />
+                    </svg>
+                  )}
                   <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-text-primary text-sm font-bold text-bg-page">
                     {index + 1}
                   </div>
@@ -417,12 +555,16 @@ export function ProjectHub({
                     <img src={url} alt="" className="h-full w-full object-cover" />
                   </div>
                   <div className="flex flex-1 items-center justify-end gap-1">
-                    <button onClick={(e) => { e.stopPropagation(); movePreview(index, index - 1); }} disabled={index === 0} className="flex h-8 w-8 items-center justify-center rounded-lg text-text-muted hover:bg-bg-cardHover hover:text-text-primary disabled:opacity-20">
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-4 w-4"><path d="m18 15-6-6-6 6"/></svg>
-                    </button>
-                    <button onClick={(e) => { e.stopPropagation(); movePreview(index, index + 1); }} disabled={index === pendingFiles.length - 1} className="flex h-8 w-8 items-center justify-center rounded-lg text-text-muted hover:bg-bg-cardHover hover:text-text-primary disabled:opacity-20">
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-4 w-4"><path d="m6 9 6 6 6-6"/></svg>
-                    </button>
+                    {isTouch && (
+                      <>
+                        <button onClick={(e) => { e.stopPropagation(); movePreview(index, index - 1); }} disabled={index === 0} className="flex h-8 w-8 items-center justify-center rounded-lg text-text-muted hover:bg-bg-cardHover hover:text-text-primary disabled:opacity-20">
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-4 w-4"><path d="m18 15-6-6-6 6"/></svg>
+                        </button>
+                        <button onClick={(e) => { e.stopPropagation(); movePreview(index, index + 1); }} disabled={index === pendingFiles.length - 1} className="flex h-8 w-8 items-center justify-center rounded-lg text-text-muted hover:bg-bg-cardHover hover:text-text-primary disabled:opacity-20">
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-4 w-4"><path d="m6 9 6 6 6-6"/></svg>
+                        </button>
+                      </>
+                    )}
                     <button onClick={(e) => { e.stopPropagation(); setFullscreenIndex(index); }} className="flex h-8 w-8 items-center justify-center rounded-lg text-text-muted hover:bg-bg-cardHover hover:text-text-primary">
                       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-4 w-4"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>
                     </button>
@@ -548,6 +690,17 @@ export function ProjectHub({
         )}
       </div>
 
+      {/* Delete project modal */}
+      <ConfirmModal
+        open={confirmDelete}
+        title="Удалить проект?"
+        message="Проект будет скрыт. Лимит на бесплатном тарифе считается по всем созданным проектам — слот не освободится."
+        confirmLabel="Удалить"
+        danger
+        onConfirm={handleDelete}
+        onCancel={() => setConfirmDelete(false)}
+      />
+
       {/* Replace images modal */}
       <ConfirmModal
         open={replaceConfirm}
@@ -579,7 +732,11 @@ export function ProjectHub({
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-bg-page/80 backdrop-blur-sm">
           <div className="flex flex-col items-center gap-3 rounded-2xl border border-border-strong bg-bg-card px-8 py-6 shadow-2xl">
             <div className="h-8 w-8 animate-spin rounded-full border-2 border-border-strong border-t-text-primary" />
-            <p className="text-sm text-text-primary">Загрузка...</p>
+            <p className="text-sm text-text-primary">
+              {uploadProgress
+                ? `Загрузка ${uploadProgress.done} из ${uploadProgress.total}...`
+                : "Загрузка..."}
+            </p>
           </div>
         </div>
       )}

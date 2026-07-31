@@ -7,10 +7,8 @@ import {
   getDoc,
   getDocs,
   updateDoc,
-  deleteDoc,
   query,
   where,
-  orderBy,
   onSnapshot,
   serverTimestamp,
   type Timestamp,
@@ -47,8 +45,8 @@ export interface Project {
   isLocked: boolean;
   /** Закреплённый проект */
   pinned: boolean;
-  /** Архивный */
-  archived: boolean;
+  /** Скрыт (мягкое удаление: проект остаётся в базе, лимит не освобождается) */
+  deleted?: boolean;
   /** Статус проекта */
   status: "waiting_for_images" | "in_progress" | "exhausted";
   createdAt: Timestamp | null;
@@ -61,7 +59,7 @@ const COLLECTION = "projects";
 export async function createProject(
   data:   Omit<
     Project,
-    "id" | "ownerUid" | "imageUrls" | "packageHistory" | "currentRound" | "extraRoundsAdded" | "isLocked" | "pinned" | "archived" | "createdAt" | "updatedAt"
+    "id" | "ownerUid" | "imageUrls" | "packageHistory" | "currentRound" | "extraRoundsAdded" | "isLocked" | "pinned" | "deleted" | "createdAt" | "updatedAt"
   > & { status?: Project["status"] },
   ownerUid: string
 ): Promise<string> {
@@ -80,7 +78,6 @@ export async function createProject(
     limitMessage: data.limitMessage,
     isLocked: false,
     pinned: false,
-    archived: false,
     status: data.status || "waiting_for_images",
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
@@ -95,7 +92,7 @@ export async function getProject(id: string): Promise<Project | null> {
   return { id: snap.id, ...(snap.data() as Omit<Project, "id">) };
 }
 
-/** Подписка на все проекты пользователя (active + archived).
+/** Подписка на все проекты пользователя.
  *  Сортировка: pinned сначала, потом по updatedAt desc. */
 export function subscribeToUserProjects(
   ownerUid: string,
@@ -114,8 +111,6 @@ export function subscribeToUserProjects(
       });
       // Сортируем локально
       list.sort((a, b) => {
-        // Архивные в конец
-        if (a.archived !== b.archived) return a.archived ? 1 : -1;
         // Закреплённые в начало
         if (a.pinned !== b.pinned) return a.pinned ? -1 : 1;
         // По updatedAt desc
@@ -148,14 +143,12 @@ export async function togglePin(id: string, pinned: boolean): Promise<void> {
   await updateProject(id, { pinned });
 }
 
-/** Заархивировать/разархивировать проект. */
-export async function toggleArchive(id: string, archived: boolean): Promise<void> {
-  await updateProject(id, { archived });
-}
-
-/** Удалить проект навсегда. */
+/**
+ * Удалить проект (мягкое удаление).
+ * Документ остаётся в базе с флагом `deleted` — слот лимита НЕ освобождается.
+ */
 export async function deleteProject(id: string): Promise<void> {
-  await deleteDoc(doc(db, COLLECTION, id));
+  await updateProject(id, { deleted: true, pinned: false });
 }
 
 /** Обновить картинки проекта */

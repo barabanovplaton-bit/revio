@@ -183,19 +183,10 @@ export default function SettingsPage() {
               мессенджерах.
             </p>
             <div className="mt-4 flex items-center gap-4 text-xs text-text-muted">
-              <span>Версия 0.1.0</span>
+              <span>Версия 0.2.0</span>
               <span>·</span>
               <a
-                href="https://github.com/barabanovplaton-bit/revio"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="transition-colors hover:text-text-primary"
-              >
-                GitHub
-              </a>
-              <span>·</span>
-              <a
-                href="https://t.me/"
+                href="https://t.me/Gafti"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="transition-colors hover:text-text-primary"
@@ -213,10 +204,12 @@ export default function SettingsPage() {
             <div className="flex items-center justify-between">
               <div>
                 <div className="text-sm font-medium text-text-primary">
-                  Free
+                  {profile?.plan === "pro" ? "Pro" : "Free"}
                 </div>
                 <div className="text-xs text-text-muted">
-                  1 проект · 10 изображений · 5 кругов
+                  {profile?.plan === "pro"
+                    ? "Безлимит проектов и изображений"
+                    : "3 проекта · 10 изображений на проект"}
                 </div>
               </div>
               <button

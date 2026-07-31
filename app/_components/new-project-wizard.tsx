@@ -17,7 +17,6 @@ export function NewProjectWizard({
   onCreated,
 }: NewProjectWizardProps) {
   const [name, setName] = useState("");
-  const [description, setDescription] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -25,7 +24,6 @@ export function NewProjectWizard({
 
   const reset = () => {
     setName("");
-    setDescription("");
     setError(null);
   };
 
@@ -43,7 +41,7 @@ export function NewProjectWizard({
       const id = await createProject(
         {
           name: name.trim(),
-          description: description.trim(),
+          description: "",
           clientName: "",
           clientContact: "",
           roundsTotal: 5,
@@ -86,17 +84,6 @@ export function NewProjectWizard({
             if (e.key === "Enter" && name.trim()) handleCreate();
           }}
           className="h-12 w-full rounded-xl border border-border-strong bg-bg-input px-4 text-center text-sm text-text-primary placeholder:text-text-muted focus:border-text-primary focus:outline-none"
-        />
-
-        <label className="mb-1.5 mt-4 block w-full text-center text-xs font-medium uppercase tracking-wide text-text-muted">
-          Описание (по желанию)
-        </label>
-        <textarea
-          value={description}
-          onChange={(e) => setDescription(e.target.value)}
-          placeholder="Пара слов о проекте или как связаться"
-          rows={3}
-          className="w-full resize-none rounded-xl border border-border-strong bg-bg-input px-4 py-3 text-center text-sm text-text-primary placeholder:text-text-muted focus:border-text-primary focus:outline-none"
         />
 
         {error && (

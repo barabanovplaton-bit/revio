@@ -14,7 +14,6 @@ import {
   subscribeToUserProjects,
   updateProject,
   togglePin,
-  toggleArchive,
   deleteProject,
   formatRelativeTime,
   type Project,
@@ -27,6 +26,9 @@ import {
 export default function Page() {
   return <App />;
 }
+
+/** Лимит активных проектов на бесплатном тарифе (считаются ВСЕ созданные, включая удалённые) */
+const FREE_PROJECT_LIMIT = 3;
 
 function App() {
   const router = useRouter();
@@ -129,8 +131,8 @@ function App() {
       return;
     }
     const isFree = (profile?.plan || "free") === "free";
-    const activeCount = projects.filter((p) => !p.archived).length;
-    if (isFree && activeCount >= 3) {
+    const totalCount = projects.length;
+    if (isFree && totalCount >= FREE_PROJECT_LIMIT) {
       setLimitOpen(true);
       return;
     }
@@ -176,15 +178,6 @@ function App() {
     if (p) await togglePin(id, !p.pinned);
   }, [projects]);
 
-  const handleArchiveProject = useCallback(
-    async (id: string) => {
-      const p = projects.find((x) => x.id === id);
-      if (p) await toggleArchive(id, !p.archived);
-      showToast(p?.archived ? "Восстановлено" : "В архиве");
-    },
-    [projects, showToast]
-  );
-
   if (showLoading || authLoading || !profileLoaded) {
     return (
       <div className="flex h-screen items-center justify-center bg-bg-page">
@@ -204,8 +197,7 @@ function App() {
       )
     : projects;
 
-  const activeProjects = filtered.filter((p) => !p.archived);
-  const archivedProjects = filtered.filter((p) => p.archived);
+  const visibleProjects = filtered.filter((p) => !p.deleted);
 
   return (
     <div className="flex min-h-screen flex-col bg-bg-page">
@@ -317,7 +309,26 @@ function App() {
               </button>
             </div>
 
-            {activeProjects.length === 0 && archivedProjects.length === 0 ? (
+            {(profile?.plan || "free") === "free" && projects.length > 0 && (
+              <div className="mb-4 flex items-center justify-between rounded-xl border border-border-strong bg-bg-card px-4 py-2.5">
+                <p className="text-xs text-text-muted">
+                  Проекты:{" "}
+                  <span className="font-medium text-text-primary">
+                    {projects.length} из {FREE_PROJECT_LIMIT}
+                  </span>{" "}
+                  на бесплатном тарифе
+                </p>
+                <button
+                  type="button"
+                  onClick={() => router.push("/pricing")}
+                  className="shrink-0 rounded-lg bg-text-primary px-3 py-1.5 text-xs font-medium text-bg-page transition-all hover:opacity-90"
+                >
+                  Pro безлимит
+                </button>
+              </div>
+            )}
+
+            {visibleProjects.length === 0 ? (
               <div className="py-20 text-center">
                 <p className="mb-4 text-sm text-text-muted">
                   {query ? "Ничего не найдено" : "У вас пока нет проектов"}
@@ -334,7 +345,7 @@ function App() {
               </div>
             ) : (
               <div className="space-y-2">
-                {activeProjects.map((p) => (
+                {visibleProjects.map((p) => (
                   <ProjectCard
                     key={p.id}
                     project={p}
@@ -348,48 +359,12 @@ function App() {
                       handlePinProject(p.id);
                       setMenuFor(null);
                     }}
-                    onArchive={() => {
-                      handleArchiveProject(p.id);
-                      setMenuFor(null);
-                    }}
                     onDelete={() => {
                       setConfirmDelete({ id: p.id, name: p.name });
                       setMenuFor(null);
                     }}
                   />
                 ))}
-
-                {archivedProjects.length > 0 && (
-                  <>
-                    <div className="pt-4 pb-2 text-xs font-medium uppercase tracking-wide text-text-muted">
-                      Архив
-                    </div>
-                    {archivedProjects.map((p) => (
-                      <ProjectCard
-                        key={p.id}
-                        project={p}
-                        menuOpen={menuFor === p.id}
-                        onSelect={() => handleSelectProject(p.id)}
-                        onMenuToggle={() =>
-                          setMenuFor(menuFor === p.id ? null : p.id)
-                        }
-                        onRename={(name) => handleRenameProject(p.id, name)}
-                        onPin={() => {
-                          handlePinProject(p.id);
-                          setMenuFor(null);
-                        }}
-                        onArchive={() => {
-                          handleArchiveProject(p.id);
-                          setMenuFor(null);
-                        }}
-                        onDelete={() => {
-                          setConfirmDelete({ id: p.id, name: p.name });
-                          setMenuFor(null);
-                        }}
-                      />
-                    ))}
-                  </>
-                )}
               </div>
             )}
           </>
@@ -426,7 +401,7 @@ function App() {
       <ConfirmModal
         open={!!confirmDelete}
         title="Удалить проект?"
-        message={`Проект «${confirmDelete?.name}» будет удалён навсегда. Это действие нельзя отменить.`}
+        message={`Проект «${confirmDelete?.name}» будет скрыт. Слот лимита на бесплатном тарифе не освободится.`}
         confirmLabel="Удалить"
         danger
         onConfirm={handleDeleteProject}
@@ -468,7 +443,6 @@ function ProjectCard({
   onMenuToggle,
   onRename,
   onPin,
-  onArchive,
   onDelete,
 }: {
   project: Project;
@@ -477,7 +451,6 @@ function ProjectCard({
   onMenuToggle: () => void;
   onRename: (name: string) => void;
   onPin: () => void;
-  onArchive: () => void;
   onDelete: () => void;
 }) {
   const [renaming, setRenaming] = useState(false);
@@ -516,22 +489,12 @@ function ProjectCard({
                 {project.name}
               </div>
               <div className="flex items-center gap-2 text-xs text-text-muted">
-                {project.description && (
-                  <span className="truncate">{project.description}</span>
-                )}
-                {!project.description && project.clientName && (
-                  <span className="truncate">{project.clientName}</span>
-                )}
-                {!project.description && !project.clientName && (
-                  <>
-                    <span>
-                      {(project.imageUrls?.length || 0)}{" "}
-                      {(project.imageUrls?.length || 0) === 1 ? "изображение" : "изображений"}
-                    </span>
-                    <span>·</span>
-                    <span>{formatRelativeTime(project.updatedAt)}</span>
-                  </>
-                )}
+                <span>
+                  {(project.imageUrls?.length || 0)}{" "}
+                  {(project.imageUrls?.length || 0) === 1 ? "изображение" : "изображений"}
+                </span>
+                <span>·</span>
+                <span>{formatRelativeTime(project.updatedAt)}</span>
               </div>
             </>
           )}
@@ -587,13 +550,6 @@ function ProjectCard({
                 className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-text-primary transition-colors hover:bg-bg-cardHover"
               >
                 Переименовать
-              </button>
-              <button
-                type="button"
-                onClick={onArchive}
-                className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-text-primary transition-colors hover:bg-bg-cardHover"
-              >
-                {project.archived ? "Восстановить" : "В архив"}
               </button>
               <div className="my-1 h-px bg-border-strong" />
               <button
