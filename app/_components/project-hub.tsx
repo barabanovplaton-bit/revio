@@ -6,7 +6,6 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   getProject,
   updateProject,
-  uploadNewPackage,
   type Project,
 } from "@/lib/projects";
 import {
@@ -43,23 +42,14 @@ export function ProjectHub({
   const [previewUrls, setPreviewUrls] = useState<string[]>([]);
   const [confirmUpload, setConfirmUpload] = useState(false);
   const [isDraggingOver, setIsDraggingOver] = useState(false);
-  const [uploadedUrls, setUploadedUrls] = useState<string[] | null>(null);
+  const [uploadError, setUploadError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Image viewer
   const [viewingImageIndex, setViewingImageIndex] = useState<number | null>(null);
 
-  // Feedback packets
-  const [selectedPacket, setSelectedPacket] = useState<number | null>(null);
-
   // Fullscreen preview
   const [fullscreenIndex, setFullscreenIndex] = useState<number | null>(null);
-
-  const refreshProject = useCallback(async () => {
-    const p = await getProject(projectId);
-    setProject(p);
-    onProjectUpdated();
-  }, [projectId, onProjectUpdated]);
 
   useEffect(() => {
     let cancelled = false;
@@ -72,9 +62,17 @@ export function ProjectHub({
     return () => { cancelled = true; };
   }, [projectId]);
 
+  // Subscribe to project updates (new comments appear automatically)
   useEffect(() => {
-    const unsub = subscribeToAllProjectMarkers(projectId, (m) => setMarkers(m));
-    return () => unsub();
+    let cancelled = false;
+    const unsub = subscribeToAllProjectMarkers(projectId, (m) => {
+      if (!cancelled) setMarkers(m);
+    });
+    const interval = setInterval(async () => {
+      const p = await getProject(projectId);
+      if (!cancelled && p) setProject(p);
+    }, 5000);
+    return () => { cancelled = true; unsub(); clearInterval(interval); };
   }, [projectId]);
 
   const showToast = (msg: string) => {
@@ -95,6 +93,7 @@ export function ProjectHub({
     const urls = valid.map((f) => URL.createObjectURL(f));
     setPendingFiles((prev) => [...prev, ...valid]);
     setPreviewUrls((prev) => [...prev, ...urls]);
+    setUploadError(null);
   };
 
   const handleDrop = useCallback((e: React.DragEvent) => {
@@ -126,37 +125,41 @@ export function ProjectHub({
     if (pendingFiles.length === 0 || !project) return;
     setConfirmUpload(false);
     setIsUploading(true);
+    setUploadError(null);
     document.body.style.overflow = "hidden";
 
     const uploaded: string[] = [];
+    let failed = 0;
     for (const file of pendingFiles) {
       try {
         const result = await uploadImage(file);
         uploaded.push(result.url);
       } catch (e) {
         console.error("Upload error:", e);
+        failed++;
       }
     }
 
     if (uploaded.length > 0) {
-      const isFirstUpload = !project.imageUrls || project.imageUrls.length === 0;
-      if (isFirstUpload) {
-        await updateProject(projectId, {
-          imageUrls: uploaded,
-          status: "in_progress",
-        });
-      } else {
-        await uploadNewPackage(projectId, uploaded, project.currentRound);
-      }
-      // Save uploaded URLs separately to display after clearing pending
-      setUploadedUrls(uploaded);
-      setProject((prev) => prev ? { ...prev, imageUrls: uploaded, status: "in_progress" } : prev);
-      showToast("Пакет загружен (" + uploaded.length + " изображений)");
+      await updateProject(projectId, {
+        imageUrls: uploaded,
+        status: "in_progress",
+      });
+      const fresh = await getProject(projectId);
+      setProject(fresh || { ...project, imageUrls: uploaded });
+      onProjectUpdated();
+      previewUrls.forEach((u) => URL.revokeObjectURL(u));
+      setPendingFiles([]);
+      setPreviewUrls([]);
+      showToast(
+        failed > 0
+          ? "Загружено " + uploaded.length + ", не удалось: " + failed
+          : "Пакет загружен (" + uploaded.length + " изображений)"
+      );
+    } else {
+      setUploadError("Не удалось загрузить изображения. Попробуй ещё раз.");
     }
 
-    previewUrls.forEach((u) => URL.revokeObjectURL(u));
-    setPendingFiles([]);
-    setPreviewUrls([]);
     setIsUploading(false);
     document.body.style.overflow = "";
   };
@@ -165,15 +168,33 @@ export function ProjectHub({
     setConfirmUpload(false);
   };
 
-  // --- Next round ---
-  const handleStartNextRound = async () => {
-    if (!project) return;
-    await updateProject(projectId, {
-      isLocked: false,
-      currentRound: project.currentRound + 1,
-    });
-    await refreshProject();
-    showToast(`Круг ${project.currentRound + 1} начат`);
+  // --- Copy comments as text ---
+  const copyComments = async () => {
+    const imageCount = project?.imageUrls?.length || 0;
+    const lines: string[] = [];
+    for (const m of markers) {
+      if (m.type === "point" && m.x != null && m.y != null) {
+        const cols = imageCount <= 3 ? imageCount : 3;
+        const rows = Math.ceil(imageCount / cols);
+        const imgIndex = Math.floor((m.y || 0) * rows) * cols + Math.floor((m.x || 0) * cols);
+        const label = `Изображение ${Math.min(imageCount, imgIndex + 1)}`;
+        lines.push(`• ${label}: ${m.text}`);
+      } else {
+        lines.push(`• Общий комментарий: ${m.text}`);
+      }
+    }
+    if (lines.length === 0) {
+      showToast("Правок пока нет");
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(
+        "Правки по проекту «" + (project?.name || "") + "»:\n" + lines.join("\n")
+      );
+      showToast("Правки скопированы");
+    } catch (e) {
+      showToast("Не удалось скопировать");
+    }
   };
 
   // --- Loading/Error ---
@@ -199,21 +220,6 @@ export function ProjectHub({
   const imageCount = project.imageUrls?.length || 0;
   const hasImages = imageCount > 0;
   const hasPending = pendingFiles.length > 0;
-
-  // Feedback packets
-  const packets: { round: number; markers: Marker[] }[] = [];
-  if (hasImages) {
-    const roundMap = new Map<number, Marker[]>();
-    for (const m of markers) {
-      const existing = roundMap.get(m.round) || [];
-      existing.push(m);
-      roundMap.set(m.round, existing);
-    }
-    const rounds = Array.from(roundMap.keys()).sort((a, b) => b - a);
-    for (const r of rounds) {
-      packets.push({ round: r, markers: roundMap.get(r)! });
-    }
-  }
 
   const shareUrl =
     typeof window !== "undefined"
@@ -251,6 +257,18 @@ export function ProjectHub({
 
   // --- Image viewer mode (with markers) ---
   if (viewingImageIndex !== null && project.imageUrls?.[viewingImageIndex]) {
+    const allMarkers = markers.filter((m) => m.type === "point");
+    const pointMarkers = allMarkers.filter((m) => {
+      const cols = imageCount <= 3 ? imageCount : 3;
+      const rows = Math.ceil(imageCount / cols);
+      const imgRow = Math.floor(viewingImageIndex / cols);
+      const imgCol = viewingImageIndex % cols;
+      const minX = imgCol / cols;
+      const maxX = (imgCol + 1) / cols;
+      const minY = imgRow / rows;
+      const maxY = (imgRow + 1) / rows;
+      return (m.x || 0) >= minX && (m.x || 0) < maxX && (m.y || 0) >= minY && (m.y || 0) < maxY;
+    });
     return (
       <div className="flex h-screen flex-col bg-bg-page">
         <div className="sticky top-0 z-20 px-4 pt-3 md:px-6">
@@ -279,31 +297,23 @@ export function ProjectHub({
           <div className="mx-auto max-w-4xl">
             <div className="relative inline-block w-full">
               <img src={project.imageUrls[viewingImageIndex]} alt="" className="w-full rounded-xl border border-border-strong" />
-              {markers
-                .filter((m) => m.type === "point" && m.round === project.currentRound && m.x != null && m.y != null)
-                .map((marker) => {
-                  const total = imageCount;
-                  const cols = total <= 3 ? total : 3;
-                  const rows = Math.ceil(total / cols);
-                  const imgRow = Math.floor(viewingImageIndex / cols);
-                  const imgCol = viewingImageIndex % cols;
-                  const minX = imgCol / cols;
-                  const maxX = (imgCol + 1) / cols;
-                  const minY = imgRow / rows;
-                  const maxY = (imgRow + 1) / rows;
-                  if ((marker.x || 0) < minX || (marker.x || 0) >= maxX || (marker.y || 0) < minY || (marker.y || 0) >= maxY) return null;
-                  return (
-                    <div key={marker.id} className="absolute group" style={{ left: `${(marker.x || 0) * 100}%`, top: `${(marker.y || 0) * 100}%`, transform: "translate(-50%, -50%)" }}>
-                      <div className="flex h-6 w-6 items-center justify-center rounded-full bg-text-primary border-2 border-white/80 shadow-lg transition-transform group-hover:scale-125">
-                        <span className="text-[10px] font-bold text-bg-page">#</span>
-                      </div>
-                      <div className="absolute left-8 top-1/2 z-40 -translate-y-1/2 w-64 rounded-xl border border-border-strong bg-bg-card p-3 shadow-2xl opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity">
-                        <p className="text-sm text-text-primary">{marker.text}</p>
-                        <p className="mt-1 text-[10px] text-text-muted">({Math.round((marker.x || 0) * 100)}%, {Math.round((marker.y || 0) * 100)}%)</p>
-                      </div>
+              {pointMarkers.map((marker) => {
+                const cols = imageCount <= 3 ? imageCount : 3;
+                const imgCol = viewingImageIndex % cols;
+                const imgRow = Math.floor(viewingImageIndex / cols);
+                const localX = ((marker.x || 0) - imgCol / cols) * cols;
+                const localY = ((marker.y || 0) - imgRow / Math.ceil(imageCount / cols)) * Math.ceil(imageCount / cols);
+                return (
+                  <div key={marker.id} className="absolute group" style={{ left: `${localX * 100}%`, top: `${localY * 100}%`, transform: "translate(-50%, -50%)" }}>
+                    <div className="flex h-6 w-6 items-center justify-center rounded-full bg-text-primary border-2 border-white/80 shadow-lg transition-transform group-hover:scale-125">
+                      <span className="text-[10px] font-bold text-bg-page">#</span>
                     </div>
-                  );
-                })}
+                    <div className="absolute left-8 top-1/2 z-40 -translate-y-1/2 w-64 rounded-xl border border-border-strong bg-bg-card p-3 shadow-2xl opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity">
+                      <p className="text-sm text-text-primary">{marker.text}</p>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </div>
         </div>
@@ -324,13 +334,9 @@ export function ProjectHub({
           </button>
           <div className="min-w-0 flex-1">
             <h1 className="truncate text-sm font-semibold text-text-primary">{project.name}</h1>
-            {(hasImages || uploadedUrls) && (
+            {hasImages && (
               <p className="text-xs text-text-muted">
-                Круг {project.currentRound}/{project.roundsTotal} ·{' '}
-                {project.isLocked
-                  ? "Ожидание правок от клиента"
-                  : "Клиент отправил правки"}
-                {project.extraRoundsAdded > 0 && ` · Доп: +${project.extraRoundsAdded}`}
+                {markers.length} {markers.length === 1 ? "правка" : markers.length > 0 && markers.length < 5 ? "правки" : "правок"}
               </p>
             )}
           </div>
@@ -345,7 +351,7 @@ export function ProjectHub({
 
       <div className="mx-auto w-full max-w-3xl flex-1 px-4 py-6 md:px-6">
 
-        {/* ===== EMPTY STATE: no images, no pending ===== */}
+        {/* ===== EMPTY STATE ===== */}
         {!hasImages && !hasPending && (
           <div
             onDragOver={(e) => { e.preventDefault(); setIsDraggingOver(true); }}
@@ -369,7 +375,7 @@ export function ProjectHub({
           </div>
         )}
 
-        {/* ===== PENDING FILES: thumbnails grid ===== */}
+        {/* ===== PENDING FILES ===== */}
         {hasPending && (
           <div className="mb-6">
             <div className="mb-3 flex items-center justify-between">
@@ -388,28 +394,22 @@ export function ProjectHub({
             <div className="space-y-2">
               {previewUrls.map((url, index) => (
                 <div key={index} className="group flex items-center gap-3 rounded-xl border border-border-strong bg-bg-card p-2 transition-all hover:border-text-primary/30">
-                  {/* Order number */}
                   <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-text-primary text-sm font-bold text-bg-page">
                     {index + 1}
                   </div>
-                  {/* Thumbnail */}
                   <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-lg border border-border-strong bg-bg-input">
                     <img src={url} alt="" className="h-full w-full object-cover" />
                   </div>
-                  {/* Actions */}
                   <div className="flex flex-1 items-center justify-end gap-1">
-                    {/* Move up/down */}
                     <button onClick={(e) => { e.stopPropagation(); movePreview(index, index - 1); }} disabled={index === 0} className="flex h-8 w-8 items-center justify-center rounded-lg text-text-muted hover:bg-bg-cardHover hover:text-text-primary disabled:opacity-20">
                       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-4 w-4"><path d="m18 15-6-6-6 6"/></svg>
                     </button>
                     <button onClick={(e) => { e.stopPropagation(); movePreview(index, index + 1); }} disabled={index === pendingFiles.length - 1} className="flex h-8 w-8 items-center justify-center rounded-lg text-text-muted hover:bg-bg-cardHover hover:text-text-primary disabled:opacity-20">
                       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-4 w-4"><path d="m6 9 6 6 6-6"/></svg>
                     </button>
-                    {/* Fullscreen */}
                     <button onClick={(e) => { e.stopPropagation(); setFullscreenIndex(index); }} className="flex h-8 w-8 items-center justify-center rounded-lg text-text-muted hover:bg-bg-cardHover hover:text-text-primary">
                       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-4 w-4"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>
                     </button>
-                    {/* Delete */}
                     <button onClick={(e) => { e.stopPropagation(); removePreview(index); }} className="flex h-8 w-8 items-center justify-center rounded-lg text-red-400 hover:text-red-300">
                       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-4 w-4"><path d="M18 6 6 18M6 6l12 12"/></svg>
                     </button>
@@ -418,7 +418,12 @@ export function ProjectHub({
               ))}
             </div>
 
-            {/* Upload button */}
+            {uploadError && (
+              <div className="mt-3 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-400">
+                {uploadError}
+              </div>
+            )}
+
             <button
               type="button"
               onClick={() => setConfirmUpload(true)}
@@ -430,7 +435,7 @@ export function ProjectHub({
         )}
 
         {/* ===== HAS IMAGES ===== */}
-        {(hasImages || uploadedUrls) && !hasPending && (
+        {hasImages && !hasPending && (
           <>
             {/* Share link */}
             <div className="mb-4 rounded-xl border border-border-strong bg-bg-card p-3">
@@ -441,210 +446,83 @@ export function ProjectHub({
                   <line x1="12" y1="2" x2="12" y2="15" />
                 </svg>
                 <input type="text" readOnly value={shareUrl} className="min-w-0 flex-1 bg-transparent text-xs text-text-muted outline-none" />
-                <button type="button" onClick={() => { navigator.clipboard.writeText(shareUrl); showToast("Скопировано"); }} className="shrink-0 rounded-lg bg-text-primary px-3 py-1.5 text-xs font-medium text-bg-page transition-all hover:opacity-90 active:scale-[0.98]">
+                <button type="button" onClick={() => { navigator.clipboard.writeText(shareUrl); showToast("Ссылка скопирована"); }} className="shrink-0 rounded-lg bg-text-primary px-3 py-1.5 text-xs font-medium text-bg-page transition-all hover:opacity-90 active:scale-[0.98]">
                   Копировать
                 </button>
               </div>
             </div>
 
-            {/* Status */}
-            <div className="mb-4 flex items-center gap-2 flex-wrap">
-              <span className={"inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium " + (
-                project.status === "exhausted" ? "bg-red-500/20 text-red-400"
-                  : project.isLocked ? "bg-yellow-500/20 text-yellow-400"
-                    : "bg-green-500/20 text-green-400"
-              )}>
-                {project.status === "exhausted" ? "Все круги использованы"
-                  : project.isLocked ? "Клиент отправил правки"
-                    : "Активен"}
-              </span>
-              <span className="text-xs text-text-muted">
-                Круг {project.currentRound}/{project.roundsTotal} · Осталось {project.roundsLeft}{project.extraRoundsAdded > 0 ? " · Доп: +" + project.extraRoundsAdded : ""} · Статус: {project.status === "waiting_for_images" ? "Ждём загрузки" : project.isLocked ? "Ожидание от клиента" : project.status === "exhausted" ? "Завершён" : "Ожидание от клиента"}
-              </span>
-              {project.clientName && (
-                <span className="text-xs text-text-muted">· {project.clientName}</span>
-              )}
-            </div>
+            {/* Copy comments */}
+            <button
+              type="button"
+              onClick={copyComments}
+              className="mb-4 flex w-full items-center justify-center gap-2 rounded-xl border border-border-strong bg-bg-card px-4 py-3 text-sm font-medium text-text-primary transition-all hover:bg-bg-cardHover"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
+                <rect x="9" y="9" width="13" height="13" rx="2" />
+                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+              </svg>
+              Скопировать все правки текстом ({markers.length})
+            </button>
 
-            {/* Open холст button (when images present) */}
-            {hasImages && (
-              <div className="mb-4">
-                <button type="button" onClick={() => setViewingImageIndex(0)} className="w-full rounded-xl border border-border-strong bg-bg-card px-4 py-3 text-sm font-medium text-text-primary transition-all hover:bg-bg-cardHover">
-                  <span className="flex items-center justify-center gap-2">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="h-5 w-5"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg>
-                    Открыть холст
-                  </span>
-                </button>
+            {/* Comments list */}
+            {markers.length > 0 && (
+              <div className="mb-6 space-y-2">
+                <h3 className="text-sm font-medium text-text-primary">Правки ({markers.length})</h3>
+                {markers.map((m) => (
+                  <div key={m.id} className="flex items-start gap-3 rounded-xl border border-border-strong bg-bg-card p-3">
+                    <div className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-text-primary text-[10px] font-bold text-bg-page">
+                      {m.type === "point" ? "#" : "!"}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm text-text-primary">{m.text}</p>
+                      <p className="mt-0.5 text-[10px] text-text-muted">
+                        {m.type === "point"
+                          ? "Точка на изображении " + (imageCount > 0 ? Math.floor((m.y || 0) * Math.ceil(imageCount / (imageCount <= 3 ? imageCount : 3))) * (imageCount <= 3 ? imageCount : 3) + Math.floor((m.x || 0) * (imageCount <= 3 ? imageCount : 3)) + 1 : 1)
+                          : "Общий комментарий"}
+                      </p>
+                    </div>
+                  </div>
+                ))}
               </div>
             )}
 
-            {/* Client submitted — action needed */}
-            {project.isLocked && project.roundsLeft > 0 && (
-              <div className="mb-4 rounded-xl border border-yellow-500/30 bg-yellow-500/10 p-4">
-                <p className="mb-3 text-sm font-medium text-yellow-400">
-                  Клиент отправил правки (круг {project.currentRound})
-                </p>
-                <div className="flex gap-2">
-                  <button type="button" onClick={() => fileInputRef.current?.click()} className="flex-1 rounded-lg bg-text-primary px-4 py-2.5 text-sm font-medium text-bg-page transition-all hover:opacity-90">
-                    Загрузить новый пакет
-                  </button>
-                  <button type="button" onClick={handleStartNextRound} className="rounded-lg border border-border-strong px-4 py-2.5 text-sm text-text-primary transition-all hover:bg-bg-cardHover">
-                    Пропустить
-                  </button>
-                </div>
-                <input ref={fileInputRef} type="file" accept="image/*" multiple onChange={(e) => handleFiles(e.target.files)} className="hidden" />
-              </div>
-            )}
-
-            {/* Exhausted */}
-            {project.status === "exhausted" && (
-              <div className="mb-4 rounded-xl border border-red-500/30 bg-red-500/10 p-4">
-                <p className="text-sm text-red-400">
-                  Все {project.roundsTotal} кругов правок использованы.
-                </p>
-              </div>
-            )}
-
-            {/* Images list (single column) */}
+            {/* Images list */}
             <div className="mb-6">
               <h3 className="mb-3 text-sm font-medium text-text-primary">
-                Изображения ({(uploadedUrls || project.imageUrls || []).length})
+                Изображения ({imageCount})
               </h3>
               <div className="space-y-2">
-                {(uploadedUrls || project.imageUrls || []).map((url, index) => {
-                  const imgMarkers = markers.filter((m) => {
-                    if (m.type !== "point" || m.x == null || m.y == null) return false;
-                    const total = imageCount;
-                    const cols = total <= 3 ? total : 3;
-                    const row = Math.floor(index / cols);
-                    const col = index % cols;
-                    const minX = col / cols;
-                    const maxX = (col + 1) / cols;
-                    const rows = Math.ceil(total / cols);
-                    const minY = row / rows;
-                    const maxY = (row + 1) / rows;
-                    return m.x >= minX && m.x < maxX && m.y >= minY && m.y < maxY;
-                  });
-                  return (
-                    <div key={index} className="group relative flex items-center gap-3 rounded-xl border border-border-strong bg-bg-card p-2 transition-all hover:border-text-primary/30 cursor-pointer" onClick={() => setViewingImageIndex(index)}>
-                      {/* Number */}
-                      <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-text-primary text-sm font-bold text-bg-page">
-                        {index + 1}
-                      </div>
-                      {/* Thumbnail */}
-                      <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-lg border border-border-strong bg-bg-input">
-                        <img src={url} alt="" className="h-full w-full object-cover" />
-                      </div>
-                      {/* Markers count */}
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm text-text-primary truncate">{project.name} — {index + 1}</p>
-                        {imgMarkers.length > 0 && (
-                          <p className="text-xs text-text-muted">{imgMarkers.length} меток</p>
-                        )}
-                      </div>
-                      {/* Actions */}
-                      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => e.stopPropagation()}>
-                        {/* Fullscreen */}
-                        <button onClick={() => setFullscreenIndex(index)} className="flex h-8 w-8 items-center justify-center rounded-lg text-text-muted hover:bg-bg-cardHover hover:text-text-primary">
-                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-4 w-4"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>
-                        </button>
-                        {/* View */}
-                        <span className="text-xs font-medium text-text-primary px-2 py-1 rounded-lg bg-bg-input/80">Просмотр</span>
-                      </div>
+                {project.imageUrls!.map((url, index) => (
+                  <div key={index} className="group relative flex items-center gap-3 rounded-xl border border-border-strong bg-bg-card p-2 transition-all hover:border-text-primary/30 cursor-pointer" onClick={() => setViewingImageIndex(index)}>
+                    <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-text-primary text-sm font-bold text-bg-page">
+                      {index + 1}
                     </div>
-                  );
-                })}
+                    <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-lg border border-border-strong bg-bg-input">
+                      <img src={url} alt="" className="h-full w-full object-cover" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="truncate text-sm text-text-primary">Изображение {index + 1}</p>
+                    </div>
+                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => e.stopPropagation()}>
+                      <button onClick={() => setFullscreenIndex(index)} className="flex h-8 w-8 items-center justify-center rounded-lg text-text-muted hover:bg-bg-cardHover hover:text-text-primary">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-4 w-4"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>
+                      </button>
+                      <span className="text-xs font-medium text-text-primary px-2 py-1 rounded-lg bg-bg-input/80">Просмотр</span>
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
-
-            {/* Package history */}
-            {project.packageHistory && project.packageHistory.length > 0 && (
-              <div className="mb-6">
-                <h3 className="mb-3 text-sm font-medium text-text-primary">
-                  Предыдущие пакеты ({project.packageHistory.length})
-                </h3>
-                <div className="space-y-2">
-                  {project.packageHistory.slice().reverse().map((pkg, i) => (
-                    <div key={i} className="flex items-center justify-between rounded-xl border border-border-strong bg-bg-card px-4 py-3">
-                      <div>
-                        <span className="text-sm font-medium text-text-primary">Пакет #{pkg.round}</span>
-                        <span className="ml-2 text-xs text-text-muted">{pkg.imageUrls.length} изображений</span>
-                      </div>
-                      <span className="text-xs text-text-muted">
-                        {pkg.createdAt?.toDate?.().toLocaleDateString("ru-RU") || ""}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Feedback packets */}
-            {packets.length > 0 && (
-              <div className="mb-6">
-                <h3 className="mb-3 text-sm font-medium text-text-primary">
-                  Пакеты правок ({packets.length})
-                </h3>
-                <div className="space-y-2">
-                  {packets.map((packet) => (
-                    <div key={packet.round} className="rounded-xl border border-border-strong bg-bg-card">
-                      <button type="button" onClick={() => setSelectedPacket(selectedPacket === packet.round ? null : packet.round)} className="flex w-full items-center justify-between px-4 py-3 text-left">
-                        <div>
-                          <span className="text-sm font-medium text-text-primary">Правка #{packet.round}</span>
-                          <span className="ml-2 text-xs text-text-muted">
-                            {packet.markers.length} {packet.markers.length === 1 ? "метка" : "меток"}
-                          </span>
-                        </div>
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className={`h-4 w-4 text-text-muted transition-transform ${selectedPacket === packet.round ? "rotate-180" : ""}`}>
-                          <path d="m6 9 6 6 6-6" />
-                        </svg>
-                      </button>
-                      <AnimatePresence>
-                        {selectedPacket === packet.round && (
-                          <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
-                            <div className="border-t border-border-strong px-4 py-3 space-y-2">
-                              {packet.markers.filter((m) => m.type === "point").map((m) => (
-                                <div key={m.id} className="flex items-start gap-3 rounded-lg bg-bg-input/50 p-3">
-                                  <div className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-text-primary text-[10px] font-bold text-bg-page">#</div>
-                                  <div className="min-w-0 flex-1">
-                                    <p className="text-sm text-text-primary">{m.text}</p>
-                                    <p className="text-[10px] text-text-muted">({Math.round((m.x || 0) * 100)}%, {Math.round((m.y || 0) * 100)}%)</p>
-                                  </div>
-                                </div>
-                              ))}
-                              {packet.markers.filter((m) => m.type === "general").map((m) => (
-                                <div key={m.id} className="flex items-start gap-3 rounded-lg bg-blue-500/10 p-3">
-                                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="mt-0.5 h-4 w-4 shrink-0 text-blue-400">
-                                    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-                                  </svg>
-                                  <div className="min-w-0 flex-1">
-                                    <p className="text-sm text-text-primary">{m.text}</p>
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          </motion.div>
-                        )}
-                      </AnimatePresence>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
           </>
         )}
       </div>
 
-      {/* Hidden file input for "load new package" flow */}
-      {!hasImages && !hasPending && (
-        <input ref={fileInputRef} type="file" accept="image/*" multiple onChange={(e) => handleFiles(e.target.files)} className="hidden" />
-      )}
-
       {/* Upload confirmation modal */}
       <ConfirmModal
         open={confirmUpload}
-        title="Загрузить пакет?"
-        message={`Будет загружено ${pendingFiles.length} изображений. После загрузки они станут частью проекта. Для замены — загрузите новый пакет.`}
+        title="Загрузить изображения?"
+        message={"Будет загружено " + pendingFiles.length + " изображений. После загрузки появится ссылка для клиента."}
         confirmLabel="Загрузить"
         onConfirm={handleConfirmUpload}
         onCancel={handleCancelUpload}

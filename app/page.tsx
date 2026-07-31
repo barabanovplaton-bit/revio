@@ -393,7 +393,6 @@ function App() {
         <NewProjectWizard
           open={newProjectOpen}
           ownerUid={user.uid}
-          userPlan={profile?.plan || "free"}
           onClose={() => setNewProjectOpen(false)}
           onCreated={handleProjectCreated}
         />
