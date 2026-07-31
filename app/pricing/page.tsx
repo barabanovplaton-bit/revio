@@ -9,18 +9,20 @@ import { signOut, subscribeToAuth, type User } from "@/lib/auth";
 import { getUserProfile, type UserProfile } from "@/lib/user-profile";
 
 const ACCENT = "#E880FC";
+const TELEGRAM_NICK = "Gafti";
+const TELEGRAM_URL = `https://t.me/${TELEGRAM_NICK}`;
 
 const plans = [
   {
     name: "Free",
     price: "0 ₽",
     period: "",
-    description: "Для тестирования и небольших проектов",
+    description: "Для первых проектов",
     features: [
-      "1 проект",
-      "10 изображений",
-      "5 кругов правок",
+      "3 проекта",
+      "10 изображений на проект",
       "Публичная ссылка для клиента",
+      "Без регистрации клиента",
     ],
     cta: "Текущий тариф",
     ctaDisabled: true,
@@ -33,9 +35,7 @@ const plans = [
     features: [
       "Безлимит проектов",
       "Безлимит изображений",
-      "Безлимит кругов правок",
       "Публичная ссылка для клиента",
-      "История версий",
       "Приоритетная поддержка",
     ],
     cta: "Оплатить",
@@ -46,20 +46,20 @@ const plans = [
 
 const faqItems = [
   {
-    q: "Как оплатить?",
-    a: "Сейчас мы принимаем оплату через СБП. Нажмите «Оплатить» и получите инструкцию. Позже добавим ЮKassa и другие способы.",
+    q: "Как оплатить Pro?",
+    a: `Нажмите кнопку «Оплатить» — откроется Telegram. Напишите нам (@${TELEGRAM_NICK}) — мы включим Pro вручную. Пока идёт тестирование, это бесплатно.`,
   },
   {
-    q: "Можно отменить подписку?",
-    a: "Да, в любой момент. Pro отключится в конце оплаченного периода. Без скрытых платежей.",
+    q: "Можно ли отменить подписку?",
+    a: "Да, в любой момент. Напишите нам в Telegram — отключим без вопросов.",
   },
   {
-    q: "Что такое «круги правок»?",
-    a: "Каждый раз, когда клиент отправляет правки — это один круг. В Free доступно 5 кругов, в Pro — безлимит.",
+    q: "Что умеет Revio?",
+    a: "Загружаете макеты, отправляете клиенту ссылку. Клиент без регистрации тыкает на места в картинках и пишет комментарии. Вы видите все правки с точками и копируете их списком.",
   },
   {
     q: "Чем Free отличается от Pro?",
-    a: "Free — 1 проект, 10 изображений, 5 кругов. Pro — безлимит всего плюс история версий и приоритетная поддержка.",
+    a: "Free — 3 проекта по 10 изображений. Pro — безлимит проектов и изображений.",
   },
 ];
 
@@ -68,6 +68,7 @@ export default function PricingPage() {
   const [openFaq, setOpenFaq] = useState<number | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [showPayModal, setShowPayModal] = useState(false);
 
   useEffect(() => {
     const unsub = subscribeToAuth(async (u) => {
@@ -144,7 +145,7 @@ export default function PricingPage() {
           </p>
         </div>
 
-        {/* Карточки — flex col, кнопка внизу через mt-auto */}
+        {/* Карточки */}
         <div className="mx-auto grid max-w-2xl grid-cols-1 gap-4 sm:grid-cols-2">
           {plans.map((plan, i) => (
             <motion.div
@@ -206,9 +207,7 @@ export default function PricingPage() {
                 type="button"
                 disabled={plan.ctaDisabled}
                 onClick={() => {
-                  if (!plan.ctaDisabled) {
-                    alert("Оплата через СБП будет доступна в следующем шаге");
-                  }
+                  if (!plan.ctaDisabled) setShowPayModal(true);
                 }}
                 className={`h-10 w-full rounded-xl text-sm font-medium transition-all ${
                   plan.ctaDisabled
@@ -222,7 +221,7 @@ export default function PricingPage() {
           ))}
         </div>
 
-        {/* FAQ — Accordion, текст по центру */}
+        {/* FAQ */}
         <div className="mx-auto mt-16 max-w-lg">
           <h3 className="mb-4 text-center text-sm font-medium text-text-muted">
             Часто задаваемые вопросы
@@ -264,6 +263,51 @@ export default function PricingPage() {
           </div>
         </div>
       </main>
+
+      {/* Pay modal */}
+      <AnimatePresence>
+        {showPayModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm"
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-bg-card border border-border-strong rounded-2xl p-6 max-w-sm w-full shadow-2xl"
+            >
+              <h2 className="text-lg font-semibold text-text-primary mb-2">
+                Pro — как оплатить
+              </h2>
+              <p className="text-sm text-text-muted mb-4">
+                Сейчас идёт тестирование. Напишите нам в Telegram — включим
+                Pro вручную и обсудим оплату.
+              </p>
+              <a
+                href={TELEGRAM_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-text-primary text-sm font-medium text-bg-page transition-all hover:opacity-90 active:scale-[0.98]"
+              >
+                <svg viewBox="0 0 24 24" fill="currentColor" className="h-4 w-4">
+                  <path d="M21.9 4.6c.2-.9-.7-1.6-1.5-1.3L2.6 9.9c-.9.3-.8 1.6.1 1.9l4.5 1.4 1.7 5.4c.2.8 1.2 1 1.8.4l2.4-2.4 4.5 3.3c.7.5 1.7.1 1.9-.7l2.4-14.6zM8.9 13l9.7-6.1c.3-.2.6.2.4.5l-7.6 7.7c-.2.2-.3.4-.4.7l-.4 2.4c0 .3-.4.4-.6.2l-1.3-4.2c-.1-.3 0-.7.2-.9z" />
+                </svg>
+                Написать в Telegram
+              </a>
+              <button
+                type="button"
+                onClick={() => setShowPayModal(false)}
+                className="mt-3 h-10 w-full rounded-xl border border-border-strong text-sm text-text-primary transition-all hover:bg-bg-cardHover"
+              >
+                Закрыть
+              </button>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

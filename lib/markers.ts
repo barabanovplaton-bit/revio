@@ -134,6 +134,20 @@ export async function deleteProjectMarkers(
 }
 
 /**
+ * Удалить ВСЕ маркеры проекта (все круги)
+ */
+export async function deleteAllProjectMarkers(
+  projectId: string
+): Promise<void> {
+  const q = query(
+    collection(db, COLLECTION),
+    where("projectId", "==", projectId)
+  );
+  const snap = await getDocs(q);
+  await Promise.all(snap.docs.map((d) => deleteDoc(d.ref)));
+}
+
+/**
  * Подписка на ВСЕ маркеры проекта (все круги, realtime)
  */
 export function subscribeToAllProjectMarkers(

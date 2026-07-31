@@ -10,6 +10,7 @@ import {
 } from "@/lib/projects";
 import {
   subscribeToAllProjectMarkers,
+  deleteAllProjectMarkers,
   type Marker,
 } from "@/lib/markers";
 import { ConfirmModal } from "./confirm-modal";
@@ -47,9 +48,11 @@ export function ProjectHub({
 
   // Image viewer
   const [viewingImageIndex, setViewingImageIndex] = useState<number | null>(null);
+  const [viewScale, setViewScale] = useState(1);
 
   // Fullscreen preview
   const [fullscreenIndex, setFullscreenIndex] = useState<number | null>(null);
+  const [replaceConfirm, setReplaceConfirm] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -74,6 +77,11 @@ export function ProjectHub({
     }, 5000);
     return () => { cancelled = true; unsub(); clearInterval(interval); };
   }, [projectId]);
+
+  // Reset zoom when switching images
+  useEffect(() => {
+    setViewScale(1);
+  }, [viewingImageIndex]);
 
   const showToast = (msg: string) => {
     setToast(msg);
@@ -141,10 +149,14 @@ export function ProjectHub({
     }
 
     if (uploaded.length > 0) {
+      const replacing = (project?.imageUrls?.length || 0) > 0;
       await updateProject(projectId, {
         imageUrls: uploaded,
         status: "in_progress",
       });
+      if (replacing) {
+        await deleteAllProjectMarkers(projectId);
+      }
       const fresh = await getProject(projectId);
       setProject(fresh || { ...project, imageUrls: uploaded });
       onProjectUpdated();
@@ -154,7 +166,9 @@ export function ProjectHub({
       showToast(
         failed > 0
           ? "Загружено " + uploaded.length + ", не удалось: " + failed
-          : "Пакет загружен (" + uploaded.length + " изображений)"
+          : replacing
+            ? "Макеты заменены"
+            : "Пакет загружен (" + uploaded.length + " изображений)"
       );
     } else {
       setUploadError("Не удалось загрузить изображения. Попробуй ещё раз.");
@@ -284,6 +298,8 @@ export function ProjectHub({
               </h1>
             </div>
             <div className="flex items-center gap-1">
+              <button type="button" onClick={() => setViewScale(Math.max(1, viewScale - 0.5))} className="rounded-lg px-2 py-1.5 text-sm font-bold text-text-muted hover:bg-bg-cardHover hover:text-text-primary" title="Уменьшить">−</button>
+              <button type="button" onClick={() => setViewScale(viewScale + 0.5)} className="rounded-lg px-2 py-1.5 text-sm font-bold text-text-muted hover:bg-bg-cardHover hover:text-text-primary" title="Увеличить">+</button>
               <button onClick={() => setViewingImageIndex(Math.max(0, viewingImageIndex - 1))} disabled={viewingImageIndex === 0} className="rounded-lg p-1.5 text-text-muted hover:bg-bg-cardHover disabled:opacity-30">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-4 w-4"><path d="m15 18-6-6 6-6" /></svg>
               </button>
@@ -295,7 +311,7 @@ export function ProjectHub({
         </div>
         <div className="flex-1 overflow-auto p-4">
           <div className="mx-auto max-w-4xl">
-            <div className="relative inline-block w-full">
+            <div className={`relative inline-block w-full ${viewScale > 1 ? "overflow-auto" : ""}`} style={viewScale > 1 ? { transform: `scale(${viewScale})`, transformOrigin: "top left", width: `${100 / viewScale}%` } : undefined}>
               <img src={project.imageUrls[viewingImageIndex]} alt="" className="w-full rounded-xl border border-border-strong" />
               {pointMarkers.map((marker) => {
                 const cols = imageCount <= 3 ? imageCount : 3;
@@ -380,7 +396,7 @@ export function ProjectHub({
           <div className="mb-6">
             <div className="mb-3 flex items-center justify-between">
               <h3 className="text-sm font-medium text-text-primary">
-                Новый пакет ({pendingFiles.length})
+                {hasImages ? "Новые макеты" : "Новый пакет"} ({pendingFiles.length})
               </h3>
               <label className="flex cursor-pointer items-center gap-1.5 rounded-lg border border-border-strong bg-bg-input px-3 py-1.5 text-xs font-medium text-text-primary transition-all hover:bg-bg-cardHover">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" className="h-3.5 w-3.5">
@@ -429,7 +445,7 @@ export function ProjectHub({
               onClick={() => setConfirmUpload(true)}
               className="mt-4 w-full rounded-xl bg-text-primary px-4 py-3 text-sm font-medium text-bg-page transition-all hover:opacity-90 active:scale-[0.98]"
             >
-              Загрузить пакет ({pendingFiles.length} изображений)
+              {hasImages ? "Заменить макеты" : "Загрузить пакет"} ({pendingFiles.length} изображений)
             </button>
           </div>
         )}
@@ -453,17 +469,31 @@ export function ProjectHub({
             </div>
 
             {/* Copy comments */}
-            <button
-              type="button"
-              onClick={copyComments}
-              className="mb-4 flex w-full items-center justify-center gap-2 rounded-xl border border-border-strong bg-bg-card px-4 py-3 text-sm font-medium text-text-primary transition-all hover:bg-bg-cardHover"
-            >
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
-                <rect x="9" y="9" width="13" height="13" rx="2" />
-                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
-              </svg>
-              Скопировать все правки текстом ({markers.length})
-            </button>
+            <div className="mb-4 flex flex-col gap-2 sm:flex-row">
+              <button
+                type="button"
+                onClick={copyComments}
+                className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-border-strong bg-bg-card px-4 py-3 text-sm font-medium text-text-primary transition-all hover:bg-bg-cardHover"
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
+                  <rect x="9" y="9" width="13" height="13" rx="2" />
+                  <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                </svg>
+                Скопировать все правки ({markers.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setReplaceConfirm(true)}
+                className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-border-strong bg-bg-card px-4 py-3 text-sm font-medium text-text-primary transition-all hover:bg-bg-cardHover"
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                  <polyline points="17,8 12,3 7,8" />
+                  <line x1="12" y1="3" x2="12" y2="15" />
+                </svg>
+                Заменить макеты
+              </button>
+            </div>
 
             {/* Comments list */}
             {markers.length > 0 && (
@@ -518,12 +548,28 @@ export function ProjectHub({
         )}
       </div>
 
+      {/* Replace images modal */}
+      <ConfirmModal
+        open={replaceConfirm}
+        title="Заменить макеты?"
+        message={"Текущие изображения и все правки клиента будут заменены новым набором. Это действие нельзя отменить."}
+        confirmLabel="Выбрать файлы"
+        danger
+        onConfirm={() => {
+          setReplaceConfirm(false);
+          fileInputRef.current?.click();
+        }}
+        onCancel={() => setReplaceConfirm(false)}
+      />
+
       {/* Upload confirmation modal */}
       <ConfirmModal
         open={confirmUpload}
-        title="Загрузить изображения?"
-        message={"Будет загружено " + pendingFiles.length + " изображений. После загрузки появится ссылка для клиента."}
-        confirmLabel="Загрузить"
+        title={hasImages ? "Заменить макеты?" : "Загрузить изображения?"}
+        message={hasImages
+          ? "Текущие макеты и все правки клиента будут заменены. Это действие нельзя отменить."
+          : "Будет загружено " + pendingFiles.length + " изображений. После загрузки появится ссылка для клиента."}
+        confirmLabel={hasImages ? "Заменить" : "Загрузить"}
         onConfirm={handleConfirmUpload}
         onCancel={handleCancelUpload}
       />

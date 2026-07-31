@@ -48,6 +48,7 @@ function App() {
     id: string;
     name: string;
   } | null>(null);
+  const [limitOpen, setLimitOpen] = useState(false);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -127,8 +128,14 @@ function App() {
       goToLogin();
       return;
     }
+    const isFree = (profile?.plan || "free") === "free";
+    const activeCount = projects.filter((p) => !p.archived).length;
+    if (isFree && activeCount >= 3) {
+      setLimitOpen(true);
+      return;
+    }
     setNewProjectOpen(true);
-  }, [user, goToLogin]);
+  }, [user, goToLogin, profile, projects]);
 
   const handleSelectProject = useCallback(
     (id: string) => {
@@ -426,6 +433,18 @@ function App() {
         onCancel={() => setConfirmDelete(null)}
       />
 
+      <ConfirmModal
+        open={limitOpen}
+        title="Лимит бесплатных проектов"
+        message="На бесплатном тарифе — до 3 проектов. Обновитесь до Pro для безлимита."
+        confirmLabel="Узнать о Pro"
+        onConfirm={() => {
+          setLimitOpen(false);
+          router.push("/pricing");
+        }}
+        onCancel={() => setLimitOpen(false)}
+      />
+
       <AnimatePresence>
         {toast && (
           <motion.div
@@ -506,7 +525,8 @@ function ProjectCard({
                 {!project.description && !project.clientName && (
                   <>
                     <span>
-                      Круг {project.currentRound}/{project.roundsTotal}
+                      {(project.imageUrls?.length || 0)}{" "}
+                      {(project.imageUrls?.length || 0) === 1 ? "изображение" : "изображений"}
                     </span>
                     <span>·</span>
                     <span>{formatRelativeTime(project.updatedAt)}</span>
