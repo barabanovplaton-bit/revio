@@ -8,12 +8,16 @@ import {
   deleteProject,
   startNewRound,
   hasRoundsLeft,
+  getMaxRoundsForPlan,
+  canAddRounds,
+  addExtraRounds,
   type Project,
 } from "@/lib/projects";
 import {
   subscribeToAllProjectMarkers,
   type Marker,
 } from "@/lib/markers";
+import { getUserProfile } from "@/lib/user-profile";
 import { ConfirmModal } from "./confirm-modal";
 import { uploadImageWithRetry, prepareImageFile } from "@/lib/cloudinary";
 
@@ -38,6 +42,7 @@ export function ProjectHub({
   const [loading, setLoading] = useState(true);
   const [markers, setMarkers] = useState<Marker[]>([]);
   const [toast, setToast] = useState<string | null>(null);
+  const [plan, setPlan] = useState<"free" | "pro">("free");
 
   // Upload state
   const [isUploading, setIsUploading] = useState(false);
@@ -73,6 +78,12 @@ export function ProjectHub({
   const [fullscreenIndex, setFullscreenIndex] = useState<number | null>(null);
   const [replaceConfirm, setReplaceConfirm] = useState(false);
 
+  // Canvas (просмотр макетов с маячками текущего раунда)
+  const [canvasOpen, setCanvasOpen] = useState(false);
+  const [canvasIndex, setCanvasIndex] = useState(0);
+  const [canvasShowMarkers, setCanvasShowMarkers] = useState(true);
+  const [canvasSelectedMarker, setCanvasSelectedMarker] = useState<string | null>(null);
+
   useEffect(() => {
     setIsTouch(
       typeof window !== "undefined" &&
@@ -91,6 +102,15 @@ export function ProjectHub({
     })();
     return () => { cancelled = true; };
   }, [projectId]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const prof = await getUserProfile(ownerUid);
+      if (!cancelled && prof) setPlan(prof.plan);
+    })();
+    return () => { cancelled = true; };
+  }, [ownerUid]);
 
   // Subscribe to project updates (new comments appear automatically)
   useEffect(() => {
@@ -326,6 +346,17 @@ export function ProjectHub({
     setConfirmUpload(false);
   };
 
+  // --- Add an extra round (докупка раунда правок) ---
+  const handleAddRound = async () => {
+    await addExtraRounds(projectId, 1, maxRounds);
+    const fresh = await getProject(projectId);
+    if (fresh) {
+      setProject(fresh);
+      onProjectUpdated();
+      showToast("Раунд добавлен — клиент снова может оставлять правки");
+    }
+  };
+
   // --- Copy comments as text ---
   const copyComments = async () => {
     const imageCount = project?.imageUrls?.length || 0;
@@ -381,6 +412,8 @@ export function ProjectHub({
   const currentRound = project.currentRound || 1;
   const roundsLeft = project.roundsLeft ?? 0;
   const roundsTotal = project.roundsTotal ?? 0;
+  const maxRounds = getMaxRoundsForPlan(plan);
+  const canBuyRounds = canAddRounds(project, maxRounds);
   // Правки текущего раунда (в `markers` приходят все раунды — для истории)
   const roundMarkers = markers.filter((m) => m.round === currentRound);
 
@@ -817,7 +850,35 @@ export function ProjectHub({
                   Раунды правок исчерпаны — клиент не может оставить новые правки
                 </span>
               )}
+              {!hasRoundsLeft(project) && canBuyRounds && (
+                <button
+                  type="button"
+                  onClick={handleAddRound}
+                  className="rounded-lg border border-text-primary/40 bg-text-primary px-3 py-1.5 text-xs font-medium text-bg-page transition-all hover:opacity-90 active:scale-[0.98]"
+                >
+                  + Добавить раунд
+                </button>
+              )}
             </div>
+
+            {/* Promo: раунды кончились и докупить больше нельзя */}
+            {!hasRoundsLeft(project) && !canBuyRounds && (
+              <div className="mb-4 rounded-xl border border-text-primary/20 bg-bg-card p-4">
+                <p className="text-sm font-medium text-text-primary">
+                  У вас закончились раунды правок
+                </p>
+                <p className="mt-1 text-xs leading-relaxed text-text-muted">
+                  Если ваш клиент хочет ещё — переходите на Pro, где раунды правок
+                  без ограничения.
+                </p>
+                <a
+                  href="/pricing"
+                  className="mt-3 flex items-center justify-center rounded-xl bg-text-primary px-4 py-2.5 text-sm font-medium text-bg-page transition-all hover:opacity-90 active:scale-[0.98]"
+                >
+                  Перейти на Pro
+                </a>
+              </div>
+            )}
 
             {/* Copy comments */}
             <div className="mb-4 flex flex-col gap-2 sm:flex-row">
@@ -831,6 +892,18 @@ export function ProjectHub({
                   <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
                 </svg>
                 Скопировать все правки ({roundMarkers.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => { setCanvasOpen(true); setCanvasIndex(0); }}
+                className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-border-strong bg-bg-card px-4 py-3 text-sm font-medium text-text-primary transition-all hover:bg-bg-cardHover"
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
+                  <rect x="3" y="3" width="18" height="18" rx="2" />
+                  <circle cx="9" cy="9" r="2" />
+                  <path d="m21 15-3.1-3.1a2 2 0 0 0-2.8 0L6 21" />
+                </svg>
+                Перейти на холст
               </button>
               <button
                 type="button"
@@ -980,6 +1053,118 @@ export function ProjectHub({
                   : `Загрузка ${uploadProgress.done} из ${uploadProgress.total}...`
                 : "Загрузка..."}
             </p>
+          </div>
+        </div>
+      )}
+
+      {/* Canvas: просмотр макетов с маячками текущего раунда */}
+      {canvasOpen && (
+        <div className="fixed inset-0 z-50 flex flex-col bg-black">
+          <div className="flex items-center justify-between px-4 py-3">
+            <button
+              type="button"
+              onClick={() => setCanvasOpen(false)}
+              className="rounded-xl bg-white/10 px-4 py-2 text-sm font-medium text-white transition-all hover:bg-white/20"
+            >
+              Закрыть
+            </button>
+            <p className="text-sm text-white/80">
+              Раунд {currentRound} · {canvasIndex + 1} / {imageCount}
+            </p>
+            <button
+              type="button"
+              onClick={() => {
+                setCanvasShowMarkers((v) => !v);
+                setCanvasSelectedMarker(null);
+              }}
+              className="rounded-xl border border-white/20 px-4 py-2 text-sm font-medium text-white transition-all hover:bg-white/10"
+            >
+              {canvasShowMarkers ? "С маячками" : "Без маячков"}
+            </button>
+          </div>
+
+          <div className="relative flex flex-1 items-center justify-center overflow-hidden px-4 pb-4">
+            {(() => {
+              const urls = project.imageUrls || [];
+              const url = urls[canvasIndex];
+              if (!url) return null;
+              const pointMarkers = roundMarkers.filter(
+                (m) => m.type === "point" && m.x !== undefined && m.y !== undefined
+              );
+              const generalMarkers = roundMarkers.filter((m) => m.type === "general");
+              return (
+                <>
+                  <div className="relative flex h-full w-full items-center justify-center">
+                    <img
+                      src={url}
+                      alt={`Макет ${canvasIndex + 1}`}
+                      className="max-h-full max-w-full select-none object-contain"
+                      draggable={false}
+                    />
+                    {canvasShowMarkers &&
+                      pointMarkers.map((m, i) => (
+                        <button
+                          key={m.id}
+                          type="button"
+                          onClick={() => setCanvasSelectedMarker(m.id)}
+                          className="absolute z-20 flex h-7 w-7 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border-2 border-white/90 bg-text-primary text-xs font-bold text-bg-page shadow-lg transition-transform hover:scale-125"
+                          style={{ left: `${(m.x || 0) * 100}%`, top: `${(m.y || 0) * 100}%` }}
+                        >
+                          {i + 1}
+                        </button>
+                      ))}
+                    {canvasShowMarkers && canvasSelectedMarker && (
+                      (() => {
+                        const sel = roundMarkers.find((m) => m.id === canvasSelectedMarker);
+                        if (!sel) return null;
+                        return (
+                          <div className="absolute left-1/2 top-4 z-30 w-72 -translate-x-1/2 rounded-xl border border-white/20 bg-bg-card p-3 shadow-2xl">
+                            <p className="text-sm text-text-primary">{sel.text}</p>
+                            <button
+                              type="button"
+                              onClick={() => setCanvasSelectedMarker(null)}
+                              className="mt-2 text-xs text-text-muted transition-colors hover:text-text-primary"
+                            >
+                              Закрыть
+                            </button>
+                          </div>
+                        );
+                      })()
+                    )}
+                  </div>
+                  {imageCount > 1 && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => { setCanvasIndex((p) => Math.max(0, p - 1)); setCanvasSelectedMarker(null); }}
+                        disabled={canvasIndex === 0}
+                        className="absolute left-3 top-1/2 z-20 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-white/10 text-white transition-all hover:bg-white/20 disabled:opacity-30"
+                      >
+                        ‹
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => { setCanvasIndex((p) => Math.min(imageCount - 1, p + 1)); setCanvasSelectedMarker(null); }}
+                        disabled={canvasIndex >= imageCount - 1}
+                        className="absolute right-3 top-1/2 z-20 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-white/10 text-white transition-all hover:bg-white/20 disabled:opacity-30"
+                      >
+                        ›
+                      </button>
+                    </>
+                  )}
+                  {canvasShowMarkers && generalMarkers.length > 0 && (
+                    <div className="absolute bottom-4 left-1/2 z-30 max-h-32 w-72 -translate-x-1/2 space-y-1.5 overflow-y-auto rounded-xl border border-white/20 bg-bg-card/90 p-3 backdrop-blur-sm">
+                      <p className="text-xs font-medium uppercase tracking-wide text-text-muted">
+                        Общие правки ({generalMarkers.length})
+                      </p>
+                      {generalMarkers.map((m) => (
+                        <p key={m.id} className="text-xs text-text-primary">{m.text}</p>
+                      ))}
+                    </div>
+                  )}
+                </>
+              );
+            })()}
           </div>
         </div>
       )}

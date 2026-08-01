@@ -71,7 +71,7 @@ export default function ReviewPage({
             <rect x="3" y="3" width="18" height="18" rx="2" /><circle cx="8.5" cy="8.5" r="1.5" /><path d="m21 15-5-5L5 21" />
           </svg>
           <h1 className="mb-2 text-xl font-semibold text-text-primary">{project.name}</h1>
-          <p className="text-text-muted">Макеты ещё не загружены. Фрилансер готовит проект.</p>
+          <p className="text-text-muted">Не переживайте, фрилансер скоро загрузит макеты.</p>
         </div>
       </div>
     );

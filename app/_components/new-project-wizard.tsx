@@ -1,11 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import { createProject } from "@/lib/projects";
+import { createProject, getMaxRoundsForPlan } from "@/lib/projects";
 
 interface NewProjectWizardProps {
   open: boolean;
   ownerUid: string;
+  plan?: "free" | "pro";
   onClose: () => void;
   onCreated: (projectId: string) => void;
 }
@@ -13,17 +14,23 @@ interface NewProjectWizardProps {
 export function NewProjectWizard({
   open,
   ownerUid,
+  plan = "free",
   onClose,
   onCreated,
 }: NewProjectWizardProps) {
   const [name, setName] = useState("");
+  const [rounds, setRounds] = useState(5);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   if (!open) return null;
 
+  const maxRounds = getMaxRoundsForPlan(plan);
+  const isPro = plan === "pro";
+
   const reset = () => {
     setName("");
+    setRounds(5);
     setError(null);
   };
 
@@ -44,8 +51,8 @@ export function NewProjectWizard({
           description: "",
           clientName: "",
           clientContact: "",
-          roundsTotal: 5,
-          roundsLeft: 5,
+          roundsTotal: rounds,
+          roundsLeft: rounds,
           limitMessage: "",
           status: "waiting_for_images",
         },
@@ -61,6 +68,14 @@ export function NewProjectWizard({
     }
   };
 
+  const changeRounds = (delta: number) => {
+    setRounds((p) => {
+      const next = p + delta;
+      if (isPro) return Math.max(1, Math.min(100, next));
+      return Math.max(1, Math.min(maxRounds, next));
+    });
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-bg-page pb-24">
       <div className="flex w-full max-w-sm flex-col items-center px-6">
@@ -68,7 +83,7 @@ export function NewProjectWizard({
           Новый проект
         </h2>
         <p className="mb-6 text-center text-xs text-text-muted">
-          Назовите проект
+          Назовите проект и выберите, сколько раундов правок будет
         </p>
 
         <label className="mb-1.5 block w-full text-center text-xs font-medium uppercase tracking-wide text-text-muted">
@@ -85,6 +100,36 @@ export function NewProjectWizard({
           }}
           className="h-12 w-full rounded-xl border border-border-strong bg-bg-input px-4 text-center text-sm text-text-primary placeholder:text-text-muted focus:border-text-primary focus:outline-none"
         />
+
+        <label className="mb-1.5 mt-6 block w-full text-center text-xs font-medium uppercase tracking-wide text-text-muted">
+          Раунды правок
+        </label>
+        <div className="flex w-full items-center justify-center gap-4">
+          <button
+            type="button"
+            onClick={() => changeRounds(-1)}
+            disabled={rounds <= 1}
+            className="flex h-10 w-10 items-center justify-center rounded-xl border border-border-strong bg-bg-input text-lg font-bold text-text-primary transition-all hover:bg-bg-cardHover disabled:opacity-30"
+          >
+            −
+          </button>
+          <span className="w-12 text-center text-2xl font-semibold text-text-primary">
+            {rounds}
+          </span>
+          <button
+            type="button"
+            onClick={() => changeRounds(1)}
+            disabled={!isPro && rounds >= maxRounds}
+            className="flex h-10 w-10 items-center justify-center rounded-xl border border-border-strong bg-bg-input text-lg font-bold text-text-primary transition-all hover:bg-bg-cardHover disabled:opacity-30"
+          >
+            +
+          </button>
+        </div>
+        <p className="mt-2 text-center text-xs text-text-muted">
+          {isPro
+            ? "Pro: раунды без ограничения"
+            : `Бесплатный тариф: максимум ${maxRounds} раундов на проект`}
+        </p>
 
         {error && (
           <div className="mt-4 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-center text-xs text-red-400">

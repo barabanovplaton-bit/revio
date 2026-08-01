@@ -159,17 +159,28 @@ export async function updateProjectImages(
   await updateProject(id, { imageUrls });
 }
 
-/** Добавить дополнительные круги правок */
+/** Добавить дополнительные раунды правок. maxTotal — верхний предел суммарного числа раундов (для Free). */
 export async function addExtraRounds(
   id: string,
-  count: number
+  count: number,
+  maxTotal?: number
 ): Promise<void> {
   const project = await getProject(id);
   if (!project) return;
+
+  const total = project.roundsTotal || 0;
+  let added = count;
+  if (maxTotal != null && total + added > maxTotal) {
+    added = Math.max(0, maxTotal - total);
+  }
+  if (added <= 0) return;
+
   await updateProject(id, {
-    roundsTotal: project.roundsTotal + count,
-    roundsLeft: project.roundsLeft + count,
-    extraRoundsAdded: (project.extraRoundsAdded || 0) + count,
+    roundsTotal: total + added,
+    roundsLeft: (project.roundsLeft || 0) + added,
+    extraRoundsAdded: (project.extraRoundsAdded || 0) + added,
+    isLocked: false,
+    status: "in_progress",
   });
 }
 
@@ -234,6 +245,19 @@ export async function startNewRound(
 /** Доступны ли ещё раунды правок */
 export function hasRoundsLeft(project: Project): boolean {
   return (project.roundsLeft ?? 0) > 0;
+}
+
+/** Максимум суммарных раундов по тарифу (Free — 5, Pro — без ограничения) */
+export function getMaxRoundsForPlan(plan: "free" | "pro"): number {
+  return plan === "pro" ? Infinity : 5;
+}
+
+/** Можно ли докупить ещё раунд по тарифу */
+export function canAddRounds(
+  project: Project,
+  maxTotal: number
+): boolean {
+  return maxTotal === Infinity || (project.roundsTotal || 0) < maxTotal;
 }
 
 /** Форматирование относительного времени. */
