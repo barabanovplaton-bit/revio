@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, Fragment } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   getProject,
@@ -193,6 +193,12 @@ export function ProjectHub({
     setPreviewUrls(newUrls);
   };
 
+  const showDropIndicator = (index: number) =>
+    dragIndex !== null &&
+    dragOverIndex === index &&
+    index !== dragIndex &&
+    index !== dragIndex + 1;
+
   // --- Upload ---
   const handleConfirmUpload = async () => {
     if (pendingFiles.length === 0 || !project) return;
@@ -204,9 +210,11 @@ export function ProjectHub({
 
     const uploaded: string[] = [];
     const failedNames: string[] = [];
-    for (let i = 0; i < pendingFiles.length; i++) {
-      const file = pendingFiles[i];
-      setUploadProgress({ done: i, total: pendingFiles.length });
+    const total = pendingFiles.length;
+    let done = 0;
+    const setProgress = () => setUploadProgress({ done, total });
+
+    const processFile = async (file: File) => {
       try {
         const prepared = await prepareImageFile(file);
         const result = await uploadImageWithRetry(prepared, 3);
@@ -214,9 +222,23 @@ export function ProjectHub({
       } catch (e) {
         console.error("Upload error:", file.name, e);
         failedNames.push(file.name);
+      } finally {
+        done++;
+        setProgress();
       }
-    }
-    setUploadProgress({ done: pendingFiles.length, total: pendingFiles.length });
+    };
+
+    const queue = [...pendingFiles];
+    const workers = Array.from(
+      { length: Math.min(3, queue.length) },
+      async () => {
+        while (queue.length > 0) {
+          const file = queue.shift()!;
+          await processFile(file);
+        }
+      }
+    );
+    await Promise.all(workers);
 
     if (uploaded.length > 0) {
       const replacing = (project?.imageUrls?.length || 0) > 0;
@@ -452,7 +474,7 @@ export function ProjectHub({
                 <button
                   type="button"
                   onClick={startRename}
-                  className="shrink-0 rounded-md p-1 text-text-muted opacity-0 transition-all hover:text-text-primary group-hover:opacity-100"
+                  className="shrink-0 rounded-md p-1 text-text-muted transition-all hover:text-text-primary"
                   title="Переименовать"
                 >
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" className="h-3.5 w-3.5">
@@ -525,55 +547,104 @@ export function ProjectHub({
                 <input type="file" accept="image/*" multiple onChange={(e) => handleFiles(e.target.files)} className="hidden" />
               </label>
             </div>
+            {!isTouch && (
+              <p className="mb-3 text-xs text-text-muted">
+                Порядок — как клиент увидит изображения. Перетащите, чтобы изменить.
+              </p>
+            )}
 
             <div className="space-y-2">
               {previewUrls.map((url, index) => (
-                <div
-                  key={index}
-                  draggable={!isTouch}
-                  onDragStart={(e) => { setDragIndex(index); e.dataTransfer.effectAllowed = "move"; }}
-                  onDragOver={(e) => { if (dragIndex !== null) { e.preventDefault(); setDragOverIndex(index); } }}
-                  onDrop={(e) => { e.preventDefault(); if (dragIndex !== null && dragIndex !== index) movePreview(dragIndex, index); setDragIndex(null); setDragOverIndex(null); }}
-                  onDragEnd={() => { setDragIndex(null); setDragOverIndex(null); }}
-                  className={`group flex items-center gap-3 rounded-xl border bg-bg-card p-2 transition-all cursor-grab active:cursor-grabbing ${
-                    dragOverIndex === index && dragIndex !== null && dragIndex !== index
-                      ? "border-text-primary opacity-60"
-                      : "border-border-strong hover:border-text-primary/30"
-                  }`}
-                >
-                  {!isTouch && (
-                    <svg viewBox="0 0 24 24" fill="currentColor" className="h-4 w-4 shrink-0 text-text-muted">
-                      <circle cx="9" cy="6" r="1.5" /><circle cx="15" cy="6" r="1.5" />
-                      <circle cx="9" cy="12" r="1.5" /><circle cx="15" cy="12" r="1.5" />
-                      <circle cx="9" cy="18" r="1.5" /><circle cx="15" cy="18" r="1.5" />
-                    </svg>
-                  )}
-                  <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-text-primary text-sm font-bold text-bg-page">
-                    {index + 1}
-                  </div>
-                  <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-lg border border-border-strong bg-bg-input">
-                    <img src={url} alt="" className="h-full w-full object-cover" />
-                  </div>
-                  <div className="flex flex-1 items-center justify-end gap-1">
-                    {isTouch && (
-                      <>
-                        <button onClick={(e) => { e.stopPropagation(); movePreview(index, index - 1); }} disabled={index === 0} className="flex h-8 w-8 items-center justify-center rounded-lg text-text-muted hover:bg-bg-cardHover hover:text-text-primary disabled:opacity-20">
-                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-4 w-4"><path d="m18 15-6-6-6 6"/></svg>
-                        </button>
-                        <button onClick={(e) => { e.stopPropagation(); movePreview(index, index + 1); }} disabled={index === pendingFiles.length - 1} className="flex h-8 w-8 items-center justify-center rounded-lg text-text-muted hover:bg-bg-cardHover hover:text-text-primary disabled:opacity-20">
-                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-4 w-4"><path d="m6 9 6 6 6-6"/></svg>
-                        </button>
-                      </>
+                <Fragment key={index}>
+                  {showDropIndicator(index) && <DropIndicator />}
+                  <div
+                    draggable={!isTouch}
+                    onDragStart={(e) => {
+                      e.dataTransfer.effectAllowed = "move";
+                      e.dataTransfer.setData("text/plain", String(index));
+                      setDragIndex(index);
+                      setDragOverIndex(index);
+                    }}
+                    onDragOver={(e) => {
+                      if (dragIndex === null) return;
+                      e.preventDefault();
+                      setDragOverIndex(index);
+                    }}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      if (dragIndex !== null && dragIndex !== index) {
+                        const to = index > dragIndex ? index - 1 : index;
+                        movePreview(dragIndex, to);
+                      }
+                      setDragIndex(null);
+                      setDragOverIndex(null);
+                    }}
+                    onDragEnd={() => {
+                      setDragIndex(null);
+                      setDragOverIndex(null);
+                    }}
+                    className={`group flex items-center gap-3 rounded-xl border bg-bg-card p-2 transition-all cursor-grab active:cursor-grabbing ${
+                      dragIndex === index
+                        ? "border-border-strong opacity-10"
+                        : dragOverIndex === index && dragIndex !== null
+                          ? "border-border-strong"
+                          : "border-border-strong hover:border-text-primary/30"
+                    }`}
+                  >
+                    {!isTouch && (
+                      <svg viewBox="0 0 24 24" fill="currentColor" className="h-4 w-4 shrink-0 text-text-muted">
+                        <circle cx="9" cy="6" r="1.5" /><circle cx="15" cy="6" r="1.5" />
+                        <circle cx="9" cy="12" r="1.5" /><circle cx="15" cy="12" r="1.5" />
+                        <circle cx="9" cy="18" r="1.5" /><circle cx="15" cy="18" r="1.5" />
+                      </svg>
                     )}
-                    <button onClick={(e) => { e.stopPropagation(); setFullscreenIndex(index); }} className="flex h-8 w-8 items-center justify-center rounded-lg text-text-muted hover:bg-bg-cardHover hover:text-text-primary">
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-4 w-4"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>
-                    </button>
-                    <button onClick={(e) => { e.stopPropagation(); removePreview(index); }} className="flex h-8 w-8 items-center justify-center rounded-lg text-red-400 hover:text-red-300">
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-4 w-4"><path d="M18 6 6 18M6 6l12 12"/></svg>
-                    </button>
+                    <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-text-primary text-sm font-bold text-bg-page">
+                      {index + 1}
+                    </div>
+                    <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-lg border border-border-strong bg-bg-input">
+                      <img src={url} alt="" className="h-full w-full object-cover" />
+                    </div>
+                    <div className="flex flex-1 items-center justify-end gap-1">
+                      {isTouch && (
+                        <>
+                          <button onClick={(e) => { e.stopPropagation(); movePreview(index, index - 1); }} disabled={index === 0} className="flex h-8 w-8 items-center justify-center rounded-lg text-text-muted hover:bg-bg-cardHover hover:text-text-primary disabled:opacity-20">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-4 w-4"><path d="m18 15-6-6-6 6"/></svg>
+                          </button>
+                          <button onClick={(e) => { e.stopPropagation(); movePreview(index, index + 1); }} disabled={index === pendingFiles.length - 1} className="flex h-8 w-8 items-center justify-center rounded-lg text-text-muted hover:bg-bg-cardHover hover:text-text-primary disabled:opacity-20">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-4 w-4"><path d="m6 9 6 6 6-6"/></svg>
+                          </button>
+                        </>
+                      )}
+                      <button onClick={(e) => { e.stopPropagation(); setFullscreenIndex(index); }} className="flex h-8 w-8 items-center justify-center rounded-lg text-text-muted hover:bg-bg-cardHover hover:text-text-primary">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-4 w-4"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>
+                      </button>
+                      <button onClick={(e) => { e.stopPropagation(); removePreview(index); }} className="flex h-8 w-8 items-center justify-center rounded-lg text-red-400 hover:text-red-300">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-4 w-4"><path d="M18 6 6 18M6 6l12 12"/></svg>
+                      </button>
+                    </div>
                   </div>
-                </div>
+                </Fragment>
               ))}
+              {showDropIndicator(pendingFiles.length) && <DropIndicator />}
+              {/* Tail drop zone: dropping after the last item */}
+              {!isTouch && (
+                <div
+                  className="h-1"
+                  onDragOver={(e) => {
+                    if (dragIndex === null) return;
+                    e.preventDefault();
+                    setDragOverIndex(pendingFiles.length);
+                  }}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    if (dragIndex !== null && dragIndex !== pendingFiles.length - 1) {
+                      movePreview(dragIndex, pendingFiles.length - 1);
+                    }
+                    setDragIndex(null);
+                    setDragOverIndex(null);
+                  }}
+                />
+              )}
             </div>
 
             {uploadError && (
@@ -749,6 +820,20 @@ export function ProjectHub({
           </motion.div>
         )}
       </AnimatePresence>
+    </div>
+  );
+}
+
+function DropIndicator() {
+  return (
+    <div className="flex items-center gap-2 py-0.5">
+      <div className="h-0.5 flex-1 rounded-full bg-text-primary/70" />
+      <div className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full border border-text-primary/50 bg-bg-card">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" className="h-2 w-2 text-text-primary">
+          <path d="m5 12 4 4m0 0 4-4M9 16V4" />
+        </svg>
+      </div>
+      <div className="h-0.5 flex-1 rounded-full bg-text-primary/70" />
     </div>
   );
 }

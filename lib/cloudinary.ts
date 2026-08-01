@@ -36,22 +36,32 @@ export async function prepareImageFile(file: File): Promise<File> {
   bitmap.close();
 
   const isPng = file.type === "image/png";
-  const blob = await new Promise<Blob | null>((resolve) => {
+  let blob = await new Promise<Blob | null>((resolve) => {
     canvas.toBlob(
       resolve,
       isPng ? "image/png" : "image/jpeg",
       isPng ? undefined : 0.92
     );
   });
+
+  // PNG может остаться слишком большим (Vercel режет запросы > 4.5 МБ) —
+  // пересобираем в JPEG, если он всё ещё тяжёлый
+  let ext = isPng ? "png" : "jpg";
+  let mime = isPng ? "image/png" : "image/jpeg";
+  if (blob && blob.size > 3.5 * 1024 * 1024) {
+    blob = await new Promise<Blob | null>((resolve) => {
+      canvas.toBlob(resolve, "image/jpeg", 0.92);
+    });
+    ext = "jpg";
+    mime = "image/jpeg";
+  }
+
   if (!blob) {
     throw new Error("Failed to compress image");
   }
 
-  const ext = isPng ? "png" : "jpg";
   const name = file.name.replace(/\.[^.]+$/, "") + "." + ext;
-  return new File([blob], name, {
-    type: isPng ? "image/png" : "image/jpeg",
-  });
+  return new File([blob], name, { type: mime });
 }
 
 function getImageSize(file: File): Promise<{ width: number; height: number } | null> {
