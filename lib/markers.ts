@@ -11,6 +11,7 @@ import {
   query,
   where,
   onSnapshot,
+  writeBatch,
   serverTimestamp,
   type Timestamp,
 } from "firebase/firestore";
@@ -49,6 +50,21 @@ export async function createMarker(
     createdAt: serverTimestamp(),
   });
   return docRef.id;
+}
+
+/**
+ * Создать несколько маркеров одним батчем (отправка пакета правок клиентом)
+ */
+export async function createMarkers(
+  markers: Array<Omit<Marker, "id" | "createdAt">>
+): Promise<void> {
+  if (markers.length === 0) return;
+  const batch = writeBatch(db);
+  markers.forEach((m) => {
+    const ref = doc(collection(db, COLLECTION));
+    batch.set(ref, { ...m, createdAt: serverTimestamp() });
+  });
+  await batch.commit();
 }
 
 /**

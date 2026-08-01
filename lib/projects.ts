@@ -94,6 +94,26 @@ export async function getProject(id: string): Promise<Project | null> {
   return { id: snap.id, ...(snap.data() as Omit<Project, "id">) };
 }
 
+/** Подписка на один проект (realtime). */
+export function subscribeToProject(
+  id: string,
+  cb: (project: Project | null) => void
+): () => void {
+  return onSnapshot(
+    doc(db, COLLECTION, id),
+    (snap) => {
+      if (!snap.exists()) {
+        cb(null);
+        return;
+      }
+      cb({ id: snap.id, ...(snap.data() as Omit<Project, "id">) });
+    },
+    (err) => {
+      console.error("subscribeToProject error:", err);
+    }
+  );
+}
+
 /** Подписка на все проекты пользователя.
  *  Сортировка: pinned сначала, потом по updatedAt desc. */
 export function subscribeToUserProjects(

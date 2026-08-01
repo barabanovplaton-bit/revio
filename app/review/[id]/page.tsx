@@ -2,11 +2,19 @@
 
 import { useState, useEffect, use } from "react";
 import {
-  getProject,
+  subscribeToProject,
   updateProject,
   hasRoundsLeft,
   type Project,
 } from "@/lib/projects";
+import { createMarkers } from "@/lib/markers";
+import {
+  loadDraft,
+  saveDraft,
+  clearDraft,
+  notifyDraftChanged,
+  newDraftId,
+} from "@/lib/review-draft";
 import { MarkerCanvas } from "@/app/_components/marker-canvas";
 
 export default function ReviewPage({
@@ -18,27 +26,38 @@ export default function ReviewPage({
   const [project, setProject] = useState<Project | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [draftCount, setDraftCount] = useState(0);
+  const [sending, setSending] = useState(false);
+
   const [showDoneModal, setShowDoneModal] = useState(false);
+  const [emptyDraftOpen, setEmptyDraftOpen] = useState(false);
+  const [sendConfirmOpen, setSendConfirmOpen] = useState(false);
+  const [generalOpen, setGeneralOpen] = useState(false);
+  const [generalText, setGeneralText] = useState("");
 
   useEffect(() => {
     let cancelled = false;
-    (async () => {
-      try {
-        const p = await getProject(id);
-        if (cancelled) return;
-        if (!p) {
-          setError("Проект не найден");
-        } else {
-          setProject(p);
-        }
-      } catch (e) {
-        console.error(e);
-        if (!cancelled) setError("Не удалось загрузить проект");
-      } finally {
-        if (!cancelled) setLoading(false);
+    const unsub = subscribeToProject(id, (p) => {
+      if (cancelled) return;
+      if (!p) {
+        setError("Проект не найден");
+      } else {
+        setProject(p);
       }
-    })();
-    return () => { cancelled = true; };
+      setLoading(false);
+    });
+    return () => {
+      cancelled = true;
+      unsub();
+    };
+  }, [id]);
+
+  // Количество черновиков в заголовке
+  useEffect(() => {
+    const upd = () => setDraftCount(loadDraft(id).length);
+    upd();
+    window.addEventListener("revio:draft-changed", upd);
+    return () => window.removeEventListener("revio:draft-changed", upd);
   }, [id]);
 
   if (loading) {
@@ -77,47 +96,115 @@ export default function ReviewPage({
     );
   }
 
-  const locked = !hasRoundsLeft(project) || project.status === "exhausted";
+  const submitted = !!project.clientSubmitted;
+  const locked =
+    !hasRoundsLeft(project) || project.status === "exhausted" || submitted;
+  const round = project.currentRound || 1;
 
-  const handleDone = async () => {
-    try {
-      await updateProject(project.id, { clientSubmitted: true });
-    } catch (e) {
-      console.error(e);
+  const handleDoneClick = () => {
+    if (locked) return;
+    const count = loadDraft(id).length;
+    if (count === 0) {
+      setEmptyDraftOpen(true);
+      return;
     }
-    setShowDoneModal(true);
+    setSendConfirmOpen(true);
+  };
+
+  const handleConfirmSend = async () => {
+    if (sending) return;
+    const items = loadDraft(id);
+    if (items.length === 0) return;
+    setSending(true);
+    try {
+      await createMarkers(
+        items.map((d) => ({
+          projectId: id,
+          round,
+          type: d.type,
+          x: d.x,
+          y: d.y,
+          imageIndex: d.imageIndex,
+          text: d.text,
+        }))
+      );
+      await updateProject(id, { clientSubmitted: true });
+      clearDraft(id);
+      setSendConfirmOpen(false);
+      setShowDoneModal(true);
+    } catch (e) {
+      console.error("Failed to send draft:", e);
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const addGeneral = () => {
+    const text = generalText.trim();
+    if (!text) return;
+    const items = loadDraft(id);
+    const order =
+      items.reduce((m, d) => Math.max(m, d.order), 0) + 1;
+    saveDraft(id, [
+      ...items,
+      { id: newDraftId(), type: "general", text, order },
+    ]);
+    notifyDraftChanged();
+    setGeneralText("");
+    setGeneralOpen(false);
   };
 
   return (
     <div className="flex h-screen flex-col bg-bg-page">
-      <header className="flex items-center justify-between border-b border-border-strong bg-bg-card px-4 py-3">
-        <div>
-          <h1 className="font-semibold text-text-primary">{project.name}</h1>
+      <header className="flex items-center justify-between gap-3 border-b border-border-strong bg-bg-card px-4 py-3">
+        <div className="min-w-0">
+          <h1 className="truncate font-semibold text-text-primary">
+            {project.name}
+          </h1>
           <p className="text-xs text-text-muted">
-            Раунд {project.currentRound || 1} · осталось раундов:{" "}
-            {project.roundsLeft ?? 0}
-            {locked ? " · правки закрыты" : " · нажмите на картинку, чтобы оставить правку"}
+            Раунд {round} · осталось раундов: {project.roundsLeft ?? 0}
+            {locked
+              ? submitted
+                ? " · правки отправлены"
+                : " · правки закрыты"
+              : " · нажмите на картинку, чтобы добавить правку"}
           </p>
         </div>
-        <button
-          type="button"
-          onClick={handleDone}
-          className="shrink-0 rounded-xl bg-text-primary px-4 py-2 text-sm font-medium text-bg-page transition-all hover:opacity-90 active:scale-[0.98]"
-        >
-          Готово
-        </button>
+        {locked ? (
+          <span className="shrink-0 rounded-xl bg-green-500/15 px-3 py-1.5 text-xs font-medium text-green-400">
+            {submitted ? "Правки отправлены" : "Правки закрыты"}
+          </span>
+        ) : (
+          <div className="flex shrink-0 items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setGeneralOpen(true)}
+              className="rounded-xl border border-border-strong px-3 py-2 text-xs font-medium text-text-primary transition-all hover:bg-bg-cardHover"
+              title="Общий комментарий"
+            >
+              + Комментарий
+            </button>
+            <button
+              type="button"
+              onClick={handleDoneClick}
+              className="rounded-xl bg-text-primary px-4 py-2 text-sm font-medium text-bg-page transition-all hover:opacity-90 active:scale-[0.98]"
+            >
+              Готово{draftCount > 0 ? ` (${draftCount})` : ""}
+            </button>
+          </div>
+        )}
       </header>
 
       <main className="flex-1 overflow-hidden">
         <MarkerCanvas
           imageUrls={project.imageUrls}
-          projectId={project.id}
-          round={project.currentRound || 1}
+          projectId={id}
+          round={round}
           isLocked={locked}
         />
       </main>
 
-      {locked && (
+      {locked && !submitted && (
         <div className="pointer-events-none fixed inset-x-0 bottom-0 z-40 flex justify-center p-4">
           <div className="pointer-events-auto max-w-md rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-center text-sm text-red-400 backdrop-blur-sm">
             Раунды правок в этом проекте исчерпаны. Свяжитесь с фрилансером, чтобы продолжить.
@@ -125,6 +212,112 @@ export default function ReviewPage({
         </div>
       )}
 
+      {locked && submitted && (
+        <div className="pointer-events-none fixed inset-x-0 bottom-0 z-40 flex justify-center p-4">
+          <div className="pointer-events-auto max-w-md rounded-xl border border-green-500/30 bg-green-500/10 px-4 py-3 text-center text-sm text-green-400 backdrop-blur-sm">
+            Правки отправлены дизайнеру. Когда начнётся новый раунд, вы снова сможете их добавить.
+          </div>
+        </div>
+      )}
+
+      {/* Подтверждение отправки пакета */}
+      {sendConfirmOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-sm rounded-2xl border border-border-strong bg-bg-card p-6 shadow-2xl">
+            <h2 className="mb-2 text-lg font-semibold text-text-primary">
+              Отправить {draftCount} {draftCount === 1 ? "правку" : draftCount > 0 && draftCount < 5 ? "правки" : "правок"} дизайнеру?
+            </h2>
+            <p className="mb-6 text-sm leading-relaxed text-text-muted">
+              Это будет пакет правок раунда {round}. После отправки вы не сможете их изменить
+              до следующего раунда.
+            </p>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setSendConfirmOpen(false)}
+                disabled={sending}
+                className="flex-1 rounded-xl border border-border-strong px-4 py-2.5 text-sm font-medium text-text-primary transition-all hover:bg-bg-cardHover disabled:opacity-50"
+              >
+                Назад
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmSend}
+                disabled={sending}
+                className="flex-1 rounded-xl bg-text-primary px-4 py-2.5 text-sm font-medium text-bg-page transition-all hover:opacity-90 disabled:opacity-50"
+              >
+                {sending ? "Отправка..." : "Отправить"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Правок ещё нет */}
+      {emptyDraftOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-sm rounded-2xl border border-border-strong bg-bg-card p-6 shadow-2xl">
+            <h2 className="mb-2 text-lg font-semibold text-text-primary">
+              Правок пока нет
+            </h2>
+            <p className="mb-6 text-sm leading-relaxed text-text-muted">
+              Добавьте хотя бы одну правку на макетах, затем нажмите «Готово».
+            </p>
+            <button
+              type="button"
+              onClick={() => setEmptyDraftOpen(false)}
+              className="w-full rounded-xl bg-text-primary px-4 py-2.5 text-sm font-medium text-bg-page transition-all hover:opacity-90"
+            >
+              Понятно
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Общий комментарий */}
+      {generalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-sm rounded-2xl border border-border-strong bg-bg-card p-6 shadow-2xl">
+            <div className="mb-3 flex items-center justify-between">
+              <h2 className="text-lg font-semibold text-text-primary">
+                Общий комментарий
+              </h2>
+              <button
+                type="button"
+                onClick={() => {
+                  setGeneralOpen(false);
+                  setGeneralText("");
+                }}
+                className="rounded-lg p-1 text-text-muted transition-colors hover:bg-bg-cardHover hover:text-text-primary"
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" className="h-4 w-4">
+                  <path d="M18 6 6 18" /><path d="m6 6 12 12" />
+                </svg>
+              </button>
+            </div>
+            <textarea
+              value={generalText}
+              onChange={(e) => setGeneralText(e.target.value)}
+              placeholder="Опишите общие правки..."
+              rows={4}
+              autoFocus
+              className="w-full resize-none rounded-lg border border-border-strong bg-bg-input px-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:border-text-primary focus:outline-none"
+            />
+            <div className="mt-4 flex justify-end">
+              <button
+                type="button"
+                onClick={addGeneral}
+                disabled={!generalText.trim()}
+                className="rounded-xl bg-text-primary px-5 py-2 text-sm font-medium text-bg-page transition-all hover:opacity-90 disabled:opacity-50"
+              >
+                Добавить
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Правки отправлены */}
       {showDoneModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
           <div className="w-full max-w-sm rounded-2xl border border-border-strong bg-bg-card p-6 shadow-2xl">
@@ -134,8 +327,8 @@ export default function ReviewPage({
               </svg>
             </div>
             <h2 className="mb-2 text-lg font-semibold text-text-primary">Правки отправлены!</h2>
-            <p className="mb-6 text-sm text-text-muted">
-              Дизайнер получит уведомление и пришлёт исправленную версию. Ты можешь вернуться позже и добавить правки.
+            <p className="mb-6 text-sm leading-relaxed text-text-muted">
+              Дизайнер получит уведомление и пришлёт исправленную версию.
             </p>
             <button
               type="button"

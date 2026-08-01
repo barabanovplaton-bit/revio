@@ -24,6 +24,8 @@ interface CanvasViewerProps {
   readOnly?: boolean;
   onAddPoint?: (x: number, y: number, imageIndex: number) => void;
   onDeleteMarker?: (id: string) => void;
+  /** id маркеров, которые можно удалить (для черновика клиента) */
+  canDeleteIds?: ReadonlySet<string>;
   onToggleDone?: (id: string, done: boolean) => void;
   /** Показывать панель списка правок (кабинет) */
   showPanel?: boolean;
@@ -45,6 +47,7 @@ export function CanvasViewer({
   readOnly = false,
   onAddPoint,
   onDeleteMarker,
+  canDeleteIds,
   onToggleDone,
   showPanel = false,
   pendingPoint = null,
@@ -133,11 +136,32 @@ export function CanvasViewer({
   const currentUrl = imageUrls[currentIndex];
   const selectedMarker = markers.find((m) => m.id === selectedMarkerId) || null;
 
+  const clamp = (v: number, min: number, max: number) =>
+    Math.min(Math.max(v, min), max);
+
+  // Ограничиваем сдвиг, чтобы картинка не уезжала за край зоны
+  const applyBounds = (pos: { x: number; y: number }, s: number) => {
+    const rect = zoneRef.current?.getBoundingClientRect();
+    if (!rect || !fit) return pos;
+    const maxX = Math.max(0, (fit.w * s - rect.width) / 2 / s);
+    const maxY = Math.max(0, (fit.h * s - rect.height) / 2 / s);
+    return {
+      x: clamp(pos.x, -maxX, maxX),
+      y: clamp(pos.y, -maxY, maxY),
+    };
+  };
+
   const zoomBy = (delta: number) => {
     setScale((p) =>
       Math.min(MAX_SCALE, Math.max(1, Math.round((p + delta) * 100) / 100))
     );
   };
+
+  // После изменения масштаба/размера возвращаем картинку в границы
+  useEffect(() => {
+    setPosition((p) => applyBounds(p, scale));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scale, fit]);
 
   const handleWheel = (e: ReactWheelEvent) => {
     e.preventDefault();
@@ -156,10 +180,15 @@ export function CanvasViewer({
     const dx = clientX - dragStartRef.current.x;
     const dy = clientY - dragStartRef.current.y;
     if (Math.abs(dx) + Math.abs(dy) > 3) dragMovedRef.current = true;
-    setPosition({
-      x: dragStartRef.current.posX + dx,
-      y: dragStartRef.current.posY + dy,
-    });
+    setPosition(
+      applyBounds(
+        {
+          x: dragStartRef.current.posX + dx,
+          y: dragStartRef.current.posY + dy,
+        },
+        scale
+      )
+    );
   };
 
   const endDrag = () => setIsDragging(false);
@@ -394,7 +423,7 @@ export function CanvasViewer({
                       setSelectedMarkerId(m.id);
                     }}
                     className={cn(
-                      "flex h-7 w-7 items-center justify-center rounded-full border-2 border-white/90 text-[11px] font-bold shadow-lg transition-transform hover:scale-110",
+                      "flex h-7 min-w-7 items-center justify-center rounded-full border-2 border-white/90 px-1 text-[11px] font-bold shadow-lg transition-transform hover:scale-110",
                       m.done
                         ? "bg-green-500 text-white"
                         : "bg-text-primary text-bg-page",
@@ -409,13 +438,15 @@ export function CanvasViewer({
             {/* Превью точки, которую ставит клиент */}
             {showMarkers && pendingPoint && canAdd && !locked && (
               <div
-                className="pointer-events-none absolute z-20 h-7 w-7 rounded-full border-2 border-white bg-text-primary/70"
+                className="pointer-events-none absolute z-20 flex h-7 min-w-7 items-center justify-center rounded-full border-2 border-white bg-text-primary/70 px-1 text-[11px] font-bold text-bg-page"
                 style={{
                   left: `${pendingPoint.x * 100}%`,
                   top: `${pendingPoint.y * 100}%`,
                   transform: "translate(-50%, -50%)",
                 }}
-              />
+              >
+                {numberById.size + 1}
+              </div>
             )}
           </div>
         </div>
@@ -436,7 +467,7 @@ export function CanvasViewer({
           }}
           className="absolute right-3 top-3 z-20 rounded-lg border border-white/20 bg-white/10 px-3 py-1.5 text-xs font-medium text-white backdrop-blur-sm transition-all hover:bg-white/20"
         >
-          {showMarkers ? "С маячками" : "Без маячков"}
+          {showMarkers ? "Без маячков" : "С маячками"}
         </button>
 
         {/* Листание */}
@@ -498,7 +529,7 @@ export function CanvasViewer({
                   {selectedMarker.done ? "Сделано ✓" : "Отметить сделанным"}
                 </button>
               )}
-              {onDeleteMarker && !locked && (
+              {onDeleteMarker && !locked && canDeleteIds?.has(selectedMarker.id) && (
                 <button
                   type="button"
                   onClick={() => {
