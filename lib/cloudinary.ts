@@ -11,13 +11,14 @@ export interface UploadResult {
  * - если файл большой или размеры превышают MAX_DIM — перекодируем через canvas
  *   (PNG с прозрачностью остаётся PNG, остальное — JPEG; визуально незаметно)
  * - гарантируем, что итоговый файл < 3.5 МБ (лимит Vercel ~4.5 МБ с запасом)
- * - если что-то не получилось — возвращаем исходный файл как есть
+ * - возвращает null, если файл невозможно подготовить — тогда он не уйдёт на сервер
+ *   и не сломает загрузку (об этом будет понятная ошибка)
  */
 const MAX_DIM = 2560;
 const MAX_BYTES = 3.8 * 1024 * 1024;
 const SAFE_BYTES = 3.5 * 1024 * 1024;
 
-export async function prepareImageFile(file: File): Promise<File> {
+export async function prepareImageFile(file: File): Promise<File | null> {
   if (file.size <= MAX_BYTES) {
     const dims = await getImageSize(file);
     if (dims && dims.width <= MAX_DIM && dims.height <= MAX_DIM) {
@@ -29,8 +30,9 @@ export async function prepareImageFile(file: File): Promise<File> {
   try {
     bitmap = await createImageBitmap(file);
   } catch (e) {
-    console.error("createImageBitmap failed, uploading original:", e);
-    return file;
+    console.error("createImageBitmap failed:", e);
+    // Формат не открывается браузером и файл большой — загружать бесполезно
+    return file.size <= SAFE_BYTES ? file : null;
   }
 
   const scale = Math.min(1, MAX_DIM / Math.max(bitmap.width, bitmap.height));
@@ -45,25 +47,22 @@ export async function prepareImageFile(file: File): Promise<File> {
   bitmap.close();
 
   const isPng = file.type === "image/png";
-  let blob = await toBlob(canvas, isPng ? "image/png" : "image/jpeg", isPng ? undefined : 0.92);
-
-  // PNG может остаться слишком большим (Vercel режет запросы > 4.5 МБ) —
-  // пересобираем в JPEG
   let ext = isPng ? "png" : "jpg";
   let mime = isPng ? "image/png" : "image/jpeg";
-  if (blob && blob.size > SAFE_BYTES) {
-    blob = await toBlob(canvas, "image/jpeg", 0.92);
+  let blob = await toBlob(canvas, mime, isPng ? undefined : 0.92);
+
+  // Жмём до тех пор, пока файл не станет меньше 3.5 МБ
+  const qualities = [0.92, 0.85, 0.8, 0.7, 0.6];
+  let qi = 0;
+  while (blob && blob.size > SAFE_BYTES && qi < qualities.length) {
+    blob = await toBlob(canvas, "image/jpeg", qualities[qi]);
     ext = "jpg";
     mime = "image/jpeg";
-  }
-
-  // Крайний случай: JPEG всё ещё слишком большой — жёстко сжимаем
-  if (blob && blob.size > SAFE_BYTES) {
-    blob = await toBlob(canvas, "image/jpeg", 0.8);
+    qi++;
   }
 
   if (!blob) {
-    return file;
+    return null;
   }
 
   const name = file.name.replace(/\.[^.]+$/, "") + "." + ext;

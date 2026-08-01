@@ -1,6 +1,6 @@
-"use client";
+﻿"use client";
 
-import { useState, useEffect, useRef, useCallback, Fragment } from "react";
+import { useState, useEffect, useRef, useCallback, Fragment, type DragEvent } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   getProject,
@@ -47,6 +47,7 @@ export function ProjectHub({
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [isDraggingOver, setIsDraggingOver] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const [lastUploadErrors, setLastUploadErrors] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Rename in header
@@ -123,10 +124,10 @@ export function ProjectHub({
       const fresh = await getProject(projectId);
       if (fresh) setProject(fresh);
       onProjectUpdated();
-      showToast("Переименовано");
+      showToast("РџРµСЂРµРёРјРµРЅРѕРІР°РЅРѕ");
     } catch (e) {
       console.error(e);
-      showToast("Не удалось переименовать");
+      showToast("РќРµ СѓРґР°Р»РѕСЃСЊ РїРµСЂРµРёРјРµРЅРѕРІР°С‚СЊ");
     }
   };
 
@@ -147,19 +148,19 @@ export function ProjectHub({
       (f) => f.type.startsWith("image/") && f.size <= 20 * 1024 * 1024
     );
     if (valid.length === 0) {
-      showToast("Только изображения до 20 МБ");
+      showToast("РўРѕР»СЊРєРѕ РёР·РѕР±СЂР°Р¶РµРЅРёСЏ РґРѕ 20 РњР‘");
       return;
     }
 
     const base = replacing ? 0 : currentCount;
     const room = MAX_IMAGES_PER_PROJECT - base;
     if (room <= 0) {
-      showToast(`Максимум ${MAX_IMAGES_PER_PROJECT} изображений на проект`);
+      showToast(`РњР°РєСЃРёРјСѓРј ${MAX_IMAGES_PER_PROJECT} РёР·РѕР±СЂР°Р¶РµРЅРёР№ РЅР° РїСЂРѕРµРєС‚`);
       return;
     }
     if (valid.length > room) {
       valid = valid.slice(0, room);
-      showToast(`Максимум ${MAX_IMAGES_PER_PROJECT} изображений на проект`);
+      showToast(`РњР°РєСЃРёРјСѓРј ${MAX_IMAGES_PER_PROJECT} РёР·РѕР±СЂР°Р¶РµРЅРёР№ РЅР° РїСЂРѕРµРєС‚`);
     }
 
     const urls = valid.map((f) => URL.createObjectURL(f));
@@ -168,7 +169,7 @@ export function ProjectHub({
     setUploadError(null);
   };
 
-  const handleDrop = useCallback((e: React.DragEvent) => {
+  const handleDrop = useCallback((e: DragEvent) => {
     e.preventDefault();
     setIsDraggingOver(false);
     handleFiles(e.dataTransfer.files);
@@ -199,12 +200,30 @@ export function ProjectHub({
     index !== dragIndex &&
     index !== dragIndex + 1;
 
+  // Drop РЅР° РїРѕР·РёС†РёСЋ В«РїРµСЂРµРґ СЌР»РµРјРµРЅС‚РѕРј indexВ» (index === len вЂ” РІ РєРѕРЅРµС† СЃРїРёСЃРєР°)
+  const handleDropAt = (index: number) => (e: DragEvent) => {
+    e.preventDefault();
+    if (dragIndex !== null && dragIndex !== index) {
+      const to = index > dragIndex ? index - 1 : index;
+      movePreview(dragIndex, to);
+    }
+    setDragIndex(null);
+    setDragOverIndex(null);
+  };
+
+  const handleDragOverAt = (index: number) => (e: DragEvent) => {
+    if (dragIndex === null) return;
+    e.preventDefault();
+    setDragOverIndex(index);
+  };
+
   // --- Upload ---
   const handleConfirmUpload = async () => {
     if (pendingFiles.length === 0 || !project) return;
     setConfirmUpload(false);
     setIsUploading(true);
     setUploadError(null);
+    setLastUploadErrors(null);
     document.body.style.overflow = "hidden";
 
     const total = pendingFiles.length;
@@ -213,7 +232,7 @@ export function ProjectHub({
     const failedNames: string[] = [];
     const prepared: (File | null)[] = new Array(total).fill(null);
 
-    // Phase 1: сжатие всех файлов (отдельный прогресс, чтобы не "висело" на 0)
+    // Phase 1: СЃР¶Р°С‚РёРµ РІСЃРµС… С„Р°Р№Р»РѕРІ (РѕС‚РґРµР»СЊРЅС‹Р№ РїСЂРѕРіСЂРµСЃСЃ, С‡С‚РѕР±С‹ РЅРµ "РІРёСЃРµР»Рѕ" РЅР° 0)
     setUploadProgress({ phase: "prepare", done: 0, total });
     const prepareQueue = [...jobs];
     const prepareWorkers = Array.from(
@@ -234,8 +253,14 @@ export function ProjectHub({
     );
     await Promise.all(prepareWorkers);
 
-    // Phase 2: загрузка, 2 воркера (облако стабильнее)
+    // Phase 2: Р·Р°РіСЂСѓР·РєР°, 2 РІРѕСЂРєРµСЂР° (РѕР±Р»Р°РєРѕ СЃС‚Р°Р±РёР»СЊРЅРµРµ)
     setUploadProgress({ phase: "upload", done: 0, total });
+    const recordFailure = (name: string, reason: string) => {
+      failedNames.push(name);
+      setLastUploadErrors((prev) =>
+        prev ? prev + "\n" + name + ": " + reason : name + ": " + reason
+      );
+    };
     const uploadQueue = [...jobs];
     const uploadWorkers = Array.from(
       { length: Math.min(2, uploadQueue.length) },
@@ -244,14 +269,15 @@ export function ProjectHub({
           const job = uploadQueue.shift()!;
           const preparedFile = prepared[job.index];
           if (!preparedFile) {
-            failedNames.push(job.file.name);
+            recordFailure(job.file.name, "С„Р°Р№Р» РЅРµ СѓРґР°Р»РѕСЃСЊ РїРѕРґРіРѕС‚РѕРІРёС‚СЊ");
           } else {
             try {
               const result = await uploadImageWithRetry(preparedFile, 3);
               uploaded.push(result.url);
             } catch (e) {
-              console.error("Upload error:", job.file.name, e);
-              failedNames.push(job.file.name);
+              const msg = e instanceof Error ? e.message : String(e);
+              console.error("Upload error:", job.file.name, msg);
+              recordFailure(job.file.name, msg);
             }
           }
           setUploadProgress((p) =>
@@ -280,18 +306,18 @@ export function ProjectHub({
       if (failedNames.length > 0) {
         showToast(
           replacing
-            ? `Макеты заменены (${uploaded.length}), не загрузилось: ${failedNames.join(", ")}`
-            : `Загружено ${uploaded.length} из ${total}, не загрузилось: ${failedNames.join(", ")}`
+            ? `РњР°РєРµС‚С‹ Р·Р°РјРµРЅРµРЅС‹ (${uploaded.length}), РЅРµ Р·Р°РіСЂСѓР·РёР»РѕСЃСЊ: ${failedNames.join(", ")}`
+            : `Р—Р°РіСЂСѓР¶РµРЅРѕ ${uploaded.length} РёР· ${total}, РЅРµ Р·Р°РіСЂСѓР·РёР»РѕСЃСЊ: ${failedNames.join(", ")}`
         );
       } else {
         showToast(
           replacing
-            ? "Макеты заменены"
-            : `Пакет загружен (${uploaded.length} изображений)`
+            ? "РњР°РєРµС‚С‹ Р·Р°РјРµРЅРµРЅС‹"
+            : `РџР°РєРµС‚ Р·Р°РіСЂСѓР¶РµРЅ (${uploaded.length} РёР·РѕР±СЂР°Р¶РµРЅРёР№)`
         );
       }
     } else {
-      setUploadError("Не удалось загрузить изображения. Попробуй ещё раз.");
+      setUploadError("РќРµ СѓРґР°Р»РѕСЃСЊ Р·Р°РіСЂСѓР·РёС‚СЊ РёР·РѕР±СЂР°Р¶РµРЅРёСЏ. РџРѕРїСЂРѕР±СѓР№ РµС‰С‘ СЂР°Р·.");
     }
 
     setUploadProgress(null);
@@ -312,23 +338,23 @@ export function ProjectHub({
         const cols = imageCount <= 3 ? imageCount : 3;
         const rows = Math.ceil(imageCount / cols);
         const imgIndex = Math.floor((m.y || 0) * rows) * cols + Math.floor((m.x || 0) * cols);
-        const label = `Изображение ${Math.min(imageCount, imgIndex + 1)}`;
-        lines.push(`• ${label}: ${m.text}`);
+        const label = `РР·РѕР±СЂР°Р¶РµРЅРёРµ ${Math.min(imageCount, imgIndex + 1)}`;
+        lines.push(`вЂў ${label}: ${m.text}`);
       } else {
-        lines.push(`• Общий комментарий: ${m.text}`);
+        lines.push(`вЂў РћР±С‰РёР№ РєРѕРјРјРµРЅС‚Р°СЂРёР№: ${m.text}`);
       }
     }
     if (lines.length === 0) {
-      showToast("Правок пока нет");
+      showToast("РџСЂР°РІРѕРє РїРѕРєР° РЅРµС‚");
       return;
     }
     try {
       await navigator.clipboard.writeText(
-        "Правки по проекту «" + (project?.name || "") + "»:\n" + lines.join("\n")
+        "РџСЂР°РІРєРё РїРѕ РїСЂРѕРµРєС‚Сѓ В«" + (project?.name || "") + "В»:\n" + lines.join("\n")
       );
-      showToast("Правки скопированы");
+      showToast("РџСЂР°РІРєРё СЃРєРѕРїРёСЂРѕРІР°РЅС‹");
     } catch (e) {
-      showToast("Не удалось скопировать");
+      showToast("РќРµ СѓРґР°Р»РѕСЃСЊ СЃРєРѕРїРёСЂРѕРІР°С‚СЊ");
     }
   };
 
@@ -344,9 +370,9 @@ export function ProjectHub({
   if (!project) {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-4 bg-bg-page">
-        <p className="text-sm text-text-muted">Проект не найден</p>
+        <p className="text-sm text-text-muted">РџСЂРѕРµРєС‚ РЅРµ РЅР°Р№РґРµРЅ</p>
         <button onClick={onBack} className="rounded-xl bg-text-primary px-4 py-2 text-sm font-medium text-bg-page">
-          Назад к проектам
+          РќР°Р·Р°Рґ Рє РїСЂРѕРµРєС‚Р°Рј
         </button>
       </div>
     );
@@ -415,12 +441,12 @@ export function ProjectHub({
             </button>
             <div className="min-w-0 flex-1">
               <h1 className="truncate text-sm font-semibold text-text-primary">
-                {project.name} — {viewingImageIndex + 1} / {imageCount}
+                {project.name} вЂ” {viewingImageIndex + 1} / {imageCount}
               </h1>
             </div>
             <div className="flex items-center gap-1">
-              <button type="button" onClick={() => setViewScale(Math.max(1, viewScale - 0.5))} className="rounded-lg px-2 py-1.5 text-sm font-bold text-text-muted hover:bg-bg-cardHover hover:text-text-primary" title="Уменьшить">−</button>
-              <button type="button" onClick={() => setViewScale(viewScale + 0.5)} className="rounded-lg px-2 py-1.5 text-sm font-bold text-text-muted hover:bg-bg-cardHover hover:text-text-primary" title="Увеличить">+</button>
+              <button type="button" onClick={() => setViewScale(Math.max(1, viewScale - 0.5))} className="rounded-lg px-2 py-1.5 text-sm font-bold text-text-muted hover:bg-bg-cardHover hover:text-text-primary" title="РЈРјРµРЅСЊС€РёС‚СЊ">в€’</button>
+              <button type="button" onClick={() => setViewScale(viewScale + 0.5)} className="rounded-lg px-2 py-1.5 text-sm font-bold text-text-muted hover:bg-bg-cardHover hover:text-text-primary" title="РЈРІРµР»РёС‡РёС‚СЊ">+</button>
               <button onClick={() => setViewingImageIndex(Math.max(0, viewingImageIndex - 1))} disabled={viewingImageIndex === 0} className="rounded-lg p-1.5 text-text-muted hover:bg-bg-cardHover disabled:opacity-30">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-4 w-4"><path d="m15 18-6-6 6-6" /></svg>
               </button>
@@ -489,7 +515,7 @@ export function ProjectHub({
                 <h1
                   className="truncate text-sm font-semibold text-text-primary cursor-pointer hover:text-text-secondary transition-colors"
                   onClick={startRename}
-                  title="Нажмите, чтобы переименовать"
+                  title="РќР°Р¶РјРёС‚Рµ, С‡С‚РѕР±С‹ РїРµСЂРµРёРјРµРЅРѕРІР°С‚СЊ"
                 >
                   {project.name}
                 </h1>
@@ -497,7 +523,7 @@ export function ProjectHub({
                   type="button"
                   onClick={startRename}
                   className="shrink-0 rounded-md p-1 text-text-muted transition-all hover:text-text-primary"
-                  title="Переименовать"
+                  title="РџРµСЂРµРёРјРµРЅРѕРІР°С‚СЊ"
                 >
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" className="h-3.5 w-3.5">
                     <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
@@ -507,7 +533,7 @@ export function ProjectHub({
             )}
             {hasImages && (
               <p className="hidden sm:block text-xs text-text-muted">
-                {markers.length} {markers.length === 1 ? "правка" : markers.length > 0 && markers.length < 5 ? "правки" : "правок"}
+                {markers.length} {markers.length === 1 ? "РїСЂР°РІРєР°" : markers.length > 0 && markers.length < 5 ? "РїСЂР°РІРєРё" : "РїСЂР°РІРѕРє"}
               </p>
             )}
           </div>
@@ -515,7 +541,7 @@ export function ProjectHub({
             type="button"
             onClick={() => setConfirmDelete(true)}
             className="shrink-0 rounded-lg p-2 text-text-muted transition-colors hover:bg-red-500/10 hover:text-red-400"
-            title="Удалить проект"
+            title="РЈРґР°Р»РёС‚СЊ РїСЂРѕРµРєС‚"
           >
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
               <path d="M3 6h18" />
@@ -548,8 +574,8 @@ export function ProjectHub({
               <polyline points="17,8 12,3 7,8" />
               <line x1="12" y1="3" x2="12" y2="15" />
             </svg>
-            <p className="mb-1 text-sm font-medium text-text-primary">Перетащите или нажмите для выбора макетов</p>
-            <p className="text-xs text-text-muted">PNG, JPG или WebP, до {MAX_IMAGES_PER_PROJECT} изображений</p>
+            <p className="mb-1 text-sm font-medium text-text-primary">РџРµСЂРµС‚Р°С‰РёС‚Рµ РёР»Рё РЅР°Р¶РјРёС‚Рµ РґР»СЏ РІС‹Р±РѕСЂР° РјР°РєРµС‚РѕРІ</p>
+            <p className="text-xs text-text-muted">PNG, JPG РёР»Рё WebP, РґРѕ {MAX_IMAGES_PER_PROJECT} РёР·РѕР±СЂР°Р¶РµРЅРёР№</p>
             <input ref={fileInputRef} type="file" accept="image/*" multiple onChange={(e) => handleFiles(e.target.files)} className="hidden" />
           </div>
         )}
@@ -559,26 +585,31 @@ export function ProjectHub({
           <div className="mb-6">
             <div className="mb-3 flex items-center justify-between">
               <h3 className="text-sm font-medium text-text-primary">
-                {hasImages ? "Новые макеты" : "Новый пакет"} ({pendingFiles.length})
+                {hasImages ? "РќРѕРІС‹Рµ РјР°РєРµС‚С‹" : "РќРѕРІС‹Р№ РїР°РєРµС‚"} ({pendingFiles.length})
               </h3>
               <label className="flex cursor-pointer items-center gap-1.5 rounded-lg border border-border-strong bg-bg-input px-3 py-1.5 text-xs font-medium text-text-primary transition-all hover:bg-bg-cardHover">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" className="h-3.5 w-3.5">
                   <path d="M12 5v14M5 12h14" />
                 </svg>
-                Добавить ещё
+                Р”РѕР±Р°РІРёС‚СЊ РµС‰С‘
                 <input type="file" accept="image/*" multiple onChange={(e) => handleFiles(e.target.files)} className="hidden" />
               </label>
             </div>
             {!isTouch && (
               <p className="mb-3 text-xs text-text-muted">
-                Порядок — как клиент увидит изображения. Перетащите, чтобы изменить.
+                РџРѕСЂСЏРґРѕРє вЂ” РєР°Рє РєР»РёРµРЅС‚ СѓРІРёРґРёС‚ РёР·РѕР±СЂР°Р¶РµРЅРёСЏ. РџРµСЂРµС‚Р°С‰РёС‚Рµ, С‡С‚РѕР±С‹ РёР·РјРµРЅРёС‚СЊ.
               </p>
             )}
 
             <div className="space-y-2">
               {previewUrls.map((url, index) => (
                 <Fragment key={index}>
-                  {showDropIndicator(index) && <DropIndicator />}
+                  {showDropIndicator(index) && (
+                    <DropIndicator
+                      onDragOver={handleDragOverAt(index)}
+                      onDrop={handleDropAt(index)}
+                    />
+                  )}
                   <div
                     draggable={!isTouch}
                     onDragStart={(e) => {
@@ -587,20 +618,8 @@ export function ProjectHub({
                       setDragIndex(index);
                       setDragOverIndex(index);
                     }}
-                    onDragOver={(e) => {
-                      if (dragIndex === null) return;
-                      e.preventDefault();
-                      setDragOverIndex(index);
-                    }}
-                    onDrop={(e) => {
-                      e.preventDefault();
-                      if (dragIndex !== null && dragIndex !== index) {
-                        const to = index > dragIndex ? index - 1 : index;
-                        movePreview(dragIndex, to);
-                      }
-                      setDragIndex(null);
-                      setDragOverIndex(null);
-                    }}
+                    onDragOver={handleDragOverAt(index)}
+                    onDrop={handleDropAt(index)}
                     onDragEnd={() => {
                       setDragIndex(null);
                       setDragOverIndex(null);
@@ -647,31 +666,28 @@ export function ProjectHub({
                   </div>
                 </Fragment>
               ))}
-              {showDropIndicator(pendingFiles.length) && <DropIndicator />}
+              {showDropIndicator(pendingFiles.length) && (
+                <DropIndicator
+                  onDragOver={handleDragOverAt(pendingFiles.length)}
+                  onDrop={handleDropAt(pendingFiles.length)}
+                />
+              )}
               {/* Tail drop zone: dropping after the last item */}
               {!isTouch && (
                 <div
                   className="h-1"
-                  onDragOver={(e) => {
-                    if (dragIndex === null) return;
-                    e.preventDefault();
-                    setDragOverIndex(pendingFiles.length);
-                  }}
-                  onDrop={(e) => {
-                    e.preventDefault();
-                    if (dragIndex !== null && dragIndex !== pendingFiles.length - 1) {
-                      movePreview(dragIndex, pendingFiles.length - 1);
-                    }
-                    setDragIndex(null);
-                    setDragOverIndex(null);
-                  }}
+                  onDragOver={handleDragOverAt(pendingFiles.length)}
+                  onDrop={handleDropAt(pendingFiles.length)}
                 />
               )}
             </div>
 
-            {uploadError && (
+            {(uploadError || lastUploadErrors) && (
               <div className="mt-3 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-400">
-                {uploadError}
+                {uploadError && <div className="font-medium">{uploadError}</div>}
+                {lastUploadErrors && (
+                  <div className="mt-1 whitespace-pre-wrap break-all opacity-90">{lastUploadErrors}</div>
+                )}
               </div>
             )}
 
@@ -680,7 +696,7 @@ export function ProjectHub({
               onClick={() => setConfirmUpload(true)}
               className="mt-4 w-full rounded-xl bg-text-primary px-4 py-3 text-sm font-medium text-bg-page transition-all hover:opacity-90 active:scale-[0.98]"
             >
-              {hasImages ? "Заменить макеты" : "Загрузить пакет"} ({pendingFiles.length} изображений)
+              {hasImages ? "Р—Р°РјРµРЅРёС‚СЊ РјР°РєРµС‚С‹" : "Р—Р°РіСЂСѓР·РёС‚СЊ РїР°РєРµС‚"} ({pendingFiles.length} РёР·РѕР±СЂР°Р¶РµРЅРёР№)
             </button>
           </div>
         )}
@@ -697,8 +713,8 @@ export function ProjectHub({
                   <line x1="12" y1="2" x2="12" y2="15" />
                 </svg>
                 <input type="text" readOnly value={shareUrl} className="min-w-0 flex-1 bg-transparent text-xs text-text-muted outline-none" />
-                <button type="button" onClick={() => { navigator.clipboard.writeText(shareUrl); showToast("Ссылка скопирована"); }} className="shrink-0 rounded-lg bg-text-primary px-3 py-1.5 text-xs font-medium text-bg-page transition-all hover:opacity-90 active:scale-[0.98]">
-                  Копировать
+                <button type="button" onClick={() => { navigator.clipboard.writeText(shareUrl); showToast("РЎСЃС‹Р»РєР° СЃРєРѕРїРёСЂРѕРІР°РЅР°"); }} className="shrink-0 rounded-lg bg-text-primary px-3 py-1.5 text-xs font-medium text-bg-page transition-all hover:opacity-90 active:scale-[0.98]">
+                  РљРѕРїРёСЂРѕРІР°С‚СЊ
                 </button>
               </div>
             </div>
@@ -714,7 +730,7 @@ export function ProjectHub({
                   <rect x="9" y="9" width="13" height="13" rx="2" />
                   <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
                 </svg>
-                Скопировать все правки ({markers.length})
+                РЎРєРѕРїРёСЂРѕРІР°С‚СЊ РІСЃРµ РїСЂР°РІРєРё ({markers.length})
               </button>
               <button
                 type="button"
@@ -726,14 +742,14 @@ export function ProjectHub({
                   <polyline points="17,8 12,3 7,8" />
                   <line x1="12" y1="3" x2="12" y2="15" />
                 </svg>
-                Заменить макеты
+                Р—Р°РјРµРЅРёС‚СЊ РјР°РєРµС‚С‹
               </button>
             </div>
 
             {/* Comments list */}
             {markers.length > 0 && (
               <div className="mb-6 space-y-2">
-                <h3 className="text-sm font-medium text-text-primary">Правки ({markers.length})</h3>
+                <h3 className="text-sm font-medium text-text-primary">РџСЂР°РІРєРё ({markers.length})</h3>
                 {markers.map((m) => (
                   <div key={m.id} className="flex items-start gap-3 rounded-xl border border-border-strong bg-bg-card p-3">
                     <div className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-text-primary text-[10px] font-bold text-bg-page">
@@ -743,8 +759,8 @@ export function ProjectHub({
                       <p className="text-sm text-text-primary">{m.text}</p>
                       <p className="mt-0.5 text-[10px] text-text-muted">
                         {m.type === "point"
-                          ? "Точка на изображении " + (imageCount > 0 ? Math.floor((m.y || 0) * Math.ceil(imageCount / (imageCount <= 3 ? imageCount : 3))) * (imageCount <= 3 ? imageCount : 3) + Math.floor((m.x || 0) * (imageCount <= 3 ? imageCount : 3)) + 1 : 1)
-                          : "Общий комментарий"}
+                          ? "РўРѕС‡РєР° РЅР° РёР·РѕР±СЂР°Р¶РµРЅРёРё " + (imageCount > 0 ? Math.floor((m.y || 0) * Math.ceil(imageCount / (imageCount <= 3 ? imageCount : 3))) * (imageCount <= 3 ? imageCount : 3) + Math.floor((m.x || 0) * (imageCount <= 3 ? imageCount : 3)) + 1 : 1)
+                          : "РћР±С‰РёР№ РєРѕРјРјРµРЅС‚Р°СЂРёР№"}
                       </p>
                     </div>
                   </div>
@@ -755,8 +771,14 @@ export function ProjectHub({
             {/* Images list */}
             <div className="mb-6">
               <h3 className="mb-3 text-sm font-medium text-text-primary">
-                Изображения ({imageCount})
+                РР·РѕР±СЂР°Р¶РµРЅРёСЏ ({imageCount})
               </h3>
+              {lastUploadErrors && (
+                <div className="mb-3 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-400">
+                  <div className="font-medium">РќРµ СѓРґР°Р»РѕСЃСЊ Р·Р°РіСЂСѓР·РёС‚СЊ:</div>
+                  <div className="mt-1 whitespace-pre-wrap break-all opacity-90">{lastUploadErrors}</div>
+                </div>
+              )}
               <div className="space-y-2">
                 {project.imageUrls!.map((url, index) => (
                   <div key={index} className="group relative flex items-center gap-3 rounded-xl border border-border-strong bg-bg-card p-2 transition-all hover:border-text-primary/30 cursor-pointer" onClick={() => setViewingImageIndex(index)}>
@@ -767,13 +789,13 @@ export function ProjectHub({
                       <img src={url} alt="" className="h-full w-full object-cover" />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="truncate text-sm text-text-primary">Изображение {index + 1}</p>
+                      <p className="truncate text-sm text-text-primary">РР·РѕР±СЂР°Р¶РµРЅРёРµ {index + 1}</p>
                     </div>
                     <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => e.stopPropagation()}>
                       <button onClick={() => setFullscreenIndex(index)} className="flex h-8 w-8 items-center justify-center rounded-lg text-text-muted hover:bg-bg-cardHover hover:text-text-primary">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-4 w-4"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>
                       </button>
-                      <span className="text-xs font-medium text-text-primary px-2 py-1 rounded-lg bg-bg-input/80">Просмотр</span>
+                      <span className="text-xs font-medium text-text-primary px-2 py-1 rounded-lg bg-bg-input/80">РџСЂРѕСЃРјРѕС‚СЂ</span>
                     </div>
                   </div>
                 ))}
@@ -786,9 +808,9 @@ export function ProjectHub({
       {/* Delete project modal */}
       <ConfirmModal
         open={confirmDelete}
-        title="Удалить проект?"
-        message="Проект будет скрыт. Лимит на бесплатном тарифе считается по всем созданным проектам — слот не освободится."
-        confirmLabel="Удалить"
+        title="РЈРґР°Р»РёС‚СЊ РїСЂРѕРµРєС‚?"
+        message="РџСЂРѕРµРєС‚ Р±СѓРґРµС‚ СЃРєСЂС‹С‚. Р›РёРјРёС‚ РЅР° Р±РµСЃРїР»Р°С‚РЅРѕРј С‚Р°СЂРёС„Рµ СЃС‡РёС‚Р°РµС‚СЃСЏ РїРѕ РІСЃРµРј СЃРѕР·РґР°РЅРЅС‹Рј РїСЂРѕРµРєС‚Р°Рј вЂ” СЃР»РѕС‚ РЅРµ РѕСЃРІРѕР±РѕРґРёС‚СЃСЏ."
+        confirmLabel="РЈРґР°Р»РёС‚СЊ"
         danger
         onConfirm={handleDelete}
         onCancel={() => setConfirmDelete(false)}
@@ -797,9 +819,9 @@ export function ProjectHub({
       {/* Replace images modal */}
       <ConfirmModal
         open={replaceConfirm}
-        title="Заменить макеты?"
-        message={"Текущие изображения и все правки клиента будут заменены новым набором. Это действие нельзя отменить."}
-        confirmLabel="Выбрать файлы"
+        title="Р—Р°РјРµРЅРёС‚СЊ РјР°РєРµС‚С‹?"
+        message={"РўРµРєСѓС‰РёРµ РёР·РѕР±СЂР°Р¶РµРЅРёСЏ Рё РІСЃРµ РїСЂР°РІРєРё РєР»РёРµРЅС‚Р° Р±СѓРґСѓС‚ Р·Р°РјРµРЅРµРЅС‹ РЅРѕРІС‹Рј РЅР°Р±РѕСЂРѕРј. Р­С‚Рѕ РґРµР№СЃС‚РІРёРµ РЅРµР»СЊР·СЏ РѕС‚РјРµРЅРёС‚СЊ."}
+        confirmLabel="Р’С‹Р±СЂР°С‚СЊ С„Р°Р№Р»С‹"
         danger
         onConfirm={() => {
           setReplaceConfirm(false);
@@ -811,11 +833,11 @@ export function ProjectHub({
       {/* Upload confirmation modal */}
       <ConfirmModal
         open={confirmUpload}
-        title={hasImages ? "Заменить макеты?" : "Загрузить изображения?"}
+        title={hasImages ? "Р—Р°РјРµРЅРёС‚СЊ РјР°РєРµС‚С‹?" : "Р—Р°РіСЂСѓР·РёС‚СЊ РёР·РѕР±СЂР°Р¶РµРЅРёСЏ?"}
         message={hasImages
-          ? "Текущие макеты и все правки клиента будут заменены. Это действие нельзя отменить."
-          : "Будет загружено " + pendingFiles.length + " изображений. После загрузки появится ссылка для клиента."}
-        confirmLabel={hasImages ? "Заменить" : "Загрузить"}
+          ? "РўРµРєСѓС‰РёРµ РјР°РєРµС‚С‹ Рё РІСЃРµ РїСЂР°РІРєРё РєР»РёРµРЅС‚Р° Р±СѓРґСѓС‚ Р·Р°РјРµРЅРµРЅС‹. Р­С‚Рѕ РґРµР№СЃС‚РІРёРµ РЅРµР»СЊР·СЏ РѕС‚РјРµРЅРёС‚СЊ."
+          : "Р‘СѓРґРµС‚ Р·Р°РіСЂСѓР¶РµРЅРѕ " + pendingFiles.length + " РёР·РѕР±СЂР°Р¶РµРЅРёР№. РџРѕСЃР»Рµ Р·Р°РіСЂСѓР·РєРё РїРѕСЏРІРёС‚СЃСЏ СЃСЃС‹Р»РєР° РґР»СЏ РєР»РёРµРЅС‚Р°."}
+        confirmLabel={hasImages ? "Р—Р°РјРµРЅРёС‚СЊ" : "Р—Р°РіСЂСѓР·РёС‚СЊ"}
         onConfirm={handleConfirmUpload}
         onCancel={handleCancelUpload}
       />
@@ -828,9 +850,9 @@ export function ProjectHub({
             <p className="text-sm text-text-primary">
               {uploadProgress
                 ? uploadProgress.phase === "prepare"
-                  ? `Подготовка ${uploadProgress.done} из ${uploadProgress.total}...`
-                  : `Загрузка ${uploadProgress.done} из ${uploadProgress.total}...`
-                : "Загрузка..."}
+                  ? `РџРѕРґРіРѕС‚РѕРІРєР° ${uploadProgress.done} РёР· ${uploadProgress.total}...`
+                  : `Р—Р°РіСЂСѓР·РєР° ${uploadProgress.done} РёР· ${uploadProgress.total}...`
+                : "Р—Р°РіСЂСѓР·РєР°..."}
             </p>
           </div>
         </div>
@@ -848,9 +870,15 @@ export function ProjectHub({
   );
 }
 
-function DropIndicator() {
+function DropIndicator({
+  onDragOver,
+  onDrop,
+}: {
+  onDragOver: (e: DragEvent) => void;
+  onDrop: (e: DragEvent) => void;
+}) {
   return (
-    <div className="flex items-center gap-2 py-0.5">
+    <div onDragOver={onDragOver} onDrop={onDrop} className="flex items-center py-1">
       <div className="h-1 flex-1 rounded-full bg-white" />
     </div>
   );
