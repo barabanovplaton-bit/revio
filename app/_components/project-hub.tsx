@@ -40,7 +40,7 @@ export function ProjectHub({
 
   // Upload state
   const [isUploading, setIsUploading] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState<{ done: number; total: number } | null>(null);
+  const [uploadProgress, setUploadProgress] = useState<{ phase: "prepare" | "upload"; done: number; total: number } | null>(null);
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
   const [previewUrls, setPreviewUrls] = useState<string[]>([]);
   const [confirmUpload, setConfirmUpload] = useState(false);
@@ -205,40 +205,62 @@ export function ProjectHub({
     setConfirmUpload(false);
     setIsUploading(true);
     setUploadError(null);
-    setUploadProgress({ done: 0, total: pendingFiles.length });
     document.body.style.overflow = "hidden";
 
+    const total = pendingFiles.length;
+    const jobs = pendingFiles.map((file, index) => ({ file, index }));
     const uploaded: string[] = [];
     const failedNames: string[] = [];
-    const total = pendingFiles.length;
-    let done = 0;
-    const setProgress = () => setUploadProgress({ done, total });
+    const prepared: (File | null)[] = new Array(total).fill(null);
 
-    const processFile = async (file: File) => {
-      try {
-        const prepared = await prepareImageFile(file);
-        const result = await uploadImageWithRetry(prepared, 3);
-        uploaded.push(result.url);
-      } catch (e) {
-        console.error("Upload error:", file.name, e);
-        failedNames.push(file.name);
-      } finally {
-        done++;
-        setProgress();
-      }
-    };
-
-    const queue = [...pendingFiles];
-    const workers = Array.from(
-      { length: Math.min(3, queue.length) },
+    // Phase 1: сжатие всех файлов (отдельный прогресс, чтобы не "висело" на 0)
+    setUploadProgress({ phase: "prepare", done: 0, total });
+    const prepareQueue = [...jobs];
+    const prepareWorkers = Array.from(
+      { length: Math.min(2, prepareQueue.length) },
       async () => {
-        while (queue.length > 0) {
-          const file = queue.shift()!;
-          await processFile(file);
+        while (prepareQueue.length > 0) {
+          const job = prepareQueue.shift()!;
+          try {
+            prepared[job.index] = await prepareImageFile(job.file);
+          } catch (e) {
+            console.error("Prepare error:", job.file.name, e);
+          }
+          setUploadProgress((p) =>
+            p && p.phase === "prepare" ? { ...p, done: p.done + 1 } : p
+          );
         }
       }
     );
-    await Promise.all(workers);
+    await Promise.all(prepareWorkers);
+
+    // Phase 2: загрузка, 2 воркера (облако стабильнее)
+    setUploadProgress({ phase: "upload", done: 0, total });
+    const uploadQueue = [...jobs];
+    const uploadWorkers = Array.from(
+      { length: Math.min(2, uploadQueue.length) },
+      async () => {
+        while (uploadQueue.length > 0) {
+          const job = uploadQueue.shift()!;
+          const preparedFile = prepared[job.index];
+          if (!preparedFile) {
+            failedNames.push(job.file.name);
+          } else {
+            try {
+              const result = await uploadImageWithRetry(preparedFile, 3);
+              uploaded.push(result.url);
+            } catch (e) {
+              console.error("Upload error:", job.file.name, e);
+              failedNames.push(job.file.name);
+            }
+          }
+          setUploadProgress((p) =>
+            p && p.phase === "upload" ? { ...p, done: p.done + 1 } : p
+          );
+        }
+      }
+    );
+    await Promise.all(uploadWorkers);
 
     if (uploaded.length > 0) {
       const replacing = (project?.imageUrls?.length || 0) > 0;
@@ -259,7 +281,7 @@ export function ProjectHub({
         showToast(
           replacing
             ? `Макеты заменены (${uploaded.length}), не загрузилось: ${failedNames.join(", ")}`
-            : `Загружено ${uploaded.length} из ${pendingFiles.length}, не загрузилось: ${failedNames.join(", ")}`
+            : `Загружено ${uploaded.length} из ${total}, не загрузилось: ${failedNames.join(", ")}`
         );
       } else {
         showToast(
@@ -585,7 +607,7 @@ export function ProjectHub({
                     }}
                     className={`group flex items-center gap-3 rounded-xl border bg-bg-card p-2 transition-all cursor-grab active:cursor-grabbing ${
                       dragIndex === index
-                        ? "border-border-strong opacity-10"
+                        ? "border-transparent opacity-0"
                         : dragOverIndex === index && dragIndex !== null
                           ? "border-border-strong"
                           : "border-border-strong hover:border-text-primary/30"
@@ -805,7 +827,9 @@ export function ProjectHub({
             <div className="h-8 w-8 animate-spin rounded-full border-2 border-border-strong border-t-text-primary" />
             <p className="text-sm text-text-primary">
               {uploadProgress
-                ? `Загрузка ${uploadProgress.done} из ${uploadProgress.total}...`
+                ? uploadProgress.phase === "prepare"
+                  ? `Подготовка ${uploadProgress.done} из ${uploadProgress.total}...`
+                  : `Загрузка ${uploadProgress.done} из ${uploadProgress.total}...`
                 : "Загрузка..."}
             </p>
           </div>
@@ -827,13 +851,7 @@ export function ProjectHub({
 function DropIndicator() {
   return (
     <div className="flex items-center gap-2 py-0.5">
-      <div className="h-0.5 flex-1 rounded-full bg-text-primary/70" />
-      <div className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full border border-text-primary/50 bg-bg-card">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" className="h-2 w-2 text-text-primary">
-          <path d="m5 12 4 4m0 0 4-4M9 16V4" />
-        </svg>
-      </div>
-      <div className="h-0.5 flex-1 rounded-full bg-text-primary/70" />
+      <div className="h-1 flex-1 rounded-full bg-white" />
     </div>
   );
 }

@@ -9,11 +9,13 @@ export interface UploadResult {
 /**
  * Подготовка изображения к загрузке:
  * - если файл большой или размеры превышают MAX_DIM — перекодируем через canvas
- *   (PNG с прозрачностью остаётся PNG, остальное — JPEG 0.92; это визуально незаметно)
- * - маленькие файлы возвращаются как есть, БЕЗ перекодировки
+ *   (PNG с прозрачностью остаётся PNG, остальное — JPEG; визуально незаметно)
+ * - гарантируем, что итоговый файл < 3.5 МБ (лимит Vercel ~4.5 МБ с запасом)
+ * - если что-то не получилось — возвращаем исходный файл как есть
  */
 const MAX_DIM = 2560;
-const MAX_BYTES = 4 * 1024 * 1024;
+const MAX_BYTES = 3.8 * 1024 * 1024;
+const SAFE_BYTES = 3.5 * 1024 * 1024;
 
 export async function prepareImageFile(file: File): Promise<File> {
   if (file.size <= MAX_BYTES) {
@@ -23,7 +25,14 @@ export async function prepareImageFile(file: File): Promise<File> {
     }
   }
 
-  const bitmap = await createImageBitmap(file);
+  let bitmap: ImageBitmap | null = null;
+  try {
+    bitmap = await createImageBitmap(file);
+  } catch (e) {
+    console.error("createImageBitmap failed, uploading original:", e);
+    return file;
+  }
+
   const scale = Math.min(1, MAX_DIM / Math.max(bitmap.width, bitmap.height));
   const w = Math.max(1, Math.round(bitmap.width * scale));
   const h = Math.max(1, Math.round(bitmap.height * scale));
@@ -36,32 +45,39 @@ export async function prepareImageFile(file: File): Promise<File> {
   bitmap.close();
 
   const isPng = file.type === "image/png";
-  let blob = await new Promise<Blob | null>((resolve) => {
-    canvas.toBlob(
-      resolve,
-      isPng ? "image/png" : "image/jpeg",
-      isPng ? undefined : 0.92
-    );
-  });
+  let blob = await toBlob(canvas, isPng ? "image/png" : "image/jpeg", isPng ? undefined : 0.92);
 
   // PNG может остаться слишком большим (Vercel режет запросы > 4.5 МБ) —
-  // пересобираем в JPEG, если он всё ещё тяжёлый
+  // пересобираем в JPEG
   let ext = isPng ? "png" : "jpg";
   let mime = isPng ? "image/png" : "image/jpeg";
-  if (blob && blob.size > 3.5 * 1024 * 1024) {
-    blob = await new Promise<Blob | null>((resolve) => {
-      canvas.toBlob(resolve, "image/jpeg", 0.92);
-    });
+  if (blob && blob.size > SAFE_BYTES) {
+    blob = await toBlob(canvas, "image/jpeg", 0.92);
     ext = "jpg";
     mime = "image/jpeg";
   }
 
+  // Крайний случай: JPEG всё ещё слишком большой — жёстко сжимаем
+  if (blob && blob.size > SAFE_BYTES) {
+    blob = await toBlob(canvas, "image/jpeg", 0.8);
+  }
+
   if (!blob) {
-    throw new Error("Failed to compress image");
+    return file;
   }
 
   const name = file.name.replace(/\.[^.]+$/, "") + "." + ext;
   return new File([blob], name, { type: mime });
+}
+
+function toBlob(
+  canvas: HTMLCanvasElement,
+  type: string,
+  quality?: number
+): Promise<Blob | null> {
+  return new Promise((resolve) => {
+    canvas.toBlob(resolve, type, quality);
+  });
 }
 
 function getImageSize(file: File): Promise<{ width: number; height: number } | null> {
@@ -96,7 +112,14 @@ export async function uploadImage(
   });
 
   if (!res.ok) {
-    throw new Error("Upload failed");
+    let details = "";
+    try {
+      const data = await res.json();
+      details = data?.details || data?.error || "";
+    } catch {
+      /* ignore */
+    }
+    throw new Error(`Upload failed${details ? ": " + details : ""}`);
   }
 
   return res.json();
