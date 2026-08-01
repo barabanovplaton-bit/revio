@@ -1,7 +1,12 @@
 "use client";
 
 import { useState, useEffect, use } from "react";
-import { getProject, type Project } from "@/lib/projects";
+import {
+  getProject,
+  updateProject,
+  hasRoundsLeft,
+  type Project,
+} from "@/lib/projects";
 import { MarkerCanvas } from "@/app/_components/marker-canvas";
 
 export default function ReviewPage({
@@ -13,6 +18,7 @@ export default function ReviewPage({
   const [project, setProject] = useState<Project | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [showDoneModal, setShowDoneModal] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -71,25 +77,75 @@ export default function ReviewPage({
     );
   }
 
+  const locked = !hasRoundsLeft(project) || project.status === "exhausted";
+
+  const handleDone = async () => {
+    try {
+      await updateProject(project.id, {});
+    } catch (e) {
+      console.error(e);
+    }
+    setShowDoneModal(true);
+  };
+
   return (
     <div className="flex h-screen flex-col bg-bg-page">
       <header className="flex items-center justify-between border-b border-border-strong bg-bg-card px-4 py-3">
         <div>
           <h1 className="font-semibold text-text-primary">{project.name}</h1>
           <p className="text-xs text-text-muted">
-            Нажмите на картинку, чтобы оставить правку
+            Раунд {project.currentRound || 1}
+            {locked ? " · правки закрыты" : " · нажмите на картинку, чтобы оставить правку"}
           </p>
         </div>
+        <button
+          type="button"
+          onClick={handleDone}
+          className="shrink-0 rounded-xl bg-text-primary px-4 py-2 text-sm font-medium text-bg-page transition-all hover:opacity-90 active:scale-[0.98]"
+        >
+          Готово
+        </button>
       </header>
 
       <main className="flex-1 overflow-hidden">
         <MarkerCanvas
           imageUrls={project.imageUrls}
           projectId={project.id}
-          round={1}
-          isLocked={false}
+          round={project.currentRound || 1}
+          isLocked={locked}
         />
       </main>
+
+      {locked && (
+        <div className="pointer-events-none fixed inset-x-0 bottom-0 z-40 flex justify-center p-4">
+          <div className="pointer-events-auto max-w-md rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-center text-sm text-red-400 backdrop-blur-sm">
+            Раунды правок в этом проекте исчерпаны. Свяжитесь с фрилансером, чтобы продолжить.
+          </div>
+        </div>
+      )}
+
+      {showDoneModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-sm rounded-2xl border border-border-strong bg-bg-card p-6 shadow-2xl">
+            <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-text-primary/10">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="h-6 w-6 text-text-primary">
+                <path d="M20 6 9 17l-5-5" />
+              </svg>
+            </div>
+            <h2 className="mb-2 text-lg font-semibold text-text-primary">Правки отправлены!</h2>
+            <p className="mb-6 text-sm text-text-muted">
+              Дизайнер получит уведомление и пришлёт исправленную версию. Ты можешь вернуться позже и добавить правки.
+            </p>
+            <button
+              type="button"
+              onClick={() => setShowDoneModal(false)}
+              className="w-full rounded-xl bg-text-primary px-4 py-2.5 text-sm font-medium text-bg-page transition-all hover:opacity-90"
+            >
+              Понятно
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

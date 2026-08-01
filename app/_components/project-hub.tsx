@@ -6,11 +6,12 @@ import {
   getProject,
   updateProject,
   deleteProject,
+  startNewRound,
+  hasRoundsLeft,
   type Project,
 } from "@/lib/projects";
 import {
   subscribeToAllProjectMarkers,
-  deleteAllProjectMarkers,
   type Marker,
 } from "@/lib/markers";
 import { ConfirmModal } from "./confirm-modal";
@@ -61,7 +62,12 @@ export function ProjectHub({
 
   // Image viewer
   const [viewingImageIndex, setViewingImageIndex] = useState<number | null>(null);
-  const [viewScale, setViewScale] = useState(1);
+
+  // History viewer (старые раунды)
+  const [historyView, setHistoryView] = useState<{
+    round: number;
+    index: number;
+  } | null>(null);
 
   // Fullscreen preview
   const [fullscreenIndex, setFullscreenIndex] = useState<number | null>(null);
@@ -99,13 +105,7 @@ export function ProjectHub({
     return () => { cancelled = true; unsub(); clearInterval(interval); };
   }, [projectId]);
 
-  // Reset zoom when switching images
-  useEffect(() => {
-    setViewScale(1);
-  }, [viewingImageIndex]);
-
-  const showToast = (msg: string) => {
-    setToast(msg);
+  const showToast = (msg: string) => {    setToast(msg);
     setTimeout(() => setToast(null), 2400);
   };
 
@@ -194,11 +194,7 @@ export function ProjectHub({
     setPreviewUrls(newUrls);
   };
 
-  const showDropIndicator = (index: number) =>
-    dragIndex !== null &&
-    dragOverIndex === index &&
-    index !== dragIndex &&
-    index !== dragIndex + 1;
+  const isDragging = dragIndex !== null && !isTouch;
 
   // Drop на позицию «перед элементом index» (index === len — в конец списка)
   const handleDropAt = (index: number) => (e: DragEvent) => {
@@ -290,12 +286,13 @@ export function ProjectHub({
 
     if (uploaded.length > 0) {
       const replacing = (project?.imageUrls?.length || 0) > 0;
-      await updateProject(projectId, {
-        imageUrls: uploaded,
-        status: "in_progress",
-      });
       if (replacing) {
-        await deleteAllProjectMarkers(projectId);
+        await startNewRound(projectId, uploaded);
+      } else {
+        await updateProject(projectId, {
+          imageUrls: uploaded,
+          status: "in_progress",
+        });
       }
       const fresh = await getProject(projectId);
       setProject(fresh || { ...project, imageUrls: uploaded });
@@ -312,7 +309,7 @@ export function ProjectHub({
       } else {
         showToast(
           replacing
-            ? "Макеты заменены"
+            ? `Раунд ${fresh?.currentRound ?? (project?.currentRound || 1) + 1}: макеты заменены. Осталось раундов: ${fresh?.roundsLeft ?? 0}`
             : `Пакет загружен (${uploaded.length} изображений)`
         );
       }
@@ -333,7 +330,7 @@ export function ProjectHub({
   const copyComments = async () => {
     const imageCount = project?.imageUrls?.length || 0;
     const lines: string[] = [];
-    for (const m of markers) {
+    for (const m of roundMarkers) {
       if (m.type === "point" && m.x != null && m.y != null) {
         const cols = imageCount <= 3 ? imageCount : 3;
         const rows = Math.ceil(imageCount / cols);
@@ -381,6 +378,11 @@ export function ProjectHub({
   const imageCount = project.imageUrls?.length || 0;
   const hasImages = imageCount > 0;
   const hasPending = pendingFiles.length > 0;
+  const currentRound = project.currentRound || 1;
+  const roundsLeft = project.roundsLeft ?? 0;
+  const roundsTotal = project.roundsTotal ?? 0;
+  // Правки текущего раунда (в `markers` приходят все раунды — для истории)
+  const roundMarkers = markers.filter((m) => m.round === currentRound);
 
   const shareUrl =
     typeof window !== "undefined"
@@ -416,9 +418,99 @@ export function ProjectHub({
     }
   }
 
+  // --- History viewer (старые раунды) ---
+  if (historyView) {
+    const historyPackage = project.packageHistory?.find(
+      (p) => p.round === historyView.round
+    );
+    if (historyPackage && historyPackage.imageUrls.length > 0) {
+      const histUrls = historyPackage.imageUrls;
+      const histIndex = Math.min(historyView.index, histUrls.length - 1);
+      const histCount = histUrls.length;
+      const histMarkers = markers.filter(
+        (m) => m.round === historyView.round && m.type === "point"
+      );
+      const histCols = histCount <= 3 ? histCount : 3;
+      const histRows = Math.ceil(histCount / histCols);
+      const imgCol = histIndex % histCols;
+      const imgRow = Math.floor(histIndex / histCols);
+      const pointMarkers = histMarkers.filter((m) => {
+        const minX = imgCol / histCols;
+        const maxX = (imgCol + 1) / histCols;
+        const minY = imgRow / histRows;
+        const maxY = (imgRow + 1) / histRows;
+        return (m.x || 0) >= minX && (m.x || 0) < maxX && (m.y || 0) >= minY && (m.y || 0) < maxY;
+      });
+      const setHist = (fn: (v: { round: number; index: number }) => { round: number; index: number }) =>
+        setHistoryView((v) => (v ? fn(v) : v));
+      return (
+        <div className="fixed inset-0 z-50 flex flex-col bg-black/95">
+          <div className="flex items-center justify-between px-4 py-3">
+            <button
+              onClick={() => setHistoryView(null)}
+              className="rounded-lg p-2 text-white/70 hover:text-white"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-5 w-5">
+                <path d="M18 6 6 18M6 6l12 12" />
+              </svg>
+            </button>
+            <span className="text-sm text-white/70">
+              Раунд {historyView.round} (история) · {histIndex + 1} / {histCount}
+            </span>
+            <button
+              onClick={() => setHistoryView(null)}
+              className="rounded-lg px-3 py-1.5 text-xs font-medium text-white/70 transition-colors hover:text-white"
+            >
+              К текущему раунду
+            </button>
+          </div>
+          <div className="flex-1 overflow-auto p-4">
+            <div className="mx-auto max-w-4xl">
+              <div className="relative inline-block w-full">
+                <img src={histUrls[histIndex]} alt="" className="w-full rounded-xl border border-white/10" />
+                {pointMarkers.map((marker) => {
+                  const localX = ((marker.x || 0) - imgCol / histCols) * histCols;
+                  const localY = ((marker.y || 0) - imgRow / histRows) * histRows;
+                  return (
+                    <div key={marker.id} className="absolute group" style={{ left: `${localX * 100}%`, top: `${localY * 100}%`, transform: "translate(-50%, -50%)" }}>
+                      <div className="flex h-6 w-6 items-center justify-center rounded-full bg-text-primary border-2 border-white/80 shadow-lg">
+                        <span className="text-[10px] font-bold text-bg-page">#</span>
+                      </div>
+                      <div className="absolute left-8 top-1/2 z-40 -translate-y-1/2 w-64 rounded-xl border border-white/10 bg-bg-card p-3 shadow-2xl opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity">
+                        <p className="text-sm text-text-primary">{marker.text}</p>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+          {histUrls.length > 1 && (
+            <>
+              <button
+                onClick={() => setHist((v) => ({ round: v.round, index: Math.max(0, v.index - 1) }))}
+                disabled={histIndex === 0}
+                className="absolute left-4 top-1/2 -translate-y-1/2 rounded-full border border-white/20 bg-black/50 p-2 text-white/80 hover:text-white disabled:opacity-30"
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-5 w-5"><path d="m15 18-6-6 6-6" /></svg>
+              </button>
+              <button
+                onClick={() => setHist((v) => ({ round: v.round, index: Math.min(histUrls.length - 1, v.index + 1) }))}
+                disabled={histIndex === histUrls.length - 1}
+                className="absolute right-4 top-1/2 -translate-y-1/2 rounded-full border border-white/20 bg-black/50 p-2 text-white/80 hover:text-white disabled:opacity-30"
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-5 w-5"><path d="m9 18 6-6-6-6" /></svg>
+              </button>
+            </>
+          )}
+        </div>
+      );
+    }
+  }
+
   // --- Image viewer mode (with markers) ---
   if (viewingImageIndex !== null && project.imageUrls?.[viewingImageIndex]) {
-    const allMarkers = markers.filter((m) => m.type === "point");
+    const allMarkers = roundMarkers.filter((m) => m.type === "point");
     const pointMarkers = allMarkers.filter((m) => {
       const cols = imageCount <= 3 ? imageCount : 3;
       const rows = Math.ceil(imageCount / cols);
@@ -445,8 +537,6 @@ export function ProjectHub({
               </h1>
             </div>
             <div className="flex items-center gap-1">
-              <button type="button" onClick={() => setViewScale(Math.max(1, viewScale - 0.5))} className="rounded-lg px-2 py-1.5 text-sm font-bold text-text-muted hover:bg-bg-cardHover hover:text-text-primary" title="Уменьшить">−</button>
-              <button type="button" onClick={() => setViewScale(viewScale + 0.5)} className="rounded-lg px-2 py-1.5 text-sm font-bold text-text-muted hover:bg-bg-cardHover hover:text-text-primary" title="Увеличить">+</button>
               <button onClick={() => setViewingImageIndex(Math.max(0, viewingImageIndex - 1))} disabled={viewingImageIndex === 0} className="rounded-lg p-1.5 text-text-muted hover:bg-bg-cardHover disabled:opacity-30">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-4 w-4"><path d="m15 18-6-6 6-6" /></svg>
               </button>
@@ -458,7 +548,7 @@ export function ProjectHub({
         </div>
         <div className="flex-1 overflow-auto p-4">
           <div className="mx-auto max-w-4xl">
-            <div className={`relative inline-block w-full ${viewScale > 1 ? "overflow-auto" : ""}`} style={viewScale > 1 ? { transform: `scale(${viewScale})`, transformOrigin: "top left", width: `${100 / viewScale}%` } : undefined}>
+            <div className="relative inline-block w-full">
               <img src={project.imageUrls[viewingImageIndex]} alt="" className="w-full rounded-xl border border-border-strong" />
               {pointMarkers.map((marker) => {
                 const cols = imageCount <= 3 ? imageCount : 3;
@@ -533,7 +623,7 @@ export function ProjectHub({
             )}
             {hasImages && (
               <p className="hidden sm:block text-xs text-text-muted">
-                {markers.length} {markers.length === 1 ? "правка" : markers.length > 0 && markers.length < 5 ? "правки" : "правок"}
+                {roundMarkers.length} {roundMarkers.length === 1 ? "правка" : roundMarkers.length > 0 && roundMarkers.length < 5 ? "правки" : "правок"} · раунд {currentRound} из {roundsTotal || "∞"}
               </p>
             )}
           </div>
@@ -604,8 +694,9 @@ export function ProjectHub({
             <div className="space-y-2">
               {previewUrls.map((url, index) => (
                 <Fragment key={index}>
-                  {showDropIndicator(index) && (
+                  {isDragging && (
                     <DropIndicator
+                      active={dragOverIndex === index}
                       onDragOver={handleDragOverAt(index)}
                       onDrop={handleDropAt(index)}
                     />
@@ -666,16 +757,9 @@ export function ProjectHub({
                   </div>
                 </Fragment>
               ))}
-              {showDropIndicator(pendingFiles.length) && (
+              {isDragging && (
                 <DropIndicator
-                  onDragOver={handleDragOverAt(pendingFiles.length)}
-                  onDrop={handleDropAt(pendingFiles.length)}
-                />
-              )}
-              {/* Tail drop zone: dropping after the last item */}
-              {!isTouch && (
-                <div
-                  className="h-1"
+                  active={dragOverIndex === pendingFiles.length}
                   onDragOver={handleDragOverAt(pendingFiles.length)}
                   onDrop={handleDropAt(pendingFiles.length)}
                 />
@@ -719,6 +803,22 @@ export function ProjectHub({
               </div>
             </div>
 
+            {/* Rounds status */}
+            <div className="mb-4 flex flex-wrap items-center gap-2">
+              <span className="rounded-lg border border-border-strong bg-bg-card px-3 py-1.5 text-xs font-medium text-text-primary">
+                Раунд {currentRound} из {roundsTotal || "∞"}
+              </span>
+              {hasRoundsLeft(project) ? (
+                <span className="rounded-lg border border-border-strong bg-bg-card px-3 py-1.5 text-xs text-text-muted">
+                  Осталось раундов правок: {roundsLeft}
+                </span>
+              ) : (
+                <span className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-1.5 text-xs text-red-400">
+                  Раунды правок исчерпаны — клиент не может оставить новые правки
+                </span>
+              )}
+            </div>
+
             {/* Copy comments */}
             <div className="mb-4 flex flex-col gap-2 sm:flex-row">
               <button
@@ -730,27 +830,57 @@ export function ProjectHub({
                   <rect x="9" y="9" width="13" height="13" rx="2" />
                   <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
                 </svg>
-                Скопировать все правки ({markers.length})
+                Скопировать все правки ({roundMarkers.length})
               </button>
               <button
                 type="button"
                 onClick={() => setReplaceConfirm(true)}
-                className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-border-strong bg-bg-card px-4 py-3 text-sm font-medium text-text-primary transition-all hover:bg-bg-cardHover"
+                disabled={!hasRoundsLeft(project)}
+                className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-border-strong bg-bg-card px-4 py-3 text-sm font-medium text-text-primary transition-all hover:bg-bg-cardHover disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-bg-card"
               >
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
                   <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
                   <polyline points="17,8 12,3 7,8" />
                   <line x1="12" y1="3" x2="12" y2="15" />
                 </svg>
-                Заменить макеты
+                {hasRoundsLeft(project) ? "Заменить макеты" : "Раунды исчерпаны"}
               </button>
             </div>
 
+            {/* History versions */}
+            {(project.packageHistory?.length || 0) > 0 && (
+              <div className="mb-6">
+                <h3 className="mb-3 text-sm font-medium text-text-primary">История версий</h3>
+                <div className="space-y-2">
+                  {[...(project.packageHistory || [])].reverse().map((pkg) => {
+                    const pkgMarkers = markers.filter((m) => m.round === pkg.round);
+                    return (
+                      <div key={pkg.round} className="flex items-center justify-between gap-3 rounded-xl border border-border-strong bg-bg-card p-3">
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium text-text-primary">Раунд {pkg.round}</p>
+                          <p className="text-xs text-text-muted">
+                            {pkg.imageUrls.length} {pkg.imageUrls.length === 1 ? "изображение" : pkg.imageUrls.length < 5 ? "изображения" : "изображений"} · {pkgMarkers.length} {pkgMarkers.length === 1 ? "правка" : pkgMarkers.length > 0 && pkgMarkers.length < 5 ? "правки" : "правок"}
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setHistoryView({ round: pkg.round, index: 0 })}
+                          className="shrink-0 rounded-lg bg-text-primary px-3 py-1.5 text-xs font-medium text-bg-page transition-all hover:opacity-90"
+                        >
+                          Открыть
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
             {/* Comments list */}
-            {markers.length > 0 && (
+            {roundMarkers.length > 0 && (
               <div className="mb-6 space-y-2">
-                <h3 className="text-sm font-medium text-text-primary">Правки ({markers.length})</h3>
-                {markers.map((m) => (
+                <h3 className="text-sm font-medium text-text-primary">Правки раунда {currentRound} ({roundMarkers.length})</h3>
+                {roundMarkers.map((m) => (
                   <div key={m.id} className="flex items-start gap-3 rounded-xl border border-border-strong bg-bg-card p-3">
                     <div className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-text-primary text-[10px] font-bold text-bg-page">
                       {m.type === "point" ? "#" : "!"}
@@ -788,14 +918,10 @@ export function ProjectHub({
                     <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-lg border border-border-strong bg-bg-input">
                       <img src={url} alt="" className="h-full w-full object-cover" />
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="truncate text-sm text-text-primary">Изображение {index + 1}</p>
-                    </div>
-                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => e.stopPropagation()}>
-                      <button onClick={() => setFullscreenIndex(index)} className="flex h-8 w-8 items-center justify-center rounded-lg text-text-muted hover:bg-bg-cardHover hover:text-text-primary">
+                    <div className="flex flex-1 items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => e.stopPropagation()}>
+                      <button onClick={() => setFullscreenIndex(index)} className="flex h-8 w-8 items-center justify-center rounded-lg text-text-muted hover:bg-bg-cardHover hover:text-text-primary" title="Открыть на весь экран">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-4 w-4"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>
                       </button>
-                      <span className="text-xs font-medium text-text-primary px-2 py-1 rounded-lg bg-bg-input/80">Просмотр</span>
                     </div>
                   </div>
                 ))}
@@ -820,7 +946,7 @@ export function ProjectHub({
       <ConfirmModal
         open={replaceConfirm}
         title="Заменить макеты?"
-        message={"Текущие изображения и все правки клиента будут заменены новым набором. Это действие нельзя отменить."}
+        message={`Текущий пакет перейдёт в историю (раунд ${currentRound}), правки клиента сохранятся. Начнётся раунд ${currentRound + 1}, останется раундов: ${roundsLeft - 1}.`}
         confirmLabel="Выбрать файлы"
         danger
         onConfirm={() => {
@@ -871,15 +997,27 @@ export function ProjectHub({
 }
 
 function DropIndicator({
+  active,
   onDragOver,
   onDrop,
 }: {
+  active: boolean;
   onDragOver: (e: DragEvent) => void;
   onDrop: (e: DragEvent) => void;
 }) {
   return (
-    <div onDragOver={onDragOver} onDrop={onDrop} className="flex items-center py-1">
-      <div className="h-1 flex-1 rounded-full bg-white" />
+    <div
+      onDragOver={onDragOver}
+      onDrop={onDrop}
+      className={`flex h-8 items-center transition-colors ${
+        active ? "bg-bg-cardHover/50" : ""
+      }`}
+    >
+      <div
+        className={`h-0.5 flex-1 rounded-full transition-colors ${
+          active ? "bg-white" : "bg-transparent"
+        }`}
+      />
     </div>
   );
 }

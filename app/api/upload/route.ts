@@ -4,15 +4,39 @@ import { v2 as cloudinary } from "cloudinary";
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
-cloudinary.config({
-  cloud_name: process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME,
-  api_key: process.env.NEXT_PUBLIC_CLOUDINARY_API_KEY,
-  api_secret: process.env.CLOUDINARY_API_SECRET,
-  secure: true,
-});
+const REQUIRED_ENV = [
+  "NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME",
+  "NEXT_PUBLIC_CLOUDINARY_API_KEY",
+  "CLOUDINARY_API_SECRET",
+] as const;
+
+function getMissingEnv(): string[] {
+  return REQUIRED_ENV.filter((key) => !process.env[key]);
+}
 
 export async function POST(req: NextRequest) {
   try {
+    const missing = getMissingEnv();
+    if (missing.length > 0) {
+      return NextResponse.json(
+        {
+          error: "Upload failed",
+          code: "CONFIG_MISSING",
+          details:
+            "Сервер Cloudinary настроен не полностью. Добавьте в Vercel -> Settings -> Environment Variables: " +
+            missing.join(", "),
+        },
+        { status: 500 }
+      );
+    }
+
+    cloudinary.config({
+      cloud_name: process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME,
+      api_key: process.env.NEXT_PUBLIC_CLOUDINARY_API_KEY,
+      api_secret: process.env.CLOUDINARY_API_SECRET,
+      secure: true,
+    });
+
     const formData = await req.formData();
     const file = formData.get("file") as File | null;
 

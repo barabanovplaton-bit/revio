@@ -200,6 +200,42 @@ export async function uploadNewPackage(
   });
 }
 
+/**
+ * Начать новый раунд правок: текущий пакет и его правки сохраняются в истории,
+ * новый пакет становится актуальным, счётчик доступных раундов уменьшается.
+ */
+export async function startNewRound(
+  id: string,
+  newImageUrls: string[]
+): Promise<void> {
+  const project = await getProject(id);
+  if (!project) return;
+
+  const current = project.currentRound || 1;
+  const history = project.packageHistory || [];
+  if (project.imageUrls && project.imageUrls.length > 0) {
+    history.push({
+      round: current,
+      imageUrls: project.imageUrls,
+      createdAt: project.updatedAt,
+    });
+  }
+
+  await updateProject(id, {
+    imageUrls: newImageUrls,
+    packageHistory: history,
+    currentRound: current + 1,
+    roundsLeft: Math.max(0, (project.roundsLeft ?? 0) - 1),
+    isLocked: false,
+    status: "in_progress",
+  });
+}
+
+/** Доступны ли ещё раунды правок */
+export function hasRoundsLeft(project: Project): boolean {
+  return (project.roundsLeft ?? 0) > 0;
+}
+
 /** Форматирование относительного времени. */
 export function formatRelativeTime(ts: Timestamp | null): string {
   if (!ts) return "";

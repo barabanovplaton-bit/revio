@@ -105,27 +105,56 @@ export async function uploadImage(
   const formData = new FormData();
   formData.append("file", file);
 
-  const res = await fetch("/api/upload", {
-    method: "POST",
-    body: formData,
-  });
+  let res: Response;
+  try {
+    res = await fetch("/api/upload", {
+      method: "POST",
+      body: formData,
+    });
+  } catch (e) {
+    // Сетевая ошибка — сервер не ответил, есть смысл повторить
+    throw makeUploadError(
+      e instanceof Error ? e.message : "Network error",
+      true
+    );
+  }
 
   if (!res.ok) {
     let details = "";
+    let code = "";
     try {
       const data = await res.json();
       details = data?.details || data?.error || "";
+      code = data?.code || "";
     } catch {
       /* ignore */
     }
-    throw new Error(`Upload failed${details ? ": " + details : ""}`);
+    // Ретраим только временные сбои (5xx); конфиг-ошибки и битые файлы (4xx)
+    // повторять бесполезно
+    const retryable = res.status >= 500 && code !== "CONFIG_MISSING";
+    throw makeUploadError(
+      `Upload failed${details ? ": " + details : ""}`,
+      retryable
+    );
   }
 
   return res.json();
 }
 
+export interface UploadError extends Error {
+  retryable: boolean;
+}
+
+function makeUploadError(message: string, retryable: boolean): UploadError {
+  const err = new Error(message) as UploadError;
+  err.retryable = retryable;
+  return err;
+}
+
 /**
- * Загрузка с повторными попытками (attempts раз)
+ * Загрузка с повторными попытками (attempts раз).
+ * Повторяет только временные сбои (сеть, 5xx, 429) —
+ * постоянные ошибки (конфиг, битый файл) прерывают сразу.
  */
 export async function uploadImageWithRetry(
   file: File,
@@ -137,7 +166,8 @@ export async function uploadImageWithRetry(
       return await uploadImage(file);
     } catch (e) {
       lastError = e;
-      if (i < attempts - 1) {
+      const retryable = (e as { retryable?: boolean })?.retryable !== false;
+      if (retryable && i < attempts - 1) {
         await new Promise((r) => setTimeout(r, 800 * (i + 1)));
       }
     }
