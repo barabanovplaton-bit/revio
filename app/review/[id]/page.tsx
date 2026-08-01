@@ -81,7 +81,7 @@ export default function ReviewPage({
 
   const handleDone = async () => {
     try {
-      await updateProject(project.id, {});
+      await updateProject(project.id, { clientSubmitted: true });
     } catch (e) {
       console.error(e);
     }
@@ -94,7 +94,8 @@ export default function ReviewPage({
         <div>
           <h1 className="font-semibold text-text-primary">{project.name}</h1>
           <p className="text-xs text-text-muted">
-            Раунд {project.currentRound || 1}
+            Раунд {project.currentRound || 1} · осталось раундов:{" "}
+            {project.roundsLeft ?? 0}
             {locked ? " · правки закрыты" : " · нажмите на картинку, чтобы оставить правку"}
           </p>
         </div>

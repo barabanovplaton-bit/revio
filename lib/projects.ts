@@ -43,6 +43,8 @@ export interface Project {
   limitMessage: string;
   /** Заблокирован ли проект (клиент отправил правки) */
   isLocked: boolean;
+  /** Клиент отправил правки текущего раунда (нажал «Готово») */
+  clientSubmitted?: boolean;
   /** Закреплённый проект */
   pinned: boolean;
   /** Скрыт (мягкое удаление: проект остаётся в базе, лимит не освобождается) */
@@ -238,6 +240,7 @@ export async function startNewRound(
     currentRound: current + 1,
     roundsLeft: Math.max(0, (project.roundsLeft ?? 0) - 1),
     isLocked: false,
+    clientSubmitted: false,
     status: "in_progress",
   });
 }

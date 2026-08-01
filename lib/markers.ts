@@ -26,6 +26,10 @@ export interface Marker {
   /** Позиция точечного маркера (relative координаты 0-1) */
   x?: number;
   y?: number;
+  /** Номер картинки, к которой привязан точечный маркер (для старых маркеров может отсутствовать) */
+  imageIndex?: number;
+  /** Отмечен ли фрилансером как сделанный */
+  done?: boolean;
   /** Текст правки */
   text: string;
   /** Создан в */
@@ -113,6 +117,16 @@ export async function updateMarker(
 ): Promise<void> {
   const { id: _omit, ...rest } = data;
   await updateDoc(doc(db, COLLECTION, id), rest);
+}
+
+/**
+ * Отметить/снять отметку «сделано» (фрилансер отмечает обработанную правку)
+ */
+export async function toggleMarkerDone(
+  id: string,
+  done: boolean
+): Promise<void> {
+  await updateMarker(id, { done });
 }
 
 /**
