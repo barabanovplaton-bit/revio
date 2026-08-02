@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
@@ -32,6 +32,16 @@ export function MarkerCanvas({
   } | null>(null);
   const [pendingImageIndex, setPendingImageIndex] = useState(0);
   const [markerText, setMarkerText] = useState("");
+  const [isMobile, setIsMobile] = useState(false);
+  const [panelOpen, setPanelOpen] = useState(false);
+
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 767px)");
+    const update = () => setIsMobile(mq.matches || "ontouchstart" in window);
+    update();
+    mq.addEventListener("change", update);
+    return () => mq.removeEventListener("change", update);
+  }, []);
 
   useEffect(() => {
     const unsub = subscribeToProjectMarkers(projectId, round, (m) => {
@@ -130,46 +140,104 @@ export function MarkerCanvas({
   const draftIds = useMemo(() => new Set(draft.map((d) => d.id)), [draft]);
   const sentPointCount = sentMarkers.filter((m) => m.type === "point").length;
 
-  const pointForm = pendingPoint ? (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: 20 }}
-      className="absolute bottom-4 left-1/2 z-30 w-[calc(100%-2rem)] max-w-sm -translate-x-1/2 rounded-xl border border-white/20 bg-bg-card p-4 shadow-2xl"
-    >
-      <textarea
-        value={markerText}
-        onChange={(e) => setMarkerText(e.target.value)}
-        placeholder="Опишите правку..."
-        rows={3}
-        autoFocus
-        className="w-full resize-none rounded-lg border border-border-strong bg-bg-input px-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:border-text-primary focus:outline-none"
-      />
-      <div className="mt-3 flex items-center justify-end gap-2">
-        <button
-          type="button"
-          onClick={() => {
-            setPendingPoint(null);
-            setMarkerText("");
-          }}
-          className="rounded-lg border border-border-strong px-3 py-1.5 text-sm text-text-primary transition-all hover:bg-bg-cardHover"
-        >
-          Отмена
-        </button>
-        <button
-          type="button"
-          onClick={handleAddMarker}
-          disabled={!markerText.trim()}
-          className="flex items-center gap-1.5 rounded-lg bg-text-primary px-3 py-1.5 text-sm font-medium text-bg-page transition-all hover:opacity-90 disabled:opacity-50"
-        >
-          Добавить
-        </button>
-      </div>
-    </motion.div>
-  ) : null;
+  const pointForm = pendingPoint ? (() => {
+    let tx = "-50%", ty = "-50%", ml = 0, mt = 0;
+    if (pendingPoint.x >= 0.5) {
+      tx = "-100%";
+      ml = -16;
+    } else {
+      ml = 16;
+    }
+    if (pendingPoint.y < 0.18) {
+      ty = "0";
+      mt = 8;
+    } else if (pendingPoint.y > 0.85) {
+      ty = "-100%";
+      mt = -8;
+    }
+    return (
+      <motion.div
+        initial={{ opacity: 0, y: 8, scale: 0.95 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        exit={{ opacity: 0, y: 8, scale: 0.95 }}
+        onMouseDown={(e) => e.stopPropagation()}
+        onTouchStart={(e) => e.stopPropagation()}
+        className="absolute z-30 w-72 max-w-[min(18rem,80vw)] rounded-xl border border-white/20 bg-bg-card p-4 shadow-2xl"
+        style={{
+          left: `${pendingPoint.x * 100}%`,
+          top: `${pendingPoint.y * 100}%`,
+          transform: `translate(${tx}, ${ty})`,
+          marginLeft: ml,
+          marginTop: mt,
+        }}
+      >
+        <textarea
+          value={markerText}
+          onChange={(e) => setMarkerText(e.target.value)}
+          placeholder="Опишите правку..."
+          rows={3}
+          autoFocus
+          className="w-full resize-none rounded-lg border border-border-strong bg-bg-input px-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:border-text-primary focus:outline-none"
+        />
+        <div className="mt-3 flex items-center justify-end gap-2">
+          <button
+            type="button"
+            onClick={() => {
+              setPendingPoint(null);
+              setMarkerText("");
+            }}
+            className="rounded-lg border border-border-strong px-3 py-1.5 text-sm text-text-primary transition-all hover:bg-bg-cardHover"
+          >
+            Отмена
+          </button>
+          <button
+            type="button"
+            onClick={handleAddMarker}
+            disabled={!markerText.trim()}
+            className="flex items-center gap-1.5 rounded-lg bg-text-primary px-3 py-1.5 text-sm font-medium text-bg-page transition-all hover:opacity-90 disabled:opacity-50"
+          >
+            Добавить
+          </button>
+        </div>
+      </motion.div>
+    );
+  })() : null;
 
-  return (
-    <div className="relative h-full w-full">
+  const draftPanel = (
+    <>
+      <div className="border-b border-border-strong px-4 py-2.5 text-xs font-medium text-text-primary">
+        Мои правки ({draft.length})
+      </div>
+      <div className="max-h-40 space-y-0.5 overflow-y-auto p-2">
+        {draft.map((d, i) => (
+          <div
+            key={d.id}
+            className="flex items-center gap-2 rounded-lg px-2 py-1.5 transition-colors hover:bg-bg-cardHover"
+          >
+            <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-text-primary text-[10px] font-bold text-bg-page">
+              {d.type === "point" ? sentPointCount + i + 1 : "!"}
+            </span>
+            <span className="min-w-0 flex-1 truncate text-xs text-text-primary">
+              {d.text}
+            </span>
+            <button
+              type="button"
+              onClick={() => handleDeleteDraft(d.id)}
+              className="shrink-0 rounded-lg p-1 text-text-muted transition-colors hover:bg-bg-cardHover hover:text-red-400"
+              title="Удалить"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-3.5 w-3.5">
+                <path d="M18 6 6 18M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+        ))}
+      </div>
+    </>
+  );
+
+  const canvas = (
+    <div className="relative min-w-0 flex-1">
       <CanvasViewer
         imageUrls={imageUrls}
         markers={markers}
@@ -181,47 +249,70 @@ export function MarkerCanvas({
         pendingPoint={pendingPoint}
         pointForm={pointForm}
       />
+    </div>
+  );
 
-      {/* Панель «Мои правки» (черновик до отправки) */}
-      <AnimatePresence>
-        {!isLocked && !pendingPoint && draft.length > 0 && (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 20 }}
-            className="absolute inset-x-0 bottom-0 z-30 max-h-44 overflow-hidden rounded-t-2xl border-t border-border-strong bg-bg-card shadow-2xl"
-          >
-            <div className="border-b border-border-strong px-4 py-2 text-xs font-medium text-text-primary">
-              Мои правки ({draft.length})
-            </div>
-            <div className="max-h-32 space-y-0.5 overflow-y-auto p-2">
-              {draft.map((d, i) => (
-                <div
-                  key={d.id}
-                  className="flex items-center gap-2 rounded-lg px-2 py-1.5 transition-colors hover:bg-bg-cardHover"
+  return (
+    <div className="relative h-full w-full">
+      {isMobile ? (
+        <>
+          {canvas}
+
+          {/* Мобильная панель «Мои правки» */}
+          {!isLocked && draft.length > 0 && (
+            <AnimatePresence>
+              {panelOpen ? (
+                <motion.div
+                  initial={{ opacity: 0, y: 40 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: 40 }}
+                  className="absolute inset-x-0 bottom-0 z-40 flex max-h-[45%] flex-col overflow-hidden rounded-t-2xl border-t border-border-strong bg-bg-card shadow-2xl"
                 >
-                  <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-text-primary text-[10px] font-bold text-bg-page">
-                    {d.type === "point" ? sentPointCount + i + 1 : "!"}
-                  </span>
-                  <span className="min-w-0 flex-1 truncate text-xs text-text-primary">
-                    {d.text}
-                  </span>
                   <button
                     type="button"
-                    onClick={() => handleDeleteDraft(d.id)}
-                    className="shrink-0 rounded-lg p-1 text-text-muted transition-colors hover:bg-bg-cardHover hover:text-red-400"
-                    title="Удалить"
+                    onClick={() => setPanelOpen(false)}
+                    className="flex items-center justify-center gap-1.5 border-b border-border-strong px-4 py-2 text-xs font-medium text-text-primary"
                   >
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-3.5 w-3.5">
-                      <path d="M18 6 6 18M6 6l12 12" />
+                    <svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth={2}
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      className="h-3.5 w-3.5"
+                    >
+                      <path d="M18 15l-6-6-6 6" />
                     </svg>
+                    Свернуть
                   </button>
-                </div>
-              ))}
+                  {draftPanel}
+                </motion.div>
+              ) : (
+                <motion.button
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: 20 }}
+                  type="button"
+                  onClick={() => setPanelOpen(true)}
+                  className="absolute bottom-4 left-1/2 z-30 -translate-x-1/2 rounded-full border border-border-strong bg-bg-card px-4 py-2 text-sm font-medium text-text-primary shadow-2xl"
+                >
+                  Мои правки ({draft.length})
+                </motion.button>
+              )}
+            </AnimatePresence>
+          )}
+        </>
+      ) : (
+        <div className="flex h-full w-full">
+          {!isLocked && draft.length > 0 && (
+            <div className="flex w-64 shrink-0 flex-col overflow-hidden border-r border-border-strong bg-bg-card">
+              {draftPanel}
             </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+          )}
+          {canvas}
+        </div>
+      )}
     </div>
   );
 }

@@ -64,6 +64,7 @@ export function CanvasViewer({
   const [mobile, setMobile] = useState(false);
   const [natSize, setNatSize] = useState<{ w: number; h: number } | null>(null);
   const [fit, setFit] = useState<{ w: number; h: number } | null>(null);
+  const [lastLoadedUrl, setLastLoadedUrl] = useState<string | null>(null);
 
   const zoneRef = useRef<HTMLDivElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
@@ -79,14 +80,25 @@ export function CanvasViewer({
     return () => mq.removeEventListener("change", update);
   }, []);
 
-  // Предзагрузка натурального размера картинки
+  // Предзагрузка всех картинок (чтобы при листании не мигало)
   useEffect(() => {
-    setNatSize(null);
-    setFit(null);
+    imageUrls.forEach((url) => {
+      const img = new Image();
+      img.src = url;
+    });
+  }, [imageUrls]);
+
+  // Натуральный размер текущей картинки
+  useEffect(() => {
+    const url = imageUrls[currentIndex];
+    if (lastLoadedUrl === url) return;
     const img = new Image();
-    img.onload = () => setNatSize({ w: img.naturalWidth, h: img.naturalHeight });
-    img.src = imageUrls[currentIndex];
-  }, [imageUrls, currentIndex]);
+    img.onload = () => {
+      setNatSize({ w: img.naturalWidth, h: img.naturalHeight });
+      setLastLoadedUrl(url);
+    };
+    img.src = url;
+  }, [imageUrls, currentIndex, lastLoadedUrl]);
 
   // Подгон размера картинки под зону (с сохранением пропорций, без увеличения мелких)
   useEffect(() => {
@@ -179,7 +191,7 @@ export function CanvasViewer({
     if (!isDragging) return;
     const dx = clientX - dragStartRef.current.x;
     const dy = clientY - dragStartRef.current.y;
-    if (Math.abs(dx) + Math.abs(dy) > 3) dragMovedRef.current = true;
+    if (Math.abs(dx) + Math.abs(dy) > 6) dragMovedRef.current = true;
     setPosition(
       applyBounds(
         {
@@ -191,7 +203,10 @@ export function CanvasViewer({
     );
   };
 
-  const endDrag = () => setIsDragging(false);
+  const endDrag = () => {
+    setIsDragging(false);
+    dragMovedRef.current = false;
+  };
 
   const handleStageClick = (e: ReactMouseEvent<HTMLDivElement>) => {
     if (isDragging || dragMovedRef.current) return;
@@ -399,7 +414,10 @@ export function CanvasViewer({
                 alt={`Макет ${currentIndex + 1}`}
                 draggable={false}
                 style={fit ? { width: fit.w, height: fit.h, display: "block" } : undefined}
-                className={fit ? undefined : "max-h-full max-w-full object-contain"}
+                className={cn(
+                  fit ? undefined : "max-h-full max-w-full object-contain",
+                  lastLoadedUrl === currentUrl ? undefined : "opacity-0"
+                )}
               />
             )}
 
@@ -448,6 +466,9 @@ export function CanvasViewer({
                 {numberById.size + 1}
               </div>
             )}
+
+            {/* Форма добавления правки (клиент) */}
+            {pointForm}
           </div>
         </div>
 
@@ -477,9 +498,19 @@ export function CanvasViewer({
               type="button"
               onClick={() => setCurrentIndex((p) => Math.max(0, p - 1))}
               disabled={currentIndex === 0}
-              className="absolute left-3 top-1/2 z-20 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full border border-white/20 bg-white/10 text-xl text-white backdrop-blur-sm transition-all hover:bg-white/20 disabled:opacity-30"
+              className="absolute left-3 top-1/2 z-20 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full border border-white/20 bg-white/10 text-white backdrop-blur-sm transition-all hover:bg-white/20 disabled:opacity-30"
             >
-              ‹
+              <svg
+                viewBox="0 0 24 24"
+                className="h-5 w-5"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth={2.5}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M15 18l-6-6 6-6" />
+              </svg>
             </button>
             <button
               type="button"
@@ -487,9 +518,19 @@ export function CanvasViewer({
                 setCurrentIndex((p) => Math.min(imageUrls.length - 1, p + 1))
               }
               disabled={currentIndex >= imageUrls.length - 1}
-              className="absolute right-3 top-1/2 z-20 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full border border-white/20 bg-white/10 text-xl text-white backdrop-blur-sm transition-all hover:bg-white/20 disabled:opacity-30"
+              className="absolute right-3 top-1/2 z-20 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full border border-white/20 bg-white/10 text-white backdrop-blur-sm transition-all hover:bg-white/20 disabled:opacity-30"
             >
-              ›
+              <svg
+                viewBox="0 0 24 24"
+                className="h-5 w-5"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth={2.5}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M9 18l6-6-6-6" />
+              </svg>
             </button>
           </>
         )}
@@ -545,8 +586,7 @@ export function CanvasViewer({
           </div>
         )}
 
-        {/* Форма добавления правки (клиент) */}
-        {pointForm}
+        {/* Счётчик страниц */}
       </div>
 
       {showPanel && mobile && panel}

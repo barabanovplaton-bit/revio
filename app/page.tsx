@@ -8,6 +8,7 @@ import { Avatar } from "./_components/avatar";
 import { ConfirmModal } from "./_components/confirm-modal";
 import { NewProjectWizard } from "./_components/new-project-wizard";
 import { OnboardingModal } from "./_components/onboarding-modal";
+import { Landing } from "./_components/landing";
 import { signOut, subscribeToAuth, type User } from "@/lib/auth";
 import { type UserProfile } from "@/lib/user-profile";
 import {
@@ -251,20 +252,8 @@ function App() {
 
       <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-6 md:px-6 md:py-8">
         {!user ? (
-          <div className="flex flex-col items-center justify-center py-20 text-center">
-            <h2 className="mb-2 font-display text-2xl font-semibold text-text-primary">
-              Правки без хаоса
-            </h2>
-            <p className="mb-8 text-sm text-text-muted">
-              Загружайте макеты, получайте правки с маячками в одном месте
-            </p>
-            <button
-              type="button"
-              onClick={goToLogin}
-              className="rounded-xl bg-text-primary px-6 py-3 text-sm font-medium text-bg-page transition-all hover:opacity-90"
-            >
-              Начать бесплатно
-            </button>
+          <div className="md:mx-auto md:max-w-5xl md:px-0">
+            <Landing />
           </div>
         ) : (
           <>

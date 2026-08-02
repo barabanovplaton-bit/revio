@@ -10,7 +10,9 @@ import { getUserProfile, type UserProfile } from "@/lib/user-profile";
 
 const ACCENT = "#E880FC";
 const TELEGRAM_NICK = "Gafti";
-const TELEGRAM_URL = `https://t.me/${TELEGRAM_NICK}`;
+const TELEGRAM_URL = `https://t.me/${TELEGRAM_NICK}?text=${encodeURIComponent(
+  "Привет! Хочу купить Pro в Revio (299 ₽/мес)."
+)}`;
 
 const plans = [
   {
@@ -205,7 +207,10 @@ export default function PricingPage() {
               </ul>
               <button
                 type="button"
-                disabled={plan.ctaDisabled}
+                disabled={
+                  plan.ctaDisabled ||
+                  (plan.name === "Pro" && profile?.plan === "pro")
+                }
                 onClick={() => {
                   if (!plan.ctaDisabled) setShowPayModal(true);
                 }}
@@ -215,7 +220,9 @@ export default function PricingPage() {
                     : "bg-text-primary text-bg-page hover:opacity-90 active:scale-[0.98]"
                 }`}
               >
-                {plan.cta}
+                {plan.name === "Pro" && profile?.plan === "pro"
+                  ? "У вас уже Pro"
+                  : plan.cta}
               </button>
             </motion.div>
           ))}

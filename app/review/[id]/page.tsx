@@ -179,10 +179,21 @@ export default function ReviewPage({
             <button
               type="button"
               onClick={() => setGeneralOpen(true)}
-              className="rounded-xl border border-border-strong px-3 py-2 text-xs font-medium text-text-primary transition-all hover:bg-bg-cardHover"
-              title="Общий комментарий"
+              className="flex items-center gap-1.5 rounded-xl border border-text-primary/40 bg-text-primary/10 px-3 py-2 text-xs font-semibold text-text-primary transition-all hover:bg-text-primary/20"
+              title="Добавить общий комментарий"
             >
-              + Комментарий
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth={2}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className="h-4 w-4"
+              >
+                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+              </svg>
+              Общий комментарий
             </button>
             <button
               type="button"
