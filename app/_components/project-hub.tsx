@@ -399,6 +399,18 @@ export function ProjectHub({
     }
   };
 
+  // Доступные для просмотра раунды (с изображениями): текущий + история
+  const availableRounds = useMemo(() => {
+    const current = project?.currentRound || 1;
+    const rounds: number[] = [current];
+    for (const pkg of project?.packageHistory || []) {
+      if (pkg.imageUrls.length > 0 && !rounds.includes(pkg.round)) {
+        rounds.push(pkg.round);
+      }
+    }
+    return rounds.sort((a, b) => a - b);
+  }, [project?.currentRound, project?.packageHistory]);
+
   // --- Loading/Error ---
   if (loading) {
     return (
@@ -437,17 +449,6 @@ export function ProjectHub({
     typeof window !== "undefined"
       ? `${window.location.origin}/review/${projectId}`
       : `/review/${projectId}`;
-
-  // Доступные для просмотра раунды (с изображениями): текущий + история
-  const availableRounds = useMemo(() => {
-    const rounds: number[] = [currentRound];
-    for (const pkg of project.packageHistory || []) {
-      if (pkg.imageUrls.length > 0 && !rounds.includes(pkg.round)) {
-        rounds.push(pkg.round);
-      }
-    }
-    return rounds.sort((a, b) => a - b);
-  }, [currentRound, project.packageHistory]);
 
   const imagesForRound = (round: number) => {
     if (round === currentRound) return project.imageUrls || [];

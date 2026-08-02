@@ -83,6 +83,25 @@ export default function ReviewPage({
     return () => window.removeEventListener("revio:draft-changed", upd);
   }, [id]);
 
+  // Просматриваемый раунд (по умолчанию — текущий) и тумблер маячков
+  const [viewRound, setViewRound] = useState(project?.currentRound || 1);
+  const [markersVisible, setMarkersVisible] = useState(true);
+  useEffect(() => {
+    setViewRound(project?.currentRound || 1);
+  }, [project?.currentRound]);
+
+  // Раунды с изображениями, доступные клиенту для просмотра
+  const availableRounds = useMemo(() => {
+    const current = project?.currentRound || 1;
+    const rounds: number[] = [current];
+    for (const pkg of project?.packageHistory || []) {
+      if (pkg.imageUrls.length > 0 && !rounds.includes(pkg.round)) {
+        rounds.push(pkg.round);
+      }
+    }
+    return rounds.sort((a, b) => a - b);
+  }, [project?.currentRound, project?.packageHistory]);
+
   if (loading) {
     return (
       <div className="flex h-screen items-center justify-center bg-bg-page">
@@ -123,23 +142,6 @@ export default function ReviewPage({
   const locked =
     !hasRoundsLeft(project) || project.status === "exhausted" || submitted;
   const round = project.currentRound || 1;
-
-  const [viewRound, setViewRound] = useState(round);
-  const [markersVisible, setMarkersVisible] = useState(true);
-  useEffect(() => {
-    setViewRound(round);
-  }, [round]);
-
-  // Раунды с изображениями, доступные клиенту для просмотра
-  const availableRounds = useMemo(() => {
-    const rounds: number[] = [round];
-    for (const pkg of project.packageHistory || []) {
-      if (pkg.imageUrls.length > 0 && !rounds.includes(pkg.round)) {
-        rounds.push(pkg.round);
-      }
-    }
-    return rounds.sort((a, b) => a - b);
-  }, [round, project.packageHistory]);
 
   const imagesForRound = (r: number) => {
     if (r === round) return project.imageUrls || [];
