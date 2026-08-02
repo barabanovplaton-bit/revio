@@ -1,13 +1,14 @@
 "use client";
 
-import { useState, useEffect, use } from "react";
+import { useState, useEffect, use, useMemo } from "react";
 import {
   subscribeToProject,
   updateProject,
   hasRoundsLeft,
   type Project,
 } from "@/lib/projects";
-import { createMarkers } from "@/lib/markers";
+import { createMarkers, subscribeToAllProjectMarkers, type Marker } from "@/lib/markers";
+import { createNotification } from "@/lib/notifications";
 import {
   loadDraft,
   saveDraft,
@@ -16,6 +17,8 @@ import {
   newDraftId,
 } from "@/lib/review-draft";
 import { MarkerCanvas } from "@/app/_components/marker-canvas";
+import { CanvasViewer } from "@/app/_components/canvas-viewer";
+import { cn } from "@/lib/utils";
 
 export default function ReviewPage({
   params,
@@ -28,10 +31,12 @@ export default function ReviewPage({
   const [error, setError] = useState<string | null>(null);
   const [draftCount, setDraftCount] = useState(0);
   const [sending, setSending] = useState(false);
+  const [allMarkers, setAllMarkers] = useState<Marker[]>([]);
 
   const [showDoneModal, setShowDoneModal] = useState(false);
   const [emptyDraftOpen, setEmptyDraftOpen] = useState(false);
   const [sendConfirmOpen, setSendConfirmOpen] = useState(false);
+  const [sendError, setSendError] = useState<string | null>(null);
   const [generalOpen, setGeneralOpen] = useState(false);
   const [generalText, setGeneralText] = useState("");
 
@@ -51,6 +56,24 @@ export default function ReviewPage({
       unsub();
     };
   }, [id]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const unsub = subscribeToAllProjectMarkers(id, (m) => {
+      if (!cancelled) setAllMarkers(m);
+    });
+    return () => {
+      cancelled = true;
+      unsub();
+    };
+  }, [id]);
+
+  // Автозакрытие модалки «Правки отправлены»
+  useEffect(() => {
+    if (!showDoneModal) return;
+    const t = setTimeout(() => setShowDoneModal(false), 2600);
+    return () => clearTimeout(t);
+  }, [showDoneModal]);
 
   // Количество черновиков в заголовке
   useEffect(() => {
@@ -101,6 +124,32 @@ export default function ReviewPage({
     !hasRoundsLeft(project) || project.status === "exhausted" || submitted;
   const round = project.currentRound || 1;
 
+  const [viewRound, setViewRound] = useState(round);
+  const [markersVisible, setMarkersVisible] = useState(true);
+  useEffect(() => {
+    setViewRound(round);
+  }, [round]);
+
+  // Раунды с изображениями, доступные клиенту для просмотра
+  const availableRounds = useMemo(() => {
+    const rounds: number[] = [round];
+    for (const pkg of project.packageHistory || []) {
+      if (pkg.imageUrls.length > 0 && !rounds.includes(pkg.round)) {
+        rounds.push(pkg.round);
+      }
+    }
+    return rounds.sort((a, b) => a - b);
+  }, [round, project.packageHistory]);
+
+  const imagesForRound = (r: number) => {
+    if (r === round) return project.imageUrls || [];
+    const pkg = project.packageHistory?.find((p) => p.round === r);
+    return pkg?.imageUrls || [];
+  };
+
+  const markersForRound = (r: number) =>
+    allMarkers.filter((m) => m.round === r);
+
   const handleDoneClick = () => {
     if (locked) return;
     const count = loadDraft(id).length;
@@ -108,6 +157,7 @@ export default function ReviewPage({
       setEmptyDraftOpen(true);
       return;
     }
+    setSendError(null);
     setSendConfirmOpen(true);
   };
 
@@ -116,6 +166,7 @@ export default function ReviewPage({
     const items = loadDraft(id);
     if (items.length === 0) return;
     setSending(true);
+    setSendError(null);
     try {
       await createMarkers(
         items.map((d) => ({
@@ -129,11 +180,23 @@ export default function ReviewPage({
         }))
       );
       await updateProject(id, { clientSubmitted: true });
+      try {
+        await createNotification({
+          ownerUid: project.ownerUid,
+          projectId: id,
+          projectName: project.name,
+          type: "revisions_submitted",
+          message: `Клиент отправил ${items.length} ${items.length === 1 ? "правку" : items.length < 5 ? "правки" : "правок"} по проекту «${project.name}»`,
+        });
+      } catch (e) {
+        console.error("Failed to send notification:", e);
+      }
       clearDraft(id);
       setSendConfirmOpen(false);
       setShowDoneModal(true);
     } catch (e) {
       console.error("Failed to send draft:", e);
+      setSendError("Не удалось отправить правки. Проверьте соединение и попробуйте ещё раз.");
     } finally {
       setSending(false);
     }
@@ -158,16 +221,39 @@ export default function ReviewPage({
     <div className="flex h-screen flex-col bg-bg-page">
       <header className="flex items-center justify-between gap-3 border-b border-border-strong bg-bg-card px-4 py-3">
         <div className="min-w-0">
-          <h1 className="truncate font-semibold text-text-primary">
-            {project.name}
-          </h1>
-          <p className="text-xs text-text-muted">
-            Раунд {round} · осталось раундов: {project.roundsLeft ?? 0}
+          {availableRounds.length > 1 ? (
+            <div className="flex items-center gap-1 rounded-xl border border-border-strong bg-bg-input p-1">
+              <button
+                type="button"
+                onClick={() => setViewRound((r) => Math.max(availableRounds[0], r - 1))}
+                disabled={viewRound <= availableRounds[0]}
+                className="flex h-7 w-7 items-center justify-center rounded-lg text-text-muted transition-colors hover:bg-bg-cardHover hover:text-text-primary disabled:opacity-30"
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4"><path d="m15 18-6-6 6-6"/></svg>
+              </button>
+              <span className="min-w-[88px] text-center text-xs font-medium text-text-primary">
+                Раунд {viewRound} из {availableRounds.length}
+              </span>
+              <button
+                type="button"
+                onClick={() => setViewRound((r) => Math.min(availableRounds[availableRounds.length - 1], r + 1))}
+                disabled={viewRound >= availableRounds[availableRounds.length - 1]}
+                className="flex h-7 w-7 items-center justify-center rounded-lg text-text-muted transition-colors hover:bg-bg-cardHover hover:text-text-primary disabled:opacity-30"
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4"><path d="m9 18 6-6-6-6"/></svg>
+              </button>
+            </div>
+          ) : (
+            <p className="text-xs font-medium text-text-muted">Раунд {round}</p>
+          )}
+          <p className="mt-0.5 text-xs text-text-muted">
             {locked
               ? submitted
-                ? " · правки отправлены"
-                : " · правки закрыты"
-              : " · нажмите на картинку, чтобы добавить правку"}
+                ? "Правки отправлены — ждите новый раунд"
+                : "Правки закрыты"
+              : viewRound === round
+                ? "Нажмите на картинку, чтобы добавить правку"
+                : `Просмотр раунда ${viewRound}`}
           </p>
         </div>
         {locked ? (
@@ -176,43 +262,100 @@ export default function ReviewPage({
           </span>
         ) : (
           <div className="flex shrink-0 items-center gap-2">
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => {
+                  setGeneralOpen((v) => !v);
+                  setGeneralText("");
+                }}
+                className="flex items-center gap-1.5 rounded-xl border border-text-primary/40 bg-text-primary/10 px-3 py-2 text-xs font-semibold text-text-primary transition-all hover:bg-text-primary/20"
+                title="Добавить общий комментарий"
+              >
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth={2}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  className="h-4 w-4"
+                >
+                  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+                </svg>
+                Общий комментарий
+              </button>
+              {generalOpen && (
+                <>
+                  <div className="fixed inset-0 z-30" onMouseDown={() => setGeneralOpen(false)} />
+                  <div className="absolute right-0 top-full z-40 mt-2 w-80 rounded-2xl border border-border-strong bg-bg-card p-4 shadow-2xl">
+                    <p className="mb-2 text-xs font-medium text-text-primary">Общий комментарий</p>
+                    <textarea
+                      value={generalText}
+                      onChange={(e) => setGeneralText(e.target.value)}
+                      placeholder="Опишите общие правки..."
+                      rows={3}
+                      autoFocus
+                      className="w-full resize-none rounded-lg border border-border-strong bg-bg-input px-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:border-text-primary focus:outline-none"
+                    />
+                    <div className="mt-3 flex justify-end">
+                      <button
+                        type="button"
+                        onClick={addGeneral}
+                        disabled={!generalText.trim()}
+                        className="rounded-xl bg-text-primary px-5 py-2 text-sm font-medium text-bg-page transition-all hover:opacity-90 disabled:opacity-50"
+                      >
+                        Добавить
+                      </button>
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
             <button
               type="button"
-              onClick={() => setGeneralOpen(true)}
-              className="flex items-center gap-1.5 rounded-xl border border-text-primary/40 bg-text-primary/10 px-3 py-2 text-xs font-semibold text-text-primary transition-all hover:bg-text-primary/20"
-              title="Добавить общий комментарий"
+              onClick={() => setMarkersVisible((v) => !v)}
+              className={cn(
+                "shrink-0 rounded-xl border px-3 py-2 text-xs font-medium transition-colors",
+                markersVisible
+                  ? "border-border-strong bg-bg-input text-text-primary hover:bg-bg-cardHover"
+                  : "border-border-strong bg-bg-card text-text-muted hover:text-text-primary"
+              )}
             >
-              <svg
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth={2}
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                className="h-4 w-4"
-              >
-                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-              </svg>
-              Общий комментарий
+              {markersVisible ? "С маячками" : "Без маячков"}
             </button>
             <button
               type="button"
               onClick={handleDoneClick}
               className="rounded-xl bg-text-primary px-4 py-2 text-sm font-medium text-bg-page transition-all hover:opacity-90 active:scale-[0.98]"
             >
-              Готово{draftCount > 0 ? ` (${draftCount})` : ""}
+              Готово
             </button>
           </div>
         )}
       </header>
 
       <main className="flex-1 overflow-hidden">
-        <MarkerCanvas
-          imageUrls={project.imageUrls}
-          projectId={id}
-          round={round}
-          isLocked={locked}
-        />
+        {viewRound === round ? (
+          <MarkerCanvas
+            imageUrls={project.imageUrls}
+            projectId={id}
+            round={round}
+            isLocked={locked}
+            markersVisible={markersVisible}
+            onToggleMarkers={() => setMarkersVisible((v) => !v)}
+          />
+        ) : (
+          <CanvasViewer
+            imageUrls={imagesForRound(viewRound)}
+            markers={markersForRound(viewRound)}
+            readOnly
+            showPanel
+            showToggle={false}
+            markersVisible={markersVisible}
+            onToggleMarkers={() => setMarkersVisible((v) => !v)}
+          />
+        )}
       </main>
 
       {locked && !submitted && (
@@ -238,10 +381,15 @@ export default function ReviewPage({
             <h2 className="mb-2 text-lg font-semibold text-text-primary">
               Отправить {draftCount} {draftCount === 1 ? "правку" : draftCount > 0 && draftCount < 5 ? "правки" : "правок"} дизайнеру?
             </h2>
-            <p className="mb-6 text-sm leading-relaxed text-text-muted">
+            <p className="mb-4 text-sm leading-relaxed text-text-muted">
               Это будет пакет правок раунда {round}. После отправки вы не сможете их изменить
               до следующего раунда.
             </p>
+            {sendError && (
+              <div className="mb-4 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-400">
+                {sendError}
+              </div>
+            )}
             <div className="flex gap-2">
               <button
                 type="button"
@@ -337,7 +485,7 @@ export default function ReviewPage({
                 <path d="M20 6 9 17l-5-5" />
               </svg>
             </div>
-            <h2 className="mb-2 text-lg font-semibold text-text-primary">Правки отправлены!</h2>
+            <h2 className="mb-2 text-lg font-semibold text-text-primary">Пакет правок отправлен</h2>
             <p className="mb-6 text-sm leading-relaxed text-text-muted">
               Дизайнер получит уведомление и пришлёт исправленную версию.
             </p>

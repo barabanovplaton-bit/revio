@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback, Fragment, type DragEvent } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo, Fragment, type DragEvent } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   getProject,
@@ -83,6 +83,8 @@ export function ProjectHub({
 
   // Canvas (просмотр макетов с маячками текущего раунда)
   const [canvasOpen, setCanvasOpen] = useState(false);
+  const [viewRound, setViewRound] = useState<number | null>(null);
+  const [markersVisible, setMarkersVisible] = useState(true);
 
   useEffect(() => {
     setIsTouch(
@@ -435,6 +437,26 @@ export function ProjectHub({
     typeof window !== "undefined"
       ? `${window.location.origin}/review/${projectId}`
       : `/review/${projectId}`;
+
+  // Доступные для просмотра раунды (с изображениями): текущий + история
+  const availableRounds = useMemo(() => {
+    const rounds: number[] = [currentRound];
+    for (const pkg of project.packageHistory || []) {
+      if (pkg.imageUrls.length > 0 && !rounds.includes(pkg.round)) {
+        rounds.push(pkg.round);
+      }
+    }
+    return rounds.sort((a, b) => a - b);
+  }, [currentRound, project.packageHistory]);
+
+  const imagesForRound = (round: number) => {
+    if (round === currentRound) return project.imageUrls || [];
+    const pkg = project.packageHistory?.find((p) => p.round === round);
+    return pkg?.imageUrls || [];
+  };
+
+  const markersForRound = (round: number) =>
+    markers.filter((m) => m.round === round);
 
   // --- Fullscreen preview ---
   if (fullscreenIndex !== null) {
@@ -823,7 +845,10 @@ export function ProjectHub({
             <div className="mb-4 flex flex-col gap-2 sm:flex-row">
               <button
                 type="button"
-                onClick={() => setCanvasOpen(true)}
+                onClick={() => {
+                  setViewRound(currentRound);
+                  setCanvasOpen(true);
+                }}
                 className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-border-strong bg-bg-card px-4 py-3 text-sm font-medium text-text-primary transition-all hover:bg-bg-cardHover"
               >
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
@@ -953,38 +978,67 @@ export function ProjectHub({
         </div>
       )}
 
-      {/* Canvas: просмотр макетов с маячками текущего раунда */}
+      {/* Canvas: просмотр макетов с маячками, переключение раундов */}
       {canvasOpen && (
-        <div className="fixed inset-0 z-50 flex flex-col bg-black">
-          <div className="flex items-center justify-between px-4 py-3">
+        <div className="fixed inset-0 z-50 flex flex-col bg-bg-page">
+          <div className="flex items-center gap-3 border-b border-border-strong bg-bg-card px-4 py-3">
             <button
               type="button"
               onClick={() => setCanvasOpen(false)}
-              className="rounded-lg p-2 text-white/70 transition-colors hover:text-white"
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-border-strong bg-bg-input text-text-primary transition-colors hover:bg-bg-cardHover"
             >
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5">
                 <path d="M19 12H5" /><path d="m12 19-7-7 7-7" />
               </svg>
             </button>
-            <span className="text-sm text-white/80">
-              Раунд {currentRound} из {roundsTotal || "∞"}
-            </span>
+            <p className="min-w-0 flex-1 truncate text-sm font-semibold text-text-primary">
+              {project.name}
+            </p>
+            {availableRounds.length > 1 && (
+              <div className="flex items-center gap-1 rounded-xl border border-border-strong bg-bg-input p-1">
+                <button
+                  type="button"
+                  onClick={() => setViewRound((r) => Math.max(availableRounds[0], (r ?? currentRound) - 1))}
+                  disabled={(viewRound ?? currentRound) <= availableRounds[0]}
+                  className="flex h-7 w-7 items-center justify-center rounded-lg text-text-muted transition-colors hover:bg-bg-cardHover hover:text-text-primary disabled:opacity-30"
+                >
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4"><path d="m15 18-6-6 6-6"/></svg>
+                </button>
+                <span className="min-w-[88px] text-center text-xs font-medium text-text-primary">
+                  Раунд {viewRound ?? currentRound} из {availableRounds.length}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setViewRound((r) => Math.min(availableRounds[availableRounds.length - 1], (r ?? currentRound) + 1))}
+                  disabled={(viewRound ?? currentRound) >= availableRounds[availableRounds.length - 1]}
+                  className="flex h-7 w-7 items-center justify-center rounded-lg text-text-muted transition-colors hover:bg-bg-cardHover hover:text-text-primary disabled:opacity-30"
+                >
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4"><path d="m9 18 6-6-6-6"/></svg>
+                </button>
+              </div>
+            )}
             <button
               type="button"
-              onClick={() => setCanvasOpen(false)}
-              className="rounded-lg p-2 text-white/70 hover:text-white"
+              onClick={() => setMarkersVisible((v) => !v)}
+              className={cn(
+                "shrink-0 rounded-xl border px-3 py-2 text-xs font-medium transition-colors",
+                markersVisible
+                  ? "border-border-strong bg-bg-input text-text-primary hover:bg-bg-cardHover"
+                  : "border-border-strong bg-bg-card text-text-muted hover:text-text-primary"
+              )}
             >
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-5 w-5">
-                <path d="M18 6 6 18M6 6l12 12" />
-              </svg>
+              {markersVisible ? "С маячками" : "Без маячков"}
             </button>
           </div>
           <div className="flex-1 overflow-hidden">
             <CanvasViewer
-              imageUrls={project.imageUrls || []}
-              markers={roundMarkers}
+              imageUrls={imagesForRound(viewRound ?? currentRound)}
+              markers={markersForRound(viewRound ?? currentRound)}
               readOnly
               showPanel
+              showToggle={false}
+              markersVisible={markersVisible}
+              onToggleMarkers={() => setMarkersVisible((v) => !v)}
               onToggleDone={handleToggleDone}
             />
           </div>

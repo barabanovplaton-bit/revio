@@ -16,7 +16,6 @@ import {
   updateProject,
   togglePin,
   deleteProject,
-  formatRelativeTime,
   type Project,
 } from "@/lib/projects";
 import {
@@ -182,12 +181,7 @@ function App() {
   if (showLoading || authLoading || !profileLoaded) {
     return (
       <div className="flex h-screen items-center justify-center bg-bg-page">
-        <div className="flex flex-col items-center gap-4">
-          <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-text-primary text-bg-page">
-            <span className="font-display text-xl font-bold">R</span>
-          </div>
-          <div className="h-6 w-6 animate-spin rounded-full border-2 border-border-strong border-t-text-primary" />
-        </div>
+        <div className="h-8 w-8 animate-spin rounded-full border-2 border-border-strong border-t-text-primary" />
       </div>
     );
   }
@@ -477,14 +471,6 @@ function ProjectCard({
             <>
               <div className="truncate text-sm font-medium text-text-primary">
                 {project.name}
-              </div>
-              <div className="flex items-center gap-2 text-xs text-text-muted">
-                <span>
-                  {(project.imageUrls?.length || 0)}{" "}
-                  {(project.imageUrls?.length || 0) === 1 ? "изображение" : "изображений"}
-                </span>
-                <span>·</span>
-                <span>{formatRelativeTime(project.updatedAt)}</span>
               </div>
             </>
           )}

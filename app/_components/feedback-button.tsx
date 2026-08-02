@@ -16,7 +16,6 @@ export function FeedbackButton() {
   const [open, setOpen] = useState(false);
   const [type, setType] = useState<FeedbackCategory>("other");
   const [text, setText] = useState("");
-  const [email, setEmail] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [sent, setSent] = useState(false);
 
@@ -25,7 +24,6 @@ export function FeedbackButton() {
     setTimeout(() => {
       setSent(false);
       setText("");
-      setEmail("");
       setType("other");
     }, 300);
   };
@@ -56,7 +54,6 @@ export function FeedbackButton() {
       await addFeedback({
         type,
         text: value,
-        email: email.trim() || undefined,
         userId,
         url: typeof window !== "undefined" ? window.location.pathname : undefined,
       });
@@ -94,7 +91,7 @@ export function FeedbackButton() {
         {open && (
           <>
             <div
-              className="fixed inset-0 z-[60] bg-black/50"
+              className="fixed inset-0 z-[60]"
               onClick={close}
             />
             <motion.div
@@ -180,14 +177,6 @@ export function FeedbackButton() {
                     rows={4}
                     autoFocus
                     className="w-full resize-none rounded-xl border border-border-strong bg-bg-input px-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:border-text-primary focus:outline-none"
-                  />
-
-                  <input
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder="Email (если захотите ответ)"
-                    className="mt-2 w-full rounded-xl border border-border-strong bg-bg-input px-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:border-text-primary focus:outline-none"
                   />
 
                   <button

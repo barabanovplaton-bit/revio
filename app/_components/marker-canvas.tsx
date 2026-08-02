@@ -16,6 +16,8 @@ interface MarkerCanvasProps {
   projectId: string;
   round: number;
   isLocked: boolean;
+  markersVisible?: boolean;
+  onToggleMarkers?: () => void;
 }
 
 export function MarkerCanvas({
@@ -23,6 +25,8 @@ export function MarkerCanvas({
   projectId,
   round,
   isLocked,
+  markersVisible,
+  onToggleMarkers,
 }: MarkerCanvasProps) {
   const [sentMarkers, setSentMarkers] = useState<Marker[]>([]);
   const [draft, setDraft] = useState<ReviewDraftItem[]>([]);
@@ -34,6 +38,10 @@ export function MarkerCanvas({
   const [markerText, setMarkerText] = useState("");
   const [isMobile, setIsMobile] = useState(false);
   const [panelOpen, setPanelOpen] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState<{
+    item: ReviewDraftItem;
+    number: number | null;
+  } | null>(null);
 
   useEffect(() => {
     const mq = window.matchMedia("(max-width: 767px)");
@@ -111,8 +119,28 @@ export function MarkerCanvas({
     if (pendingPoint) setPendingPoint(null);
   };
 
+  const draftDeleteNumber = (d: ReviewDraftItem): number | null => {
+    if (d.type !== "point") return null;
+    const idx = draft
+      .filter((x) => x.type === "point")
+      .findIndex((x) => x.id === d.id);
+    return idx >= 0 ? sentPointCount + idx + 1 : null;
+  };
+
+  const requestDelete = (d: ReviewDraftItem) => {
+    setDeleteConfirm({ item: d, number: draftDeleteNumber(d) });
+  };
+
   const onDeleteMarker = (id: string) => {
-    if (draft.some((d) => d.id === id)) handleDeleteDraft(id);
+    const d = draft.find((x) => x.id === id);
+    if (!d) return;
+    requestDelete(d);
+  };
+
+  const confirmDelete = () => {
+    if (!deleteConfirm) return;
+    handleDeleteDraft(deleteConfirm.item.id);
+    setDeleteConfirm(null);
   };
 
   // Объединяем отправленные правки и черновик для отрисовки на фото
@@ -162,6 +190,7 @@ export function MarkerCanvas({
         exit={{ opacity: 0, y: 8, scale: 0.95 }}
         onMouseDown={(e) => e.stopPropagation()}
         onTouchStart={(e) => e.stopPropagation()}
+        onClick={(e) => e.stopPropagation()}
         className="absolute z-30 w-72 max-w-[min(18rem,80vw)] rounded-xl border border-white/20 bg-bg-card p-4 shadow-2xl"
         style={{
           left: `${pendingPoint.x * 100}%`,
@@ -208,7 +237,7 @@ export function MarkerCanvas({
       <div className="border-b border-border-strong px-4 py-2.5 text-xs font-medium text-text-primary">
         Мои правки ({draft.length})
       </div>
-      <div className="max-h-40 space-y-0.5 overflow-y-auto p-2">
+      <div className="flex-1 space-y-0.5 overflow-y-auto p-2">
         {draft.map((d, i) => (
           <div
             key={d.id}
@@ -222,7 +251,7 @@ export function MarkerCanvas({
             </span>
             <button
               type="button"
-              onClick={() => handleDeleteDraft(d.id)}
+              onClick={() => requestDelete(d)}
               className="shrink-0 rounded-lg p-1 text-text-muted transition-colors hover:bg-bg-cardHover hover:text-red-400"
               title="Удалить"
             >
@@ -248,6 +277,9 @@ export function MarkerCanvas({
         canDeleteIds={draftIds}
         pendingPoint={pendingPoint}
         pointForm={pointForm}
+        showToggle={false}
+        markersVisible={markersVisible}
+        onToggleMarkers={onToggleMarkers}
       />
     </div>
   );
@@ -306,11 +338,43 @@ export function MarkerCanvas({
       ) : (
         <div className="flex h-full w-full">
           {!isLocked && draft.length > 0 && (
-            <div className="flex w-64 shrink-0 flex-col overflow-hidden border-r border-border-strong bg-bg-card">
+            <div className="my-3 ml-3 flex w-72 shrink-0 flex-col overflow-hidden rounded-2xl border border-border-strong bg-bg-card shadow-xl">
               {draftPanel}
             </div>
           )}
           {canvas}
+        </div>
+      )}
+
+      {/* Подтверждение удаления правки */}
+      {deleteConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-sm rounded-2xl border border-border-strong bg-bg-card p-6 shadow-2xl">
+            <h2 className="mb-2 text-lg font-semibold text-text-primary">
+              {deleteConfirm.number !== null
+                ? `Удалить правку №${deleteConfirm.number}?`
+                : "Удалить общий комментарий?"}
+            </h2>
+            <p className="mb-6 text-sm leading-relaxed text-text-muted">
+              «{deleteConfirm.item.text}» будет удалено из черновика.
+            </p>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setDeleteConfirm(null)}
+                className="flex-1 rounded-xl border border-border-strong px-4 py-2.5 text-sm font-medium text-text-primary transition-all hover:bg-bg-cardHover"
+              >
+                Отмена
+              </button>
+              <button
+                type="button"
+                onClick={confirmDelete}
+                className="flex-1 rounded-xl bg-red-500 px-4 py-2.5 text-sm font-medium text-white transition-all hover:bg-red-600"
+              >
+                Удалить
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

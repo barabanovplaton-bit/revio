@@ -33,6 +33,11 @@ interface CanvasViewerProps {
   pendingPoint?: { x: number; y: number } | null;
   /** Форма «Опишите правку» (рендерится внизу зоны фото) */
   pointForm?: ReactNode;
+  /** Показывать встроенный тумблер «С маячками» (по умолчанию да) */
+  showToggle?: boolean;
+  /** Внешнее управление тумблером маячков (контролируемый режим) */
+  markersVisible?: boolean;
+  onToggleMarkers?: () => void;
   className?: string;
 }
 
@@ -52,6 +57,9 @@ export function CanvasViewer({
   showPanel = false,
   pendingPoint = null,
   pointForm,
+  showToggle = true,
+  markersVisible,
+  onToggleMarkers,
   className,
 }: CanvasViewerProps) {
   const [currentIndex, setCurrentIndex] = useState(initialIndex);
@@ -66,9 +74,13 @@ export function CanvasViewer({
   const [fit, setFit] = useState<{ w: number; h: number } | null>(null);
   const [lastLoadedUrl, setLastLoadedUrl] = useState<string | null>(null);
 
+  const markersShown = markersVisible ?? showMarkers;
+
   const zoneRef = useRef<HTMLDivElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
   const dragMovedRef = useRef(false);
+  const draggingRef = useRef(false);
+  const suppressClickRef = useRef(false);
   const dragStartRef = useRef({ x: 0, y: 0, posX: 0, posY: 0 });
 
   // Мобилка (грубый курсор / touch)
@@ -106,7 +118,9 @@ export function CanvasViewer({
     if (!zone || !natSize) return;
     const compute = () => {
       const rect = zone.getBoundingClientRect();
-      const s = Math.min(rect.width / natSize.w, rect.height / natSize.h, 1);
+      const availW = Math.max(1, rect.width - 48);
+      const availH = Math.max(1, rect.height - 48);
+      const s = Math.min(availW / natSize.w, availH / natSize.h, 1);
       setFit({
         w: Math.max(1, Math.round(natSize.w * s)),
         h: Math.max(1, Math.round(natSize.h * s)),
@@ -180,15 +194,38 @@ export function CanvasViewer({
     zoomBy(e.deltaY < 0 ? 0.25 : -0.25);
   };
 
+  const removeDragListeners = () => {
+    window.removeEventListener("mousemove", handleWindowMouseMove);
+    window.removeEventListener("mouseup", endDrag);
+    window.removeEventListener("touchmove", handleWindowTouchMove);
+    window.removeEventListener("touchend", endDrag);
+  };
+
   const startDrag = (clientX: number, clientY: number) => {
     if (scale <= 1) return;
-    setIsDragging(true);
+    draggingRef.current = true;
     dragMovedRef.current = false;
+    suppressClickRef.current = false;
+    setIsDragging(true);
     dragStartRef.current = { x: clientX, y: clientY, posX: position.x, posY: position.y };
+    window.addEventListener("mousemove", handleWindowMouseMove);
+    window.addEventListener("mouseup", endDrag);
+    window.addEventListener("touchmove", handleWindowTouchMove, { passive: false });
+    window.addEventListener("touchend", endDrag);
+  };
+
+  const handleWindowMouseMove = (e: MouseEvent) => {
+    e.preventDefault();
+    moveDrag(e.clientX, e.clientY);
+  };
+
+  const handleWindowTouchMove = (e: TouchEvent) => {
+    e.preventDefault();
+    if (e.touches.length === 1) moveDrag(e.touches[0].clientX, e.touches[0].clientY);
   };
 
   const moveDrag = (clientX: number, clientY: number) => {
-    if (!isDragging) return;
+    if (!draggingRef.current) return;
     const dx = clientX - dragStartRef.current.x;
     const dy = clientY - dragStartRef.current.y;
     if (Math.abs(dx) + Math.abs(dy) > 6) dragMovedRef.current = true;
@@ -204,11 +241,19 @@ export function CanvasViewer({
   };
 
   const endDrag = () => {
-    setIsDragging(false);
+    if (!draggingRef.current) return;
+    if (dragMovedRef.current) suppressClickRef.current = true;
+    draggingRef.current = false;
     dragMovedRef.current = false;
+    setIsDragging(false);
+    removeDragListeners();
   };
 
   const handleStageClick = (e: ReactMouseEvent<HTMLDivElement>) => {
+    if (suppressClickRef.current) {
+      suppressClickRef.current = false;
+      return;
+    }
     if (isDragging || dragMovedRef.current) return;
     if (!canAdd || locked || readOnly) return;
     const rect = stageRef.current?.getBoundingClientRect();
@@ -253,10 +298,10 @@ export function CanvasViewer({
   const panel = (
     <div
       className={cn(
-        "flex shrink-0 flex-col bg-bg-card",
+        "flex shrink-0 flex-col overflow-hidden bg-bg-card",
         mobile
           ? "h-2/5 border-t border-border-strong"
-          : "w-64 border-r border-border-strong"
+          : "my-3 ml-3 max-h-full w-72 rounded-2xl border border-border-strong shadow-xl"
       )}
     >
       <div className="flex items-center justify-between border-b border-border-strong px-3 py-2">
@@ -394,18 +439,10 @@ export function CanvasViewer({
               e.preventDefault();
               startDrag(e.clientX, e.clientY);
             }}
-            onMouseMove={(e) => moveDrag(e.clientX, e.clientY)}
-            onMouseUp={endDrag}
-            onMouseLeave={endDrag}
             onTouchStart={(e) => {
               if (e.touches.length === 1)
                 startDrag(e.touches[0].clientX, e.touches[0].clientY);
             }}
-            onTouchMove={(e) => {
-              if (e.touches.length === 1)
-                moveDrag(e.touches[0].clientX, e.touches[0].clientY);
-            }}
-            onTouchEnd={endDrag}
             onClick={handleStageClick}
           >
             {currentUrl && (
@@ -422,7 +459,7 @@ export function CanvasViewer({
             )}
 
             {/* Маркеры */}
-            {showMarkers &&
+            {markersShown &&
               pageMarkers.map((m) => (
                 <div
                   key={m.id}
@@ -454,7 +491,7 @@ export function CanvasViewer({
               ))}
 
             {/* Превью точки, которую ставит клиент */}
-            {showMarkers && pendingPoint && canAdd && !locked && (
+            {markersShown && pendingPoint && canAdd && !locked && (
               <div
                 className="pointer-events-none absolute z-20 flex h-7 min-w-7 items-center justify-center rounded-full border-2 border-white bg-text-primary/70 px-1 text-[11px] font-bold text-bg-page"
                 style={{
@@ -480,16 +517,22 @@ export function CanvasViewer({
         )}
 
         {/* Тумблер маячков */}
-        <button
-          type="button"
-          onClick={() => {
-            setShowMarkers((v) => !v);
-            setSelectedMarkerId(null);
-          }}
-          className="absolute right-3 top-3 z-20 rounded-lg border border-white/20 bg-white/10 px-3 py-1.5 text-xs font-medium text-white backdrop-blur-sm transition-all hover:bg-white/20"
-        >
-          {showMarkers ? "Без маячков" : "С маячками"}
-        </button>
+        {showToggle && (
+          <button
+            type="button"
+            onClick={() => {
+              if (onToggleMarkers) {
+                onToggleMarkers();
+              } else {
+                setShowMarkers((v) => !v);
+              }
+              setSelectedMarkerId(null);
+            }}
+            className="absolute right-3 top-3 z-20 rounded-lg border border-white/20 bg-white/10 px-3 py-1.5 text-xs font-medium text-white backdrop-blur-sm transition-all hover:bg-white/20"
+          >
+            {markersShown ? "Без маячков" : "С маячками"}
+          </button>
+        )}
 
         {/* Листание */}
         {imageUrls.length > 1 && (

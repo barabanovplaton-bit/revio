@@ -100,6 +100,9 @@ export function NewProjectWizard({
           }}
           className="h-12 w-full rounded-xl border border-border-strong bg-bg-input px-4 text-center text-sm text-text-primary placeholder:text-text-muted focus:border-text-primary focus:outline-none"
         />
+        <p className="mt-1.5 text-center text-[11px] text-text-muted">
+          Имя видно только вам — клиент видит правки, а не название проекта
+        </p>
 
         <label className="mb-1.5 mt-6 block w-full text-center text-xs font-medium uppercase tracking-wide text-text-muted">
           Раунды правок
