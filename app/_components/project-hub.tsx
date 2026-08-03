@@ -21,6 +21,7 @@ import {
 import { getUserProfile, isOwner } from "@/lib/user-profile";
 import { ConfirmModal } from "./confirm-modal";
 import { CanvasViewer } from "./canvas-viewer";
+import { FeedbackButton } from "./feedback-button";
 import { cn } from "@/lib/utils";
 import { uploadImageWithRetry, prepareImageFile } from "@/lib/cloudinary";
 
@@ -275,21 +276,56 @@ export function ProjectHub({
 
   const isDragging = dragIndex !== null && !isTouch;
 
+  // Вставка «перед элементом index» ничего не меняет в двух случаях:
+  // на месте самой карточки (index === dragIndex) и сразу после неё (index === dragIndex + 1).
+  const isDropAllowed = (index: number, dragIdx: number | null) =>
+    dragIdx !== null && index !== dragIdx && index !== dragIdx + 1;
+
   // Drop на позицию «перед элементом index» (index === len — в конец списка)
   const handleDropAt = (index: number) => (e: DragEvent) => {
     e.preventDefault();
-    if (dragIndex !== null && dragIndex !== index) {
-      const to = index > dragIndex ? index - 1 : index;
-      movePreview(dragIndex, to);
+    const dragIdx = dragIndex;
+    if (dragIdx !== null && isDropAllowed(index, dragIdx)) {
+      const to = index > dragIdx ? index - 1 : index;
+      movePreview(dragIdx, to);
     }
     setDragIndex(null);
     setDragOverIndex(null);
   };
 
   const handleDragOverAt = (index: number) => (e: DragEvent) => {
-    if (dragIndex === null) return;
+    const dragIdx = dragIndex;
+    if (dragIdx === null) return;
+    if (!isDropAllowed(index, dragIdx)) {
+      // Запрещённая зона: без preventDefault браузер покажет курсор-запрет
+      setDragOverIndex(null);
+      return;
+    }
     e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
     setDragOverIndex(index);
+  };
+
+  const ghostRef = useRef<HTMLDivElement | null>(null);
+
+  const createDragGhost = (el: HTMLElement) => {
+    ghostRef.current?.remove();
+    const clone = el.cloneNode(true) as HTMLDivElement;
+    clone.style.position = "fixed";
+    clone.style.top = "-10000px";
+    clone.style.left = "-10000px";
+    clone.style.width = `${el.offsetWidth}px`;
+    clone.style.opacity = "0.8";
+    clone.style.pointerEvents = "none";
+    clone.style.margin = "0";
+    document.body.appendChild(clone);
+    ghostRef.current = clone;
+    return clone;
+  };
+
+  const clearDragGhost = () => {
+    ghostRef.current?.remove();
+    ghostRef.current = null;
   };
 
   // --- Upload ---
@@ -719,9 +755,9 @@ export function ProjectHub({
             <div className="space-y-2">
               {previewUrls.map((url, index) => (
                 <Fragment key={index}>
-                  {isDragging && index > 0 && (
+                  {isDragging && dragOverIndex === index && (
                     <DropIndicator
-                      active={dragOverIndex === index}
+                      active
                       onDragOver={handleDragOverAt(index)}
                       onDrop={handleDropAt(index)}
                     />
@@ -731,18 +767,17 @@ export function ProjectHub({
                     onDragStart={(e) => {
                       e.dataTransfer.effectAllowed = "move";
                       e.dataTransfer.setData("text/plain", String(index));
-                      const thumb = e.currentTarget.querySelector("img");
-                      if (thumb) {
-                        e.dataTransfer.setDragImage(thumb, 32, 32);
-                      }
+                      const ghost = createDragGhost(e.currentTarget);
+                      e.dataTransfer.setDragImage(ghost, 32, 16);
                       setDragIndex(index);
-                      setDragOverIndex(index);
+                      setDragOverIndex(null);
                     }}
                     onDragOver={handleDragOverAt(index)}
                     onDrop={handleDropAt(index)}
                     onDragEnd={() => {
                       setDragIndex(null);
                       setDragOverIndex(null);
+                      clearDragGhost();
                     }}
                     className={`group flex items-center gap-3 rounded-xl border bg-bg-card p-2 transition-all cursor-grab active:cursor-grabbing ${
                       dragIndex === index
@@ -786,9 +821,9 @@ export function ProjectHub({
                   </div>
                 </Fragment>
               ))}
-              {isDragging && (
+              {isDragging && dragOverIndex === pendingFiles.length && (
                 <DropIndicator
-                  active={dragOverIndex === pendingFiles.length}
+                  active
                   onDragOver={handleDragOverAt(pendingFiles.length)}
                   onDrop={handleDropAt(pendingFiles.length)}
                 />
@@ -834,13 +869,13 @@ export function ProjectHub({
 
             {/* Rounds status */}
             <div className="mb-4 flex flex-wrap items-center gap-2">
-              {isProPlan ? (
-                <span className="rounded-lg border border-border-strong bg-bg-card px-3 py-1.5 text-xs text-text-muted">
-                  Раунд {currentRound} · правки без ограничений
-                </span>
-              ) : hasRoundsLeft(project) ? (
+              {hasRoundsLeft(project) ? (
                 <span className="rounded-lg border border-border-strong bg-bg-card px-3 py-1.5 text-xs text-text-muted">
                   Раунд {currentRound} из {roundsTotal || "∞"} · осталось раундов правок: {roundsLeft}
+                </span>
+              ) : isProPlan ? (
+                <span className="rounded-lg border border-border-strong bg-bg-card px-3 py-1.5 text-xs text-text-muted">
+                  Раунд {currentRound} из {roundsTotal || "∞"} · раунды правок закончились
                 </span>
               ) : (
                 <span className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-1.5 text-xs text-red-400">
@@ -901,22 +936,13 @@ export function ProjectHub({
               </button>
               <button
                 type="button"
-                onClick={() => {
-                  if (!isProPlan && !hasRoundsLeft(project)) {
-                    showToast("Раунды правок исчерпаны — добавьте раунд или перейдите на Pro");
-                    return;
-                  }
-                  if (!hasClientRevisions) {
-                    showToast("Клиент ещё не отправил правки. Кнопка станет активной после этого.");
-                    return;
-                  }
-                  setReplaceConfirm(true);
-                }}
+                disabled={replaceBlocked}
+                onClick={() => setReplaceConfirm(true)}
                 className={cn(
-                  "flex flex-1 items-center justify-center gap-2 rounded-xl border px-4 py-3 text-sm font-medium transition-all",
+                  "flex flex-1 items-center justify-center gap-2 rounded-xl border border-border-strong bg-bg-card px-4 py-3 text-sm font-medium transition-all disabled:cursor-not-allowed disabled:opacity-40",
                   replaceBlocked
-                    ? "border-border-strong bg-bg-card text-text-muted opacity-60"
-                    : "border-border-strong bg-bg-card text-text-primary hover:bg-bg-cardHover"
+                    ? "text-text-muted"
+                    : "text-text-primary hover:bg-bg-cardHover"
                 )}
               >
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
@@ -1103,7 +1129,6 @@ export function ProjectHub({
               const selected = canvasSelectedId
                 ? list.find((m) => m.id === canvasSelectedId) ?? null
                 : null;
-              if (!selected) return null;
               const pointOrder = list
                 .filter((m) => m.type === "point")
                 .sort(
@@ -1112,46 +1137,60 @@ export function ProjectHub({
                     (b.createdAt?.toMillis() || 0)
                 );
               const num =
-                selected.type === "point"
+                selected?.type === "point"
                   ? pointOrder.findIndex((m) => m.id === selected.id) + 1
                   : null;
               return (
                 <aside className="flex w-[19rem] shrink-0 flex-col border-l border-border-strong bg-bg-card">
                   <div className="flex items-center justify-between border-b border-border-strong px-4 py-3">
                     <p className="text-sm font-medium text-text-primary">
-                      {selected.type === "general"
-                        ? "Общая правка"
-                        : `Правка №${num}`}
+                      {selected
+                        ? selected.type === "general"
+                          ? "Общая правка"
+                          : `Правка №${num}`
+                        : "Правка"}
                     </p>
-                    <button
-                      type="button"
-                      onClick={() => setCanvasSelectedId(null)}
-                      className="rounded-lg p-1 text-text-muted transition-colors hover:bg-bg-cardHover hover:text-text-primary"
-                    >
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" className="h-4 w-4">
-                        <path d="M18 6 6 18M6 6l12 12" />
-                      </svg>
-                    </button>
+                    {selected && (
+                      <button
+                        type="button"
+                        onClick={() => setCanvasSelectedId(null)}
+                        className="rounded-lg p-1 text-text-muted transition-colors hover:bg-bg-cardHover hover:text-text-primary"
+                      >
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" className="h-4 w-4">
+                          <path d="M18 6 6 18M6 6l12 12" />
+                        </svg>
+                      </button>
+                    )}
                   </div>
-                  <div className="flex-1 overflow-y-auto p-4">
-                    <p className="break-words text-sm leading-relaxed text-text-primary">
-                      {selected.text}
-                    </p>
-                  </div>
-                  <div className="flex gap-2 border-t border-border-strong p-3">
-                    <button
-                      type="button"
-                      onClick={() => handleToggleDone(selected.id, !selected.done)}
-                      className={cn(
-                        "flex-1 rounded-xl px-3 py-2 text-sm font-medium transition-all",
-                        selected.done
-                          ? "bg-green-500 text-white"
-                          : "border border-border-strong text-text-primary hover:bg-bg-cardHover"
-                      )}
-                    >
-                      {selected.done ? "Сделано ✓" : "Отметить сделанным"}
-                    </button>
-                  </div>
+                  {selected ? (
+                    <>
+                      <div className="flex-1 overflow-y-auto p-4">
+                        <p className="break-words text-sm leading-relaxed text-text-primary">
+                          {selected.text}
+                        </p>
+                      </div>
+                      <div className="flex gap-2 border-t border-border-strong p-3">
+                        <button
+                          type="button"
+                          onClick={() => handleToggleDone(selected.id, !selected.done)}
+                          className={cn(
+                            "flex-1 rounded-xl px-3 py-2 text-sm font-medium transition-all",
+                            selected.done
+                              ? "bg-green-500 text-white"
+                              : "border border-border-strong text-text-primary hover:bg-bg-cardHover"
+                          )}
+                        >
+                          {selected.done ? "Сделано ✓" : "Отметить сделанным"}
+                        </button>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="flex flex-1 items-center justify-center p-4">
+                      <p className="text-center text-xs leading-relaxed text-text-muted">
+                        Нажмите на правку в списке слева или на маячок на макете, чтобы посмотреть текст.
+                      </p>
+                    </div>
+                  )}
                 </aside>
               );
             })()}
@@ -1176,6 +1215,8 @@ export function ProjectHub({
         onChange={(e) => handleFiles(e.target.files)}
         className="hidden"
       />
+
+      <FeedbackButton />
     </div>
   );
 }
@@ -1193,7 +1234,7 @@ function DropIndicator({
     <div
       onDragOver={onDragOver}
       onDrop={onDrop}
-      className={`flex h-7 items-center px-1 transition-colors ${
+      className={`flex h-1 items-center px-1 transition-colors ${
         active ? "bg-text-primary/10" : ""
       }`}
     >

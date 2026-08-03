@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import { Inter, Space_Grotesk } from "next/font/google";
-import { FeedbackButton } from "./_components/feedback-button";
 import "./globals.css";
 
 const inter = Inter({
@@ -50,7 +49,6 @@ export default function RootLayout({
       </head>
       <body className="font-sans antialiased">
         {children}
-        <FeedbackButton />
       </body>
     </html>
   );

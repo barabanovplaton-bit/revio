@@ -188,13 +188,16 @@ export function CanvasViewer({
   const clamp = (v: number, min: number, max: number) =>
     Math.min(Math.max(v, min), max);
 
-  // Ограничиваем сдвиг, чтобы картинка не уезжала за край зоны
+  // Ограничиваем сдвиг, чтобы картинка не уезжала за край зоны.
+  // position хранится в экранных пикселях (transform: translate(px) scale(s)).
+  // При scale > 1 границы расширяются ровно на выходящую за пределы часть,
+  // чтобы каждый угол макета можно было дотянуть до центра/краёв зоны.
   const applyBounds = (pos: { x: number; y: number }, s: number) => {
     if (s <= 1) return { x: 0, y: 0 };
     const rect = zoneRef.current?.getBoundingClientRect();
     if (!rect || !fit) return pos;
-    const maxX = Math.max(0, (fit.w * s - rect.width) / 2 / s);
-    const maxY = Math.max(0, (fit.h * s - rect.height) / 2 / s);
+    const maxX = Math.max(0, (fit.w * s - rect.width) / 2);
+    const maxY = Math.max(0, (fit.h * s - rect.height) / 2);
     return {
       x: clamp(pos.x, -maxX, maxX),
       y: clamp(pos.y, -maxY, maxY),
@@ -214,7 +217,7 @@ export function CanvasViewer({
     if (next === scale) return;
     const mx = e.clientX - rect.left - rect.width / 2;
     const my = e.clientY - rect.top - rect.height / 2;
-    // Точка под курсором в координатах фото (stage)
+    // Точка под курсором в координатах фото (экранная позиция = pos + px * s)
     const px = (mx - position.x) / scale;
     const py = (my - position.y) / scale;
     const newPos = {
@@ -479,7 +482,7 @@ export function CanvasViewer({
               transform:
                 scale === 1 && position.x === 0 && position.y === 0
                   ? undefined
-                  : `scale(${scale}) translate(${position.x / scale}px, ${position.y / scale}px)`,
+                  : `translate(${position.x}px, ${position.y}px) scale(${scale})`,
               transformOrigin: "center",
               cursor: scale > 1 ? "grab" : canAdd ? "crosshair" : "default",
             }}
@@ -494,16 +497,34 @@ export function CanvasViewer({
             onClick={handleStageClick}
           >
             {currentUrl && (
-              <img
-                src={currentUrl}
-                alt={`Макет ${currentIndex + 1}`}
-                draggable={false}
-                style={fit ? { width: fit.w, height: fit.h, display: "block" } : undefined}
-                className={cn(
-                  fit ? undefined : "max-h-full max-w-full object-contain",
-                  lastLoadedUrl === currentUrl ? undefined : "opacity-0"
+              <>
+                {/* Пока новый слайд грузится — держим предыдущий загруженный видимым */}
+                {lastLoadedUrl && lastLoadedUrl !== currentUrl && (
+                  <img
+                    src={lastLoadedUrl}
+                    alt=""
+                    draggable={false}
+                    style={
+                      fit
+                        ? { width: fit.w, height: fit.h, display: "block" }
+                        : undefined
+                    }
+                    className={
+                      fit ? undefined : "max-h-full max-w-full object-contain"
+                    }
+                  />
                 )}
-              />
+                <img
+                  src={currentUrl}
+                  alt={`Макет ${currentIndex + 1}`}
+                  draggable={false}
+                  style={fit ? { width: fit.w, height: fit.h, display: "block" } : undefined}
+                  className={cn(
+                    fit ? undefined : "max-h-full max-w-full object-contain",
+                    lastLoadedUrl === currentUrl ? undefined : "opacity-0"
+                  )}
+                />
+              </>
             )}
 
             {/* Маркеры */}

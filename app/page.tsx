@@ -9,6 +9,7 @@ import { ConfirmModal } from "./_components/confirm-modal";
 import { NewProjectWizard } from "./_components/new-project-wizard";
 import { OnboardingModal } from "./_components/onboarding-modal";
 import { Landing } from "./_components/landing";
+import { FeedbackButton } from "./_components/feedback-button";
 import { signOut, subscribeToAuth, type User } from "@/lib/auth";
 import { type UserProfile } from "@/lib/user-profile";
 import { isOwner } from "@/lib/user-profile";
@@ -430,6 +431,8 @@ function App() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      <FeedbackButton />
     </div>
   );
 }

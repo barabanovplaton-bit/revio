@@ -21,39 +21,8 @@ export function FeedbackButton() {
   const [text, setText] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [sent, setSent] = useState(false);
-  const [mounted, setMounted] = useState(false);
-  const [navBusy, setNavBusy] = useState(false);
 
   const pathname = usePathname();
-
-  // Не показываем кнопку, пока страница грузится (перезагрузка/переход)
-  useEffect(() => {
-    if (document.readyState === "complete") {
-      setMounted(true);
-      return;
-    }
-    const onLoad = () => setMounted(true);
-    window.addEventListener("load", onLoad);
-    return () => window.removeEventListener("load", onLoad);
-  }, []);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const nav = (
-      window as unknown as { navigation?: EventTarget }
-    ).navigation;
-    if (!nav) return;
-    const start = () => setNavBusy(true);
-    const end = () => setNavBusy(false);
-    nav.addEventListener("navigate", start);
-    nav.addEventListener("navigatesuccess", end);
-    nav.addEventListener("navigateerror", end);
-    return () => {
-      nav.removeEventListener("navigate", start);
-      nav.removeEventListener("navigatesuccess", end);
-      nav.removeEventListener("navigateerror", end);
-    };
-  }, []);
 
   // Сохраняем черновик, чтобы не пропадало при случайном закрытии
   useEffect(() => {
@@ -70,7 +39,6 @@ export function FeedbackButton() {
 
   // На странице клиента кнопку не показываем (не мешает при загрузке и работе)
   if (pathname?.startsWith("/review/")) return null;
-  if (!mounted || navBusy) return null;
 
   const openForm = () => {
     try {

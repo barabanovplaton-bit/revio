@@ -158,7 +158,14 @@ export function NewProjectWizard({
             disabled={saving || !name.trim()}
             className="h-12 flex-1 rounded-xl bg-text-primary text-sm font-medium text-bg-page transition-all hover:opacity-90 active:scale-[0.98] disabled:opacity-40"
           >
-            {saving ? "Создание..." : "Создать"}
+            {saving ? (
+              <span className="flex items-center justify-center gap-2">
+                <span className="h-4 w-4 animate-spin rounded-full border-2 border-bg-page/40 border-t-bg-page" />
+                Создание...
+              </span>
+            ) : (
+              "Создать"
+            )}
           </button>
         </div>
       </div>
