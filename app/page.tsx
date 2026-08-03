@@ -159,10 +159,9 @@ function App() {
 
   const handleProjectCreated = useCallback(
     (id: string) => {
-      router.push(`/project/${id}`);
-      showToast("Проект создан");
+      router.push(`/project/${id}?created=1`);
     },
-    [showToast, router]
+    [router]
   );
 
   const handleDeleteProject = useCallback(async () => {

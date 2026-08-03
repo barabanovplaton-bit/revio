@@ -187,6 +187,17 @@ export function ProjectHub({
     return () => window.removeEventListener("mousemove", onMove);
   }, [dragIndex]);
 
+  // Плашка «Проект создан» после перехода с мастера создания
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("created") === "1") {
+      showToast("Проект создан");
+      window.history.replaceState({}, "", window.location.pathname);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // --- Rename ---
   const startRename = () => {
     setRenameValue(project?.name || "");

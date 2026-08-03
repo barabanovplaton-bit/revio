@@ -271,7 +271,7 @@ export default function ReviewPage({
 
   return (
     <div className="flex h-screen flex-col bg-bg-page">
-      <header className="relative z-50 flex items-center justify-between gap-3 border-b border-border-strong bg-bg-card px-4 py-2.5">
+      <header className="relative flex items-center justify-between gap-3 border-b border-border-strong bg-bg-card px-4 py-2.5">
         <div className="flex min-w-0 flex-wrap items-center gap-2">
           {availableRounds.length > 1 ? (
             <div className="flex items-center gap-0.5 rounded-xl border border-border-strong bg-bg-input p-1">
@@ -379,7 +379,7 @@ export default function ReviewPage({
               className={cn(
                 "flex shrink-0 items-center gap-1.5 rounded-xl border px-3 py-2 text-xs font-semibold transition-all",
                 pointMode
-                  ? "border-red-500 bg-red-500 text-white hover:bg-red-600"
+                  ? "relative z-[80] border-red-500 bg-red-500 text-white hover:bg-red-600"
                   : "border-text-primary/40 bg-text-primary/10 text-text-primary hover:bg-text-primary/20"
               )}
             >
@@ -425,7 +425,7 @@ export default function ReviewPage({
       <main className="flex-1 overflow-hidden">
         {viewRound === round ? (
           <MarkerCanvas
-            imageUrls={project.imageUrls}
+            imageUrls={imagesForRound(viewRound)}
             projectId={id}
             round={round}
             isLocked={locked}

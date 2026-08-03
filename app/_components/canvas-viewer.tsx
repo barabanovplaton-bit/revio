@@ -52,6 +52,8 @@ interface CanvasViewerProps {
 }
 
 const MAX_SCALE = 3;
+/** Зазор от краёв рабочей зоны при максимальном приближении (чтобы был виден край) */
+const ZOOM_EDGE_PADDING = 16;
 
 export function CanvasViewer({
   imageUrls,
@@ -196,8 +198,8 @@ export function CanvasViewer({
     if (s <= 1) return { x: 0, y: 0 };
     const rect = zoneRef.current?.getBoundingClientRect();
     if (!rect || !fit) return pos;
-    const maxX = Math.max(0, (fit.w * s - rect.width) / 2);
-    const maxY = Math.max(0, (fit.h * s - rect.height) / 2);
+    const maxX = Math.max(0, (fit.w * s - rect.width) / 2 - ZOOM_EDGE_PADDING);
+    const maxY = Math.max(0, (fit.h * s - rect.height) / 2 - ZOOM_EDGE_PADDING);
     return {
       x: clamp(pos.x, -maxX, maxX),
       y: clamp(pos.y, -maxY, maxY),
