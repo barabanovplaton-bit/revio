@@ -86,9 +86,14 @@ export default function ReviewPage({
   // Просматриваемый раунд (по умолчанию — текущий) и тумблер маячков
   const [viewRound, setViewRound] = useState(project?.currentRound || 1);
   const [markersVisible, setMarkersVisible] = useState(true);
+  // Текущая страница (для счётчика «N / M» в шапке)
+  const [viewIndex, setViewIndex] = useState(0);
   useEffect(() => {
     setViewRound(project?.currentRound || 1);
   }, [project?.currentRound]);
+  useEffect(() => {
+    setViewIndex(0);
+  }, [viewRound]);
 
   // Раунды с изображениями, доступные клиенту для просмотра
   const availableRounds = useMemo(() => {
@@ -222,9 +227,9 @@ export default function ReviewPage({
   return (
     <div className="flex h-screen flex-col bg-bg-page">
       <header className="flex items-center justify-between gap-3 border-b border-border-strong bg-bg-card px-4 py-3">
-        <div className="min-w-0">
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
           {availableRounds.length > 1 ? (
-            <div className="flex items-center gap-1 rounded-xl border border-border-strong bg-bg-input p-1">
+            <div className="flex items-center gap-0.5 rounded-xl border border-border-strong bg-bg-input p-1">
               <button
                 type="button"
                 onClick={() => setViewRound((r) => Math.max(availableRounds[0], r - 1))}
@@ -233,8 +238,8 @@ export default function ReviewPage({
               >
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4"><path d="m15 18-6-6 6-6"/></svg>
               </button>
-              <span className="min-w-[88px] text-center text-xs font-medium text-text-primary">
-                Раунд {viewRound} из {availableRounds.length}
+              <span className="min-w-0 px-1 text-center text-xs font-medium text-text-primary">
+                Раунд {viewRound}/{availableRounds.length}
               </span>
               <button
                 type="button"
@@ -248,7 +253,15 @@ export default function ReviewPage({
           ) : (
             <p className="text-xs font-medium text-text-muted">Раунд {round}</p>
           )}
-          <p className="mt-0.5 text-xs text-text-muted">
+          {(() => {
+            const n = imagesForRound(viewRound).length;
+            return n > 1 ? (
+              <span className="inline-flex shrink-0 items-center rounded-lg border border-border-strong bg-bg-input px-2.5 py-1 text-xs font-medium text-text-primary">
+                {Math.min(viewIndex + 1, n)} / {n}
+              </span>
+            ) : null;
+          })()}
+          <p className="w-full text-xs text-text-muted">
             {locked
               ? submitted
                 ? "Правки отправлены — ждите новый раунд"
@@ -346,6 +359,7 @@ export default function ReviewPage({
             isLocked={locked}
             markersVisible={markersVisible}
             onToggleMarkers={() => setMarkersVisible((v) => !v)}
+            onImageChange={setViewIndex}
           />
         ) : (
           <CanvasViewer
@@ -356,6 +370,7 @@ export default function ReviewPage({
             showToggle={false}
             markersVisible={markersVisible}
             onToggleMarkers={() => setMarkersVisible((v) => !v)}
+            onImageChange={setViewIndex}
           />
         )}
       </main>
@@ -364,14 +379,6 @@ export default function ReviewPage({
         <div className="pointer-events-none fixed inset-x-0 bottom-0 z-40 flex justify-center p-4">
           <div className="pointer-events-auto max-w-md rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-center text-sm text-red-400 backdrop-blur-sm">
             Раунды правок в этом проекте исчерпаны. Свяжитесь с фрилансером, чтобы продолжить.
-          </div>
-        </div>
-      )}
-
-      {locked && submitted && (
-        <div className="pointer-events-none fixed inset-x-0 bottom-0 z-40 flex justify-center p-4">
-          <div className="pointer-events-auto max-w-md rounded-xl border border-green-500/30 bg-green-500/10 px-4 py-3 text-center text-sm text-green-400 backdrop-blur-sm">
-            Правки отправлены дизайнеру. Когда начнётся новый раунд, вы снова сможете их добавить.
           </div>
         </div>
       )}

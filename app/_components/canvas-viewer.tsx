@@ -38,6 +38,8 @@ interface CanvasViewerProps {
   /** Внешнее управление тумблером маячков (контролируемый режим) */
   markersVisible?: boolean;
   onToggleMarkers?: () => void;
+  /** Смена текущей картинки (для счётчика страниц в шапке) */
+  onImageChange?: (index: number) => void;
   className?: string;
 }
 
@@ -60,6 +62,7 @@ export function CanvasViewer({
   showToggle = true,
   markersVisible,
   onToggleMarkers,
+  onImageChange,
   className,
 }: CanvasViewerProps) {
   const [currentIndex, setCurrentIndex] = useState(initialIndex);
@@ -118,8 +121,8 @@ export function CanvasViewer({
     if (!zone || !natSize) return;
     const compute = () => {
       const rect = zone.getBoundingClientRect();
-      const availW = Math.max(1, rect.width - 48);
-      const availH = Math.max(1, rect.height - 48);
+      const availW = Math.max(1, rect.width - 8);
+      const availH = Math.max(1, rect.height - 8);
       const s = Math.min(availW / natSize.w, availH / natSize.h, 1);
       setFit({
         w: Math.max(1, Math.round(natSize.w * s)),
@@ -167,6 +170,7 @@ export function CanvasViewer({
 
   // Ограничиваем сдвиг, чтобы картинка не уезжала за край зоны
   const applyBounds = (pos: { x: number; y: number }, s: number) => {
+    if (s <= 1) return { x: 0, y: 0 };
     const rect = zoneRef.current?.getBoundingClientRect();
     if (!rect || !fit) return pos;
     const maxX = Math.max(0, (fit.w * s - rect.width) / 2 / s);
@@ -333,7 +337,7 @@ export function CanvasViewer({
             type="button"
             onClick={() => goToMarker(m)}
             className={cn(
-              "flex w-full items-start gap-2 rounded-lg p-2 text-left transition-colors",
+              "flex w-full items-center gap-2 rounded-lg p-2 text-left transition-colors",
               selectedMarkerId === m.id
                 ? "bg-bg-cardHover"
                 : "hover:bg-bg-cardHover/60",
@@ -342,7 +346,7 @@ export function CanvasViewer({
           >
             <span
               className={cn(
-                "mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[11px] font-bold",
+                "flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[11px] font-bold",
                 m.done
                   ? "bg-green-500 text-white"
                   : "bg-text-primary text-bg-page"
@@ -350,7 +354,7 @@ export function CanvasViewer({
             >
               {numberById.get(m.id)}
             </span>
-            <span className="min-w-0 flex-1 text-xs text-text-primary">
+            <span className="min-w-0 flex-1 break-words text-xs leading-snug text-text-primary">
               {filter === "page" && (
                 <span className="mr-1 text-[10px] text-text-muted">
                   стр. {(m.imageIndex ?? 0) + 1} ·
@@ -367,7 +371,7 @@ export function CanvasViewer({
                   onToggleDone(m.id, !m.done);
                 }}
                 className={cn(
-                  "mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md border text-xs transition-colors",
+                  "flex h-5 w-5 shrink-0 items-center justify-center rounded-md border text-xs transition-colors",
                   m.done
                     ? "border-green-500 bg-green-500 text-white"
                     : "border-border-strong text-transparent hover:border-text-primary"
@@ -384,8 +388,8 @@ export function CanvasViewer({
               Общие правки · {generalMarkers.length}
             </p>
             {generalMarkers.map((m) => (
-              <div key={m.id} className="flex items-start gap-2 px-2 py-1.5">
-                <span className="min-w-0 flex-1 text-xs text-text-primary">
+              <div key={m.id} className="flex items-center gap-2 px-2 py-1.5">
+                <span className="min-w-0 flex-1 break-words text-xs leading-snug text-text-primary">
                   {m.text}
                 </span>
                 {onToggleDone && (
@@ -394,7 +398,7 @@ export function CanvasViewer({
                     aria-checked={!!m.done}
                     onClick={() => onToggleDone(m.id, !m.done)}
                     className={cn(
-                      "mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md border text-xs transition-colors",
+                      "flex h-5 w-5 shrink-0 items-center justify-center rounded-md border text-xs transition-colors",
                       m.done
                         ? "border-green-500 bg-green-500 text-white"
                         : "border-border-strong text-transparent hover:border-text-primary"
@@ -417,7 +421,7 @@ export function CanvasViewer({
 
       {/* Зона фото */}
       <div
-        className="relative flex-1 overflow-hidden bg-black"
+        className="relative flex-1 overflow-hidden bg-bg-page"
         ref={zoneRef}
         onWheel={handleWheel}
       >
@@ -509,12 +513,7 @@ export function CanvasViewer({
           </div>
         </div>
 
-        {/* Счётчик страниц */}
-        {imageUrls.length > 1 && (
-          <div className="absolute left-1/2 top-3 z-20 -translate-x-1/2 rounded-lg border border-white/20 bg-white/10 px-3 py-1 text-sm text-white backdrop-blur-sm">
-            {currentIndex + 1} / {imageUrls.length}
-          </div>
-        )}
+        {/* Счётчик страниц вынесен в шапку (onImageChange) */}
 
         {/* Тумблер маячков */}
         {showToggle && (
@@ -539,7 +538,13 @@ export function CanvasViewer({
           <>
             <button
               type="button"
-              onClick={() => setCurrentIndex((p) => Math.max(0, p - 1))}
+              onClick={() => {
+                setCurrentIndex((p) => {
+                  const next = Math.max(0, p - 1);
+                  onImageChange?.(next);
+                  return next;
+                });
+              }}
               disabled={currentIndex === 0}
               className="absolute left-3 top-1/2 z-20 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full border border-white/20 bg-white/10 text-white backdrop-blur-sm transition-all hover:bg-white/20 disabled:opacity-30"
             >
@@ -557,9 +562,13 @@ export function CanvasViewer({
             </button>
             <button
               type="button"
-              onClick={() =>
-                setCurrentIndex((p) => Math.min(imageUrls.length - 1, p + 1))
-              }
+              onClick={() => {
+                setCurrentIndex((p) => {
+                  const next = Math.min(imageUrls.length - 1, p + 1);
+                  onImageChange?.(next);
+                  return next;
+                });
+              }}
               disabled={currentIndex >= imageUrls.length - 1}
               className="absolute right-3 top-1/2 z-20 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full border border-white/20 bg-white/10 text-white backdrop-blur-sm transition-all hover:bg-white/20 disabled:opacity-30"
             >
@@ -582,9 +591,11 @@ export function CanvasViewer({
         {selectedMarker && (
           <div className="absolute bottom-20 left-1/2 z-30 w-[calc(100%-2rem)] max-w-md -translate-x-1/2 rounded-xl border border-white/20 bg-bg-card p-3 shadow-2xl">
             <div className="flex items-start justify-between gap-3">
-              <p className="text-sm text-text-primary">
+              <p className="max-h-[30vh] min-w-0 flex-1 break-words text-sm leading-relaxed text-text-primary">
                 <span className="mr-1.5 inline-flex h-5 w-5 items-center justify-center rounded-full bg-text-primary text-[10px] font-bold text-bg-page align-middle">
-                  {numberById.get(selectedMarker.id)}
+                  {selectedMarker.type === "general"
+                    ? "!"
+                    : numberById.get(selectedMarker.id)}
                 </span>
                 {selectedMarker.text}
               </p>

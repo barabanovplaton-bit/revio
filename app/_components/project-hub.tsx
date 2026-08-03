@@ -85,6 +85,22 @@ export function ProjectHub({
   const [canvasOpen, setCanvasOpen] = useState(false);
   const [viewRound, setViewRound] = useState<number | null>(null);
   const [markersVisible, setMarkersVisible] = useState(true);
+  // Текущие страницы для счётчиков «N / M» в шапках просмотра
+  const [canvasIndex, setCanvasIndex] = useState(0);
+  const [histViewIndex, setHistViewIndex] = useState(0);
+  const [viewIdx, setViewIdx] = useState(0);
+
+  useEffect(() => {
+    setCanvasIndex(0);
+  }, [viewRound, canvasOpen]);
+
+  useEffect(() => {
+    setHistViewIndex(0);
+  }, [historyView]);
+
+  useEffect(() => {
+    if (viewingImageIndex !== null) setViewIdx(viewingImageIndex);
+  }, [viewingImageIndex]);
 
   useEffect(() => {
     setIsTouch(
@@ -206,7 +222,7 @@ export function ProjectHub({
     }
 
     const base = replacing ? 0 : currentCount;
-    const room = MAX_IMAGES_PER_PROJECT - base;
+    const room = MAX_IMAGES_PER_PROJECT - base - pendingFiles.length;
     if (room <= 0) {
       showToast(`Максимум ${MAX_IMAGES_PER_PROJECT} изображений на проект`);
       return;
@@ -510,6 +526,8 @@ export function ProjectHub({
             <span className="text-sm text-white/80">
               Раунд {historyView.round} (история) ·{" "}
               {histMarkers.filter((m) => m.type === "point").length} правок
+              {histUrls.length > 1 &&
+                ` · страница ${Math.min(histViewIndex + 1, histUrls.length)}/${histUrls.length}`}
             </span>
             <button
               onClick={() => setHistoryView(null)}
@@ -527,6 +545,7 @@ export function ProjectHub({
               readOnly
               showPanel
               onToggleDone={handleToggleDone}
+              onImageChange={setHistViewIndex}
             />
           </div>
         </div>
@@ -548,7 +567,11 @@ export function ProjectHub({
               <path d="M19 12H5" /><path d="m12 19-7-7 7-7" />
             </svg>
           </button>
-          <span className="text-sm text-white/80">{project.name}</span>
+          <span className="text-sm text-white/80">
+            {project.name}
+            {project.imageUrls.length > 1 &&
+              ` · ${Math.min(viewIdx + 1, project.imageUrls.length)}/${project.imageUrls.length}`}
+          </span>
           <button
             type="button"
             onClick={() => setViewingImageIndex(null)}
@@ -567,6 +590,7 @@ export function ProjectHub({
             readOnly
             showPanel
             onToggleDone={handleToggleDone}
+            onImageChange={setViewIdx}
           />
         </div>
       </div>
@@ -986,7 +1010,8 @@ export function ProjectHub({
             <button
               type="button"
               onClick={() => setCanvasOpen(false)}
-              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-border-strong bg-bg-input text-text-primary transition-colors hover:bg-bg-cardHover"
+              title="Назад"
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-text-primary transition-all hover:bg-bg-cardHover hover:ring-1 hover:ring-border-strong"
             >
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5">
                 <path d="M19 12H5" /><path d="m12 19-7-7 7-7" />
@@ -996,7 +1021,7 @@ export function ProjectHub({
               {project.name}
             </p>
             {availableRounds.length > 1 && (
-              <div className="flex items-center gap-1 rounded-xl border border-border-strong bg-bg-input p-1">
+              <div className="flex items-center gap-0.5 rounded-xl border border-border-strong bg-bg-input p-1">
                 <button
                   type="button"
                   onClick={() => setViewRound((r) => Math.max(availableRounds[0], (r ?? currentRound) - 1))}
@@ -1005,8 +1030,8 @@ export function ProjectHub({
                 >
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4"><path d="m15 18-6-6 6-6"/></svg>
                 </button>
-                <span className="min-w-[88px] text-center text-xs font-medium text-text-primary">
-                  Раунд {viewRound ?? currentRound} из {availableRounds.length}
+                <span className="min-w-0 px-1 text-center text-xs font-medium text-text-primary">
+                  Раунд {viewRound ?? currentRound}/{availableRounds.length}
                 </span>
                 <button
                   type="button"
@@ -1018,6 +1043,14 @@ export function ProjectHub({
                 </button>
               </div>
             )}
+            {(() => {
+              const n = imagesForRound(viewRound ?? currentRound).length;
+              return n > 1 ? (
+                <span className="shrink-0 rounded-lg border border-border-strong bg-bg-input px-2.5 py-1 text-xs font-medium text-text-primary">
+                  {Math.min(canvasIndex + 1, n)} / {n}
+                </span>
+              ) : null;
+            })()}
             <button
               type="button"
               onClick={() => setMarkersVisible((v) => !v)}
@@ -1041,6 +1074,7 @@ export function ProjectHub({
               markersVisible={markersVisible}
               onToggleMarkers={() => setMarkersVisible((v) => !v)}
               onToggleDone={handleToggleDone}
+              onImageChange={setCanvasIndex}
             />
           </div>
         </div>

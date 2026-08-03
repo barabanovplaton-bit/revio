@@ -1,6 +1,7 @@
 ﻿"use client";
 
 import { useState, useEffect, useMemo, useCallback } from "react";
+import type { CSSProperties } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { CanvasViewer } from "./canvas-viewer";
 import { subscribeToProjectMarkers, type Marker } from "@/lib/markers";
@@ -18,6 +19,7 @@ interface MarkerCanvasProps {
   isLocked: boolean;
   markersVisible?: boolean;
   onToggleMarkers?: () => void;
+  onImageChange?: (index: number) => void;
 }
 
 export function MarkerCanvas({
@@ -27,6 +29,7 @@ export function MarkerCanvas({
   isLocked,
   markersVisible,
   onToggleMarkers,
+  onImageChange,
 }: MarkerCanvasProps) {
   const [sentMarkers, setSentMarkers] = useState<Marker[]>([]);
   const [draft, setDraft] = useState<ReviewDraftItem[]>([]);
@@ -169,19 +172,20 @@ export function MarkerCanvas({
   const sentPointCount = sentMarkers.filter((m) => m.type === "point").length;
 
   const pointForm = pendingPoint ? (() => {
-    let tx = "-50%", ty = "-50%", ml = 0, mt = 0;
-    if (pendingPoint.x >= 0.5) {
-      tx = "-100%";
-      ml = -16;
+    // Форма всегда в противоположном квадранте зоны от точки:
+    // сверху → внизу, слева → справа, чтобы никогда не уходить за экран.
+    const alignX = pendingPoint.x >= 0.5 ? "left" : "right";
+    const alignY = pendingPoint.y >= 0.5 ? "top" : "bottom";
+    const posStyle: CSSProperties =
+      alignY === "top"
+        ? { top: 16, bottom: undefined }
+        : { top: undefined, bottom: 16 };
+    if (alignX === "left") {
+      posStyle.left = 16;
+      posStyle.right = undefined;
     } else {
-      ml = 16;
-    }
-    if (pendingPoint.y < 0.18) {
-      ty = "0";
-      mt = 8;
-    } else if (pendingPoint.y > 0.85) {
-      ty = "-100%";
-      mt = -8;
+      posStyle.left = undefined;
+      posStyle.right = 16;
     }
     return (
       <motion.div
@@ -192,13 +196,7 @@ export function MarkerCanvas({
         onTouchStart={(e) => e.stopPropagation()}
         onClick={(e) => e.stopPropagation()}
         className="absolute z-30 w-72 max-w-[min(18rem,80vw)] rounded-xl border border-white/20 bg-bg-card p-4 shadow-2xl"
-        style={{
-          left: `${pendingPoint.x * 100}%`,
-          top: `${pendingPoint.y * 100}%`,
-          transform: `translate(${tx}, ${ty})`,
-          marginLeft: ml,
-          marginTop: mt,
-        }}
+        style={posStyle}
       >
         <textarea
           value={markerText}
@@ -232,38 +230,87 @@ export function MarkerCanvas({
     );
   })() : null;
 
-  const draftPanel = (
-    <>
-      <div className="border-b border-border-strong px-4 py-2.5 text-xs font-medium text-text-primary">
-        Мои правки ({draft.length})
-      </div>
-      <div className="flex-1 space-y-0.5 overflow-y-auto p-2">
-        {draft.map((d, i) => (
-          <div
-            key={d.id}
-            className="flex items-center gap-2 rounded-lg px-2 py-1.5 transition-colors hover:bg-bg-cardHover"
-          >
-            <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-text-primary text-[10px] font-bold text-bg-page">
-              {d.type === "point" ? sentPointCount + i + 1 : "!"}
-            </span>
-            <span className="min-w-0 flex-1 truncate text-xs text-text-primary">
-              {d.text}
-            </span>
-            <button
-              type="button"
-              onClick={() => requestDelete(d)}
-              className="shrink-0 rounded-lg p-1 text-text-muted transition-colors hover:bg-bg-cardHover hover:text-red-400"
-              title="Удалить"
-            >
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-3.5 w-3.5">
-                <path d="M18 6 6 18M6 6l12 12" />
-              </svg>
-            </button>
+  const draftPanel = (() => {
+    const points = draft
+      .filter((d) => d.type === "point")
+      .sort((a, b) => a.order - b.order);
+    const generals = draft
+      .filter((d) => d.type === "general")
+      .sort((a, b) => a.order - b.order);
+    return (
+      <>
+        <div className="border-b border-border-strong px-4 py-2.5 text-xs font-medium text-text-primary">
+          Мои правки ({draft.length})
+        </div>
+        <div className="flex-1 overflow-y-auto p-2">
+          {draft.length === 0 && (
+            <p className="px-2 py-3 text-center text-xs leading-relaxed text-text-muted">
+              Нажмите на картинку, чтобы добавить первую правку.
+            </p>
+          )}
+          <div className="space-y-0.5">
+            {points.map((d, i) => (
+              <div
+                key={d.id}
+                className="flex items-center gap-2 rounded-lg px-2 py-1.5 transition-colors hover:bg-bg-cardHover"
+              >
+                <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-text-primary text-[10px] font-bold text-bg-page">
+                  {sentPointCount + i + 1}
+                </span>
+                <span className="min-w-0 flex-1 break-words text-xs leading-snug text-text-primary">
+                  {d.text}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => requestDelete(d)}
+                  className="shrink-0 rounded-lg p-1 text-text-muted transition-colors hover:bg-bg-cardHover hover:text-red-400"
+                  title="Удалить"
+                >
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-3.5 w-3.5">
+                    <path d="M18 6 6 18M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            ))}
           </div>
-        ))}
-      </div>
-    </>
-  );
+          {generals.length > 0 && (
+            <>
+              <div className="mt-3 border-t border-border-strong pt-2">
+                <p className="mb-1 px-2 text-[10px] font-medium uppercase tracking-wide text-text-muted">
+                  Общие правки · {generals.length}
+                </p>
+              </div>
+              <div className="space-y-0.5">
+                {generals.map((d) => (
+                  <div
+                    key={d.id}
+                    className="flex items-center gap-2 rounded-lg px-2 py-1.5 transition-colors hover:bg-bg-cardHover"
+                  >
+                    <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-text-primary/15 text-[10px] font-bold text-text-primary">
+                      !
+                    </span>
+                    <span className="min-w-0 flex-1 break-words text-xs leading-snug text-text-primary">
+                      {d.text}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => requestDelete(d)}
+                      className="shrink-0 rounded-lg p-1 text-text-muted transition-colors hover:bg-bg-cardHover hover:text-red-400"
+                      title="Удалить"
+                    >
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-3.5 w-3.5">
+                        <path d="M18 6 6 18M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+      </>
+    );
+  })();
 
   const canvas = (
     <div className="relative min-w-0 flex-1">
@@ -280,6 +327,7 @@ export function MarkerCanvas({
         showToggle={false}
         markersVisible={markersVisible}
         onToggleMarkers={onToggleMarkers}
+        onImageChange={onImageChange}
       />
     </div>
   );
@@ -291,7 +339,7 @@ export function MarkerCanvas({
           {canvas}
 
           {/* Мобильная панель «Мои правки» */}
-          {!isLocked && draft.length > 0 && (
+          {!isLocked && (
             <AnimatePresence>
               {panelOpen ? (
                 <motion.div
@@ -337,7 +385,7 @@ export function MarkerCanvas({
         </>
       ) : (
         <div className="flex h-full w-full">
-          {!isLocked && draft.length > 0 && (
+          {!isLocked && (
             <div className="my-3 ml-3 flex w-72 shrink-0 flex-col overflow-hidden rounded-2xl border border-border-strong bg-bg-card shadow-xl">
               {draftPanel}
             </div>

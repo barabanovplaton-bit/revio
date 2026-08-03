@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { usePathname } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { onAuthStateChanged } from "firebase/auth";
 import { auth } from "@/lib/firebase";
@@ -18,6 +19,10 @@ export function FeedbackButton() {
   const [text, setText] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [sent, setSent] = useState(false);
+
+  const pathname = usePathname();
+  // На странице клиента кнопку не показываем (не мешает при загрузке и работе)
+  if (pathname?.startsWith("/review/")) return null;
 
   const close = () => {
     setOpen(false);
