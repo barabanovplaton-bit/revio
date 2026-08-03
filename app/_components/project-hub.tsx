@@ -1061,7 +1061,7 @@ export function ProjectHub({
                   : "border-border-strong bg-bg-card text-text-muted hover:text-text-primary"
               )}
             >
-              {markersVisible ? "С маячками" : "Без маячков"}
+              {markersVisible ? "Без маячков" : "С маячками"}
             </button>
           </div>
           <div className="flex-1 overflow-hidden">

@@ -11,6 +11,7 @@ import {
   newDraftId,
   type ReviewDraftItem,
 } from "@/lib/review-draft";
+import { cn } from "@/lib/utils";
 
 interface MarkerCanvasProps {
   imageUrls: string[];
@@ -20,6 +21,9 @@ interface MarkerCanvasProps {
   markersVisible?: boolean;
   onToggleMarkers?: () => void;
   onImageChange?: (index: number) => void;
+  /** Режим «Точечный комментарий» (затемнение вокруг фото) */
+  pointMode?: boolean;
+  onTogglePointMode?: () => void;
 }
 
 export function MarkerCanvas({
@@ -30,6 +34,8 @@ export function MarkerCanvas({
   markersVisible,
   onToggleMarkers,
   onImageChange,
+  pointMode = false,
+  onTogglePointMode,
 }: MarkerCanvasProps) {
   const [sentMarkers, setSentMarkers] = useState<Marker[]>([]);
   const [draft, setDraft] = useState<ReviewDraftItem[]>([]);
@@ -41,6 +47,11 @@ export function MarkerCanvas({
   const [markerText, setMarkerText] = useState("");
   const [isMobile, setIsMobile] = useState(false);
   const [panelOpen, setPanelOpen] = useState(false);
+  // Выбранная правка для правой деталь-панели
+  const [selectedDraftId, setSelectedDraftId] = useState<string | null>(null);
+  // Режим «Переписать» (редактирование текста черновика)
+  const [editing, setEditing] = useState(false);
+  const [editValue, setEditValue] = useState("");
   const [deleteConfirm, setDeleteConfirm] = useState<{
     item: ReviewDraftItem;
     number: number | null;
@@ -108,6 +119,7 @@ export function MarkerCanvas({
         },
       ]);
       setPendingPoint(null);
+      setSelectedDraftId(null);
     } else {
       persist([
         ...draft,
@@ -119,6 +131,10 @@ export function MarkerCanvas({
 
   const handleDeleteDraft = (id: string) => {
     persist(draft.filter((d) => d.id !== id));
+    if (selectedDraftId === id) {
+      setSelectedDraftId(null);
+      setEditing(false);
+    }
     if (pendingPoint) setPendingPoint(null);
   };
 
@@ -146,6 +162,43 @@ export function MarkerCanvas({
     setDeleteConfirm(null);
   };
 
+  const sentPointCount = sentMarkers.filter((m) => m.type === "point").length;
+
+  // Выбранная правка для правой деталь-панели (из черновика или отправленных)
+  const selectedDraft =
+    (selectedDraftId ? draft.find((d) => d.id === selectedDraftId) : null) ??
+    (selectedDraftId
+      ? sentMarkers.find((m) => m.id === selectedDraftId)
+      : null) ??
+    null;
+
+  const selectedMarkerNumber = (() => {
+    if (!selectedDraft) return null;
+    if (selectedDraft.type === "general") return null;
+    const points = draft
+      .filter((d) => d.type === "point")
+      .sort((a, b) => a.order - b.order);
+    const idx = points.findIndex((d) => d.id === selectedDraft.id);
+    if (idx >= 0) return sentPointCount + idx + 1;
+    const sentIdx = sentMarkers
+      .filter((m) => m.type === "point")
+      .sort(
+        (a, b) => (a.createdAt?.toMillis() || 0) - (b.createdAt?.toMillis() || 0)
+      )
+      .findIndex((m) => m.id === selectedDraft.id);
+    return sentIdx >= 0 ? sentIdx + 1 : null;
+  })();
+
+  const saveEdit = () => {
+    if (!selectedDraftId || !editValue.trim()) return;
+    persist(
+      draft.map((d) =>
+        d.id === selectedDraftId ? { ...d, text: editValue.trim() } : d
+      )
+    );
+    setEditing(false);
+  };
+
   // Объединяем отправленные правки и черновик для отрисовки на фото
   const markers: Marker[] = useMemo(() => {
     const sentMax = sentMarkers.reduce(
@@ -169,11 +222,9 @@ export function MarkerCanvas({
   }, [sentMarkers, draft, projectId, round]);
 
   const draftIds = useMemo(() => new Set(draft.map((d) => d.id)), [draft]);
-  const sentPointCount = sentMarkers.filter((m) => m.type === "point").length;
 
-  const pointForm = pendingPoint ? (() => {
-    // Форма всегда в противоположном квадранте зоны от точки:
-    // сверху → внизу, слева → справа, чтобы никогда не уходить за экран.
+  // На десктопе форма живёт в правой панели; на мобиле — старая, у точки
+  const pointForm = isMobile && pendingPoint ? (() => {
     const alignX = pendingPoint.x >= 0.5 ? "left" : "right";
     const alignY = pendingPoint.y >= 0.5 ? "top" : "bottom";
     const posStyle: CSSProperties =
@@ -249,29 +300,43 @@ export function MarkerCanvas({
             </p>
           )}
           <div className="space-y-0.5">
-            {points.map((d, i) => (
-              <div
-                key={d.id}
-                className="flex items-center gap-2 rounded-lg px-2 py-1.5 transition-colors hover:bg-bg-cardHover"
-              >
-                <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-text-primary text-[10px] font-bold text-bg-page">
-                  {sentPointCount + i + 1}
-                </span>
-                <span className="min-w-0 flex-1 break-words text-xs leading-snug text-text-primary">
-                  {d.text}
-                </span>
+            {points.map((d, i) => ({ d, i }))
+              .reverse()
+              .map(({ d, i }) => (
                 <button
+                  key={d.id}
                   type="button"
-                  onClick={() => requestDelete(d)}
-                  className="shrink-0 rounded-lg p-1 text-text-muted transition-colors hover:bg-bg-cardHover hover:text-red-400"
-                  title="Удалить"
+                  onClick={() => {
+                    setSelectedDraftId(d.id);
+                    setEditing(false);
+                  }}
+                  className={cn(
+                    "flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left transition-colors hover:bg-bg-cardHover",
+                    selectedDraftId === d.id && "bg-bg-cardHover"
+                  )}
                 >
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-3.5 w-3.5">
-                    <path d="M18 6 6 18M6 6l12 12" />
-                  </svg>
+                  <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-text-primary text-[10px] font-bold text-bg-page">
+                    {sentPointCount + i + 1}
+                  </span>
+                  <span className="line-clamp-2 min-w-0 flex-1 break-words text-xs leading-snug text-text-primary">
+                    {d.text}
+                  </span>
+                  <span
+                    role="button"
+                    tabIndex={-1}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      requestDelete(d);
+                    }}
+                    className="shrink-0 rounded-lg p-1 text-text-muted transition-colors hover:bg-bg-cardHover hover:text-red-400"
+                    title="Удалить"
+                  >
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-3.5 w-3.5">
+                      <path d="M18 6 6 18M6 6l12 12" />
+                    </svg>
+                  </span>
                 </button>
-              </div>
-            ))}
+              ))}
           </div>
           {generals.length > 0 && (
             <>
@@ -281,28 +346,40 @@ export function MarkerCanvas({
                 </p>
               </div>
               <div className="space-y-0.5">
-                {generals.map((d) => (
-                  <div
+                {[...generals].reverse().map((d) => (
+                  <button
                     key={d.id}
-                    className="flex items-center gap-2 rounded-lg px-2 py-1.5 transition-colors hover:bg-bg-cardHover"
+                    type="button"
+                    onClick={() => {
+                      setSelectedDraftId(d.id);
+                      setEditing(false);
+                    }}
+                    className={cn(
+                      "flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left transition-colors hover:bg-bg-cardHover",
+                      selectedDraftId === d.id && "bg-bg-cardHover"
+                    )}
                   >
                     <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-text-primary/15 text-[10px] font-bold text-text-primary">
                       !
                     </span>
-                    <span className="min-w-0 flex-1 break-words text-xs leading-snug text-text-primary">
+                    <span className="line-clamp-2 min-w-0 flex-1 break-words text-xs leading-snug text-text-primary">
                       {d.text}
                     </span>
-                    <button
-                      type="button"
-                      onClick={() => requestDelete(d)}
+                    <span
+                      role="button"
+                      tabIndex={-1}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        requestDelete(d);
+                      }}
                       className="shrink-0 rounded-lg p-1 text-text-muted transition-colors hover:bg-bg-cardHover hover:text-red-400"
                       title="Удалить"
                     >
                       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-3.5 w-3.5">
                         <path d="M18 6 6 18M6 6l12 12" />
                       </svg>
-                    </button>
-                  </div>
+                    </span>
+                  </button>
                 ))}
               </div>
             </>
@@ -311,6 +388,148 @@ export function MarkerCanvas({
       </>
     );
   })();
+
+  // Правая деталь-панель (десктоп): форма добавления или просмотр правки
+  const detailPanel = !isMobile ? (
+    <aside className="absolute right-0 top-0 bottom-0 z-40 flex w-[19rem] flex-col border-l border-border-strong bg-bg-card shadow-2xl">
+      {pendingPoint ? (
+        <>
+          <div className="flex items-center justify-between border-b border-border-strong px-4 py-3">
+            <p className="text-sm font-medium text-text-primary">
+              Точка №{sentPointCount + draft.length + 1}
+            </p>
+            <button
+              type="button"
+              onClick={() => {
+                setPendingPoint(null);
+                setMarkerText("");
+                if (pointMode) onTogglePointMode?.();
+              }}
+              className="rounded-lg p-1 text-text-muted transition-colors hover:bg-bg-cardHover hover:text-text-primary"
+              title="Отмена"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" className="h-4 w-4">
+                <path d="M18 6 6 18M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+          <div className="flex-1 overflow-y-auto p-4">
+            <textarea
+              value={markerText}
+              onChange={(e) => setMarkerText(e.target.value)}
+              placeholder="Опишите правку..."
+              rows={4}
+              autoFocus
+              className="w-full resize-none rounded-lg border border-border-strong bg-bg-input px-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:border-text-primary focus:outline-none"
+            />
+          </div>
+          <div className="flex gap-2 border-t border-border-strong p-3">
+            <button
+              type="button"
+              onClick={() => {
+                setPendingPoint(null);
+                setMarkerText("");
+                onTogglePointMode?.();
+              }}
+              className="flex-1 rounded-xl border border-border-strong px-3 py-2 text-sm text-text-primary transition-all hover:bg-bg-cardHover"
+            >
+              Отмена
+            </button>
+            <button
+              type="button"
+              onClick={handleAddMarker}
+              disabled={!markerText.trim()}
+              className="flex-1 rounded-xl bg-text-primary px-3 py-2 text-sm font-medium text-bg-page transition-all hover:opacity-90 disabled:opacity-50"
+            >
+              Добавить
+            </button>
+          </div>
+        </>
+      ) : selectedDraft ? (
+        <>
+          <div className="flex items-center justify-between border-b border-border-strong px-4 py-3">
+            <p className="text-sm font-medium text-text-primary">
+              {selectedDraft.type === "general"
+                ? "Общая правка"
+                : `Правка №${selectedMarkerNumber}`}
+            </p>
+            <button
+              type="button"
+              onClick={() => setSelectedDraftId(null)}
+              className="rounded-lg p-1 text-text-muted transition-colors hover:bg-bg-cardHover hover:text-text-primary"
+              title="Закрыть"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" className="h-4 w-4">
+                <path d="M18 6 6 18M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+          <div className="flex-1 overflow-y-auto p-4">
+            {editing ? (
+              <textarea
+                value={editValue}
+                onChange={(e) => setEditValue(e.target.value)}
+                rows={6}
+                autoFocus
+                className="w-full resize-none rounded-lg border border-border-strong bg-bg-input px-3 py-2 text-sm text-text-primary focus:border-text-primary focus:outline-none"
+              />
+            ) : (
+              <p className="break-words text-sm leading-relaxed text-text-primary">
+                {selectedDraft.text}
+              </p>
+            )}
+          </div>
+          <div className="flex gap-2 border-t border-border-strong p-3">
+            {editing ? (
+              <>
+                <button
+                  type="button"
+                  onClick={() => setEditing(false)}
+                  className="flex-1 rounded-xl border border-border-strong px-3 py-2 text-sm text-text-primary transition-all hover:bg-bg-cardHover"
+                >
+                  Отмена
+                </button>
+                <button
+                  type="button"
+                  onClick={saveEdit}
+                  disabled={!editValue.trim()}
+                  className="flex-1 rounded-xl bg-text-primary px-3 py-2 text-sm font-medium text-bg-page transition-all hover:opacity-90 disabled:opacity-50"
+                >
+                  Сохранить
+                </button>
+              </>
+            ) : (
+              <>
+                {draft.some((d) => d.id === selectedDraft.id) && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEditing(true);
+                        setEditValue(selectedDraft.text);
+                      }}
+                      className="flex-1 rounded-xl border border-border-strong px-3 py-2 text-sm text-text-primary transition-all hover:bg-bg-cardHover"
+                    >
+                      Переписать
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        requestDelete(selectedDraft as ReviewDraftItem);
+                      }}
+                      className="flex-1 rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-400 transition-all hover:bg-red-500/20"
+                    >
+                      Удалить
+                    </button>
+                  </>
+                )}
+              </>
+            )}
+          </div>
+        </>
+      ) : null}
+    </aside>
+  ) : null;
 
   const canvas = (
     <div className="relative min-w-0 flex-1">
@@ -328,6 +547,20 @@ export function MarkerCanvas({
         markersVisible={markersVisible}
         onToggleMarkers={onToggleMarkers}
         onImageChange={onImageChange}
+        selectedId={selectedDraftId}
+        onSelectMarker={(id) => {
+          setSelectedDraftId(id);
+          setEditing(false);
+        }}
+        showBottomCard={!isMobile}
+        dimAroundZone={pointMode && !isMobile}
+        onDimClick={() => {
+          setPendingPoint(null);
+          setMarkerText("");
+          setSelectedDraftId(null);
+          setEditing(false);
+          onTogglePointMode?.();
+        }}
       />
     </div>
   );
@@ -386,11 +619,19 @@ export function MarkerCanvas({
       ) : (
         <div className="flex h-full w-full">
           {!isLocked && (
-            <div className="my-3 ml-3 flex w-72 shrink-0 flex-col overflow-hidden rounded-2xl border border-border-strong bg-bg-card shadow-xl">
+            <div className="flex w-60 shrink-0 flex-col overflow-hidden border-r border-border-strong bg-bg-card">
               {draftPanel}
             </div>
           )}
-          {canvas}
+          <div className="relative min-w-0 flex-1">
+            {canvas}
+            {!isLocked && !pendingPoint && !pointMode && (
+              <div className="pointer-events-none absolute bottom-3 left-1/2 z-30 -translate-x-1/2 rounded-full border border-border-strong bg-bg-card/90 px-3 py-1.5 text-xs text-text-muted shadow-lg backdrop-blur-sm">
+                Нажмите на картинку, чтобы добавить правку
+              </div>
+            )}
+          </div>
+          {detailPanel}
         </div>
       )}
 

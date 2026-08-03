@@ -40,6 +40,14 @@ interface CanvasViewerProps {
   onToggleMarkers?: () => void;
   /** Смена текущей картинки (для счётчика страниц в шапке) */
   onImageChange?: (index: number) => void;
+  /** Внешнее управление выбранным маркером (правая деталь-панель клиента) */
+  selectedId?: string | null;
+  onSelectMarker?: (id: string | null) => void;
+  /** Скрыть нижнюю карточку выбранного маркера (клиент использует свою панель) */
+  showBottomCard?: boolean;
+  /** Затемнить всё вокруг зоны фото (режим «Точечный комментарий») */
+  dimAroundZone?: boolean;
+  onDimClick?: () => void;
   className?: string;
 }
 
@@ -63,6 +71,11 @@ export function CanvasViewer({
   markersVisible,
   onToggleMarkers,
   onImageChange,
+  selectedId,
+  onSelectMarker,
+  showBottomCard = true,
+  dimAroundZone = false,
+  onDimClick,
   className,
 }: CanvasViewerProps) {
   const [currentIndex, setCurrentIndex] = useState(initialIndex);
@@ -70,12 +83,42 @@ export function CanvasViewer({
   const [position, setPosition] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
   const [showMarkers, setShowMarkers] = useState(true);
-  const [selectedMarkerId, setSelectedMarkerId] = useState<string | null>(null);
+  const [internalSelectedId, setInternalSelectedId] = useState<string | null>(null);
   const [filter, setFilter] = useState<Filter>("order");
   const [mobile, setMobile] = useState(false);
   const [natSize, setNatSize] = useState<{ w: number; h: number } | null>(null);
   const [fit, setFit] = useState<{ w: number; h: number } | null>(null);
   const [lastLoadedUrl, setLastLoadedUrl] = useState<string | null>(null);
+  const [zoneRect, setZoneRect] = useState<{
+    top: number;
+    left: number;
+    right: number;
+    bottom: number;
+  } | null>(null);
+
+  // Затемнение вокруг зоны фото (режим «Точечный комментарий»)
+  useEffect(() => {
+    if (!dimAroundZone) return;
+    const update = () => {
+      const r = zoneRef.current?.getBoundingClientRect();
+      if (r) setZoneRect({ top: r.top, left: r.left, right: r.right, bottom: r.bottom });
+    };
+    update();
+    window.addEventListener("resize", update);
+    const ro = new ResizeObserver(update);
+    if (zoneRef.current) ro.observe(zoneRef.current);
+    return () => {
+      window.removeEventListener("resize", update);
+      ro.disconnect();
+    };
+  }, [dimAroundZone]);
+
+  // Выбранный маркер: внешнее управление (правая панель клиента) или внутреннее
+  const selectedMarkerId = selectedId !== undefined ? selectedId : internalSelectedId;
+  const setSelectedMarkerId = (id: string | null) => {
+    if (selectedId !== undefined) onSelectMarker?.(id);
+    else setInternalSelectedId(id);
+  };
 
   const markersShown = markersVisible ?? showMarkers;
 
@@ -121,8 +164,8 @@ export function CanvasViewer({
     if (!zone || !natSize) return;
     const compute = () => {
       const rect = zone.getBoundingClientRect();
-      const availW = Math.max(1, rect.width - 8);
-      const availH = Math.max(1, rect.height - 8);
+      const availW = Math.max(1, rect.width - 4);
+      const availH = Math.max(1, rect.height - 4);
       const s = Math.min(availW / natSize.w, availH / natSize.h, 1);
       setFit({
         w: Math.max(1, Math.round(natSize.w * s)),
@@ -181,10 +224,28 @@ export function CanvasViewer({
     };
   };
 
-  const zoomBy = (delta: number) => {
-    setScale((p) =>
-      Math.min(MAX_SCALE, Math.max(1, Math.round((p + delta) * 100) / 100))
+  // Зум в точку под курсором: точка под курсором остаётся на месте при приближении
+  const handleWheel = (e: ReactWheelEvent) => {
+    e.preventDefault();
+    const rect = zoneRef.current?.getBoundingClientRect();
+    if (!rect || !fit) return;
+    const step = 0.12;
+    const next = Math.min(
+      MAX_SCALE,
+      Math.max(1, Math.round((scale + (e.deltaY < 0 ? step : -step)) * 100) / 100)
     );
+    if (next === scale) return;
+    const mx = e.clientX - rect.left - rect.width / 2;
+    const my = e.clientY - rect.top - rect.height / 2;
+    // Точка под курсором в координатах фото (stage)
+    const px = (mx - position.x) / scale;
+    const py = (my - position.y) / scale;
+    const newPos = {
+      x: mx - next * px,
+      y: my - next * py,
+    };
+    setScale(next);
+    setPosition(applyBounds(newPos, next));
   };
 
   // После изменения масштаба/размера возвращаем картинку в границы
@@ -192,11 +253,6 @@ export function CanvasViewer({
     setPosition((p) => applyBounds(p, scale));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scale, fit]);
-
-  const handleWheel = (e: ReactWheelEvent) => {
-    e.preventDefault();
-    zoomBy(e.deltaY < 0 ? 0.25 : -0.25);
-  };
 
   const removeDragListeners = () => {
     window.removeEventListener("mousemove", handleWindowMouseMove);
@@ -417,11 +473,40 @@ export function CanvasViewer({
 
   return (
     <div className={cn("relative flex h-full w-full overflow-hidden", className)}>
+      {/* Затемнение вокруг зоны фото */}
+      {dimAroundZone && zoneRect && (
+        <>
+          <div
+            className="fixed z-40 bg-black/60"
+            style={{ top: 0, left: 0, right: 0, height: zoneRect.top }}
+            onClick={onDimClick}
+          />
+          <div
+            className="fixed z-40 bg-black/60"
+            style={{ top: zoneRect.bottom, left: 0, right: 0, height: `calc(100vh - ${zoneRect.bottom}px)` }}
+            onClick={onDimClick}
+          />
+          <div
+            className="fixed z-40 bg-black/60"
+            style={{ top: zoneRect.top, left: 0, width: zoneRect.left, height: zoneRect.bottom - zoneRect.top }}
+            onClick={onDimClick}
+          />
+          <div
+            className="fixed z-40 bg-black/60"
+            style={{ top: zoneRect.top, left: zoneRect.right, right: 0, height: zoneRect.bottom - zoneRect.top }}
+            onClick={onDimClick}
+          />
+        </>
+      )}
+
       {showPanel && !mobile && panel}
 
       {/* Зона фото */}
       <div
-        className="relative flex-1 overflow-hidden bg-bg-page"
+        className={cn(
+          "relative flex-1 overflow-hidden bg-bg-page",
+          dimAroundZone && "z-50"
+        )}
         ref={zoneRef}
         onWheel={handleWheel}
       >
@@ -587,8 +672,8 @@ export function CanvasViewer({
           </>
         )}
 
-        {/* Карточка выбранного маркера */}
-        {selectedMarker && (
+        {/* Карточка выбранного маркера (внизу, только если включена) */}
+        {showBottomCard && selectedMarker && (
           <div className="absolute bottom-20 left-1/2 z-30 w-[calc(100%-2rem)] max-w-md -translate-x-1/2 rounded-xl border border-white/20 bg-bg-card p-3 shadow-2xl">
             <div className="flex items-start justify-between gap-3">
               <p className="max-h-[30vh] min-w-0 flex-1 break-words text-sm leading-relaxed text-text-primary">
