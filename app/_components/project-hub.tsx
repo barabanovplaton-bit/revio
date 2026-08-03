@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   getProject,
   updateProject,
-  deleteProject,
+  deleteProjectPermanently,
   startNewRound,
   hasRoundsLeft,
   getMaxRoundsForPlan,
@@ -18,7 +18,7 @@ import {
   toggleMarkerDone,
   type Marker,
 } from "@/lib/markers";
-import { getUserProfile } from "@/lib/user-profile";
+import { getUserProfile, isOwner } from "@/lib/user-profile";
 import { ConfirmModal } from "./confirm-modal";
 import { CanvasViewer } from "./canvas-viewer";
 import { cn } from "@/lib/utils";
@@ -125,7 +125,12 @@ export function ProjectHub({
     let cancelled = false;
     (async () => {
       const prof = await getUserProfile(ownerUid);
-      if (!cancelled && prof) setPlan(prof.plan);
+      // Владелец (админ) — всегда Pro (безлимит)
+      if (!cancelled && prof) {
+        setPlan(isOwner(prof.uid, prof.email) ? "pro" : prof.plan);
+      } else if (!cancelled) {
+        setPlan(isOwner(ownerUid, null) ? "pro" : "free");
+      }
     })();
     return () => { cancelled = true; };
   }, [ownerUid]);
@@ -203,7 +208,7 @@ export function ProjectHub({
   // --- Delete ---
   const handleDelete = async () => {
     setConfirmDelete(false);
-    await deleteProject(projectId);
+    await deleteProjectPermanently(projectId);
     onProjectDeleted();
   };
 
@@ -649,7 +654,7 @@ export function ProjectHub({
             type="button"
             onClick={() => setConfirmDelete(true)}
             className="shrink-0 rounded-lg p-2 text-text-muted transition-colors hover:bg-red-500/10 hover:text-red-400"
-            title="Удалить проект"
+            title="Удалить проект навсегда"
           >
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
               <path d="M3 6h18" />
@@ -953,9 +958,9 @@ export function ProjectHub({
       {/* Delete project modal */}
       <ConfirmModal
         open={confirmDelete}
-        title="Удалить проект?"
-        message="Проект будет скрыт. Лимит на бесплатном тарифе считается по всем созданным проектам — слот не освободится."
-        confirmLabel="Удалить"
+        title="Удалить проект навсегда?"
+        message="Все макеты, правки и уведомления проекта будут удалены из базы без возможности восстановления."
+        confirmLabel="Удалить навсегда"
         danger
         onConfirm={handleDelete}
         onCancel={() => setConfirmDelete(false)}

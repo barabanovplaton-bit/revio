@@ -7,6 +7,7 @@ import {
   getDoc,
   getDocs,
   updateDoc,
+  deleteDoc,
   query,
   where,
   onSnapshot,
@@ -171,6 +172,30 @@ export async function togglePin(id: string, pinned: boolean): Promise<void> {
  */
 export async function deleteProject(id: string): Promise<void> {
   await updateProject(id, { deleted: true, pinned: false });
+}
+
+/**
+ * Удалить проект НАВСЕГДА (без восстановления).
+ * Очищает сабколлекции: маркеры, уведомления, затем сам документ проекта.
+ */
+export async function deleteProjectPermanently(id: string): Promise<void> {
+  const { deleteAllProjectMarkers } = await import("./markers");
+
+  // Маркеры проекта (все раунды)
+  await deleteAllProjectMarkers(id);
+
+  // Уведомления проекта
+  const notifQ = query(
+    collection(db, "notifications"),
+    where("projectId", "==", id)
+  );
+  const notifSnap = await getDocs(notifQ);
+  await Promise.all(
+    notifSnap.docs.map((d) => deleteDoc(doc(db, "notifications", d.id)))
+  );
+
+  // Сам проект
+  await deleteDoc(doc(db, COLLECTION, id));
 }
 
 /** Обновить картинки проекта */

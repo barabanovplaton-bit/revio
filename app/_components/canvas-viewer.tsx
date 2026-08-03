@@ -89,29 +89,6 @@ export function CanvasViewer({
   const [natSize, setNatSize] = useState<{ w: number; h: number } | null>(null);
   const [fit, setFit] = useState<{ w: number; h: number } | null>(null);
   const [lastLoadedUrl, setLastLoadedUrl] = useState<string | null>(null);
-  const [zoneRect, setZoneRect] = useState<{
-    top: number;
-    left: number;
-    right: number;
-    bottom: number;
-  } | null>(null);
-
-  // Затемнение вокруг зоны фото (режим «Точечный комментарий»)
-  useEffect(() => {
-    if (!dimAroundZone) return;
-    const update = () => {
-      const r = zoneRef.current?.getBoundingClientRect();
-      if (r) setZoneRect({ top: r.top, left: r.left, right: r.right, bottom: r.bottom });
-    };
-    update();
-    window.addEventListener("resize", update);
-    const ro = new ResizeObserver(update);
-    if (zoneRef.current) ro.observe(zoneRef.current);
-    return () => {
-      window.removeEventListener("resize", update);
-      ro.disconnect();
-    };
-  }, [dimAroundZone]);
 
   // Выбранный маркер: внешнее управление (правая панель клиента) или внутреннее
   const selectedMarkerId = selectedId !== undefined ? selectedId : internalSelectedId;
@@ -473,30 +450,13 @@ export function CanvasViewer({
 
   return (
     <div className={cn("relative flex h-full w-full overflow-hidden", className)}>
-      {/* Затемнение вокруг зоны фото */}
-      {dimAroundZone && zoneRect && (
-        <>
-          <div
-            className="fixed z-40 bg-black/60"
-            style={{ top: 0, left: 0, right: 0, height: zoneRect.top }}
-            onClick={onDimClick}
-          />
-          <div
-            className="fixed z-40 bg-black/60"
-            style={{ top: zoneRect.bottom, left: 0, right: 0, height: `calc(100vh - ${zoneRect.bottom}px)` }}
-            onClick={onDimClick}
-          />
-          <div
-            className="fixed z-40 bg-black/60"
-            style={{ top: zoneRect.top, left: 0, width: zoneRect.left, height: zoneRect.bottom - zoneRect.top }}
-            onClick={onDimClick}
-          />
-          <div
-            className="fixed z-40 bg-black/60"
-            style={{ top: zoneRect.top, left: zoneRect.right, right: 0, height: zoneRect.bottom - zoneRect.top }}
-            onClick={onDimClick}
-          />
-        </>
+      {/* Затемнение всего экрана (режим «Точечный комментарий»): панели/фон темнеют, фото яркое */}
+      {dimAroundZone && (
+        <div
+          className="fixed inset-0 z-40 bg-black/70"
+          onClick={onDimClick}
+          title="Отменить режим точечного комментария"
+        />
       )}
 
       {showPanel && !mobile && panel}

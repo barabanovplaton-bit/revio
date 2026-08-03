@@ -127,3 +127,22 @@ export async function updateDisplayName(
   const ref = doc(db, COLLECTION, uid);
   await setDoc(ref, { displayName, updatedAt: serverTimestamp() }, { merge: true });
 }
+
+/** UID владельца сервиса (автодеплой / энв) */
+export const OWNER_UIDS: string[] = [
+  "7bYNLtzy5eqUtOa6qpwPE1u9263",
+  ...(process.env.NEXT_PUBLIC_OWNER_UID || "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean),
+];
+
+/** Почта владельца — безлимит и админ-доступ всегда */
+export const OWNER_EMAILS: string[] = ["barabanovplaton@gmail.com"];
+
+/** Является ли пользователь владельцем (админом). Безлимит всегда. */
+export function isOwner(uid?: string | null, email?: string | null): boolean {
+  if (uid && OWNER_UIDS.includes(uid)) return true;
+  if (email && OWNER_EMAILS.includes(email.toLowerCase())) return true;
+  return false;
+}

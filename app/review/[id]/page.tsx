@@ -42,6 +42,26 @@ export default function ReviewPage({
   const [generalText, setGeneralText] = useState("");
   const [pointMode, setPointMode] = useState(false);
 
+  // Черновик общего комментария не пропадает при случайном закрытии
+  useEffect(() => {
+    if (!generalOpen) return;
+    try {
+      const saved = window.localStorage.getItem(`revio:general:${id}`);
+      if (saved) setGeneralText(saved);
+    } catch {
+      /* ignore */
+    }
+  }, [generalOpen, id]);
+
+  useEffect(() => {
+    if (!generalOpen) return;
+    try {
+      window.localStorage.setItem(`revio:general:${id}`, generalText);
+    } catch {
+      /* ignore */
+    }
+  }, [generalOpen, generalText, id]);
+
   useEffect(() => {
     setPointMode(false);
   }, [project?.clientSubmitted, project?.status]);
@@ -113,6 +133,15 @@ export default function ReviewPage({
     return rounds.sort((a, b) => a - b);
   }, [project?.currentRound, project?.packageHistory]);
 
+  // Fallback для старых проектов: если текущий пакет пуст, берём последний из истории
+  const fallbackImages = useMemo(() => {
+    const history = project?.packageHistory || [];
+    for (let i = history.length - 1; i >= 0; i--) {
+      if (history[i].imageUrls.length > 0) return history[i].imageUrls;
+    }
+    return [] as string[];
+  }, [project?.packageHistory]);
+
   if (loading) {
     return (
       <div className="flex h-screen items-center justify-center bg-bg-page">
@@ -155,7 +184,12 @@ export default function ReviewPage({
   const round = project.currentRound || 1;
 
   const imagesForRound = (r: number) => {
-    if (r === round) return project.imageUrls || [];
+    if (r === round) {
+      if (project.imageUrls && project.imageUrls.length > 0) {
+        return project.imageUrls;
+      }
+      return fallbackImages;
+    }
     const pkg = project.packageHistory?.find((p) => p.round === r);
     return pkg?.imageUrls || [];
   };
@@ -228,61 +262,65 @@ export default function ReviewPage({
     notifyDraftChanged();
     setGeneralText("");
     setGeneralOpen(false);
+    try {
+      window.localStorage.removeItem(`revio:general:${id}`);
+    } catch {
+      /* ignore */
+    }
   };
 
   return (
     <div className="flex h-screen flex-col bg-bg-page">
-      <header className="flex items-center justify-between gap-3 border-b border-border-strong bg-bg-card px-4 py-2">
+      <header className="relative z-50 flex items-center justify-between gap-3 border-b border-border-strong bg-bg-card px-4 py-2.5">
         <div className="flex min-w-0 flex-wrap items-center gap-2">
           {availableRounds.length > 1 ? (
-            <div className="flex items-center gap-0.5 rounded-lg border border-border-strong bg-bg-input p-0.5">
+            <div className="flex items-center gap-0.5 rounded-xl border border-border-strong bg-bg-input p-1">
               <button
                 type="button"
                 onClick={() => setViewRound((r) => Math.max(availableRounds[0], r - 1))}
                 disabled={viewRound <= availableRounds[0]}
-                className="flex h-6 w-6 items-center justify-center rounded text-text-muted transition-colors hover:bg-bg-cardHover hover:text-text-primary disabled:opacity-30"
+                className="flex h-7 w-7 items-center justify-center rounded-lg text-text-muted transition-colors hover:bg-bg-cardHover hover:text-text-primary disabled:opacity-30"
               >
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="h-3.5 w-3.5"><path d="m15 18-6-6 6-6"/></svg>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4"><path d="m15 18-6-6 6-6"/></svg>
               </button>
-              <span className="min-w-0 px-1 text-center text-[11px] font-medium text-text-primary">
+              <span className="min-w-0 px-1 text-center text-xs font-medium text-text-primary">
                 Раунд {viewRound}/{availableRounds.length}
               </span>
               <button
                 type="button"
                 onClick={() => setViewRound((r) => Math.min(availableRounds[availableRounds.length - 1], r + 1))}
                 disabled={viewRound >= availableRounds[availableRounds.length - 1]}
-                className="flex h-6 w-6 items-center justify-center rounded text-text-muted transition-colors hover:bg-bg-cardHover hover:text-text-primary disabled:opacity-30"
+                className="flex h-7 w-7 items-center justify-center rounded-lg text-text-muted transition-colors hover:bg-bg-cardHover hover:text-text-primary disabled:opacity-30"
               >
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="h-3.5 w-3.5"><path d="m9 18 6-6-6-6"/></svg>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4"><path d="m9 18 6-6-6-6"/></svg>
               </button>
             </div>
           ) : (
-            <p className="text-[11px] font-medium text-text-muted">Раунд {round}</p>
+            <p className="text-xs font-medium text-text-muted">Раунд {round}</p>
           )}
           {(() => {
             const n = imagesForRound(viewRound).length;
             return n > 1 ? (
-              <span className="inline-flex shrink-0 items-center rounded-md border border-border-strong bg-bg-input px-1.5 py-0.5 text-[11px] font-medium text-text-primary">
+              <span className="inline-flex shrink-0 items-center rounded-lg border border-border-strong bg-bg-input px-2.5 py-1 text-xs font-medium text-text-primary">
                 {Math.min(viewIndex + 1, n)} / {n}
               </span>
             ) : null;
           })()}
         </div>
         {locked ? (
-          <span className="shrink-0 rounded-lg bg-green-500/15 px-3 py-1.5 text-xs font-medium text-green-400">
+          <span className="shrink-0 rounded-xl bg-green-500/15 px-3 py-1.5 text-xs font-medium text-green-400">
             {submitted ? "Правки отправлены" : "Правки закрыты"}
           </span>
         ) : (
-          <div className="flex shrink-0 items-center gap-1.5">
+          <div className="flex shrink-0 items-center gap-2">
             <div className="relative">
               <button
                 type="button"
                 onClick={() => {
                   setPointMode(false);
                   setGeneralOpen((v) => !v);
-                  setGeneralText("");
                 }}
-                className="flex items-center gap-1.5 rounded-lg border border-text-primary/40 bg-text-primary/10 px-2.5 py-1.5 text-xs font-semibold text-text-primary transition-all hover:bg-text-primary/20"
+                className="flex items-center gap-1.5 rounded-xl border border-text-primary/40 bg-text-primary/10 px-3 py-2 text-xs font-semibold text-text-primary transition-all hover:bg-text-primary/20"
                 title="Добавить общий комментарий"
               >
                 <svg
@@ -307,7 +345,7 @@ export default function ReviewPage({
                       animate={{ opacity: 1, y: 0 }}
                       exit={{ opacity: 0, y: -8 }}
                       transition={{ duration: 0.15 }}
-                      className="absolute right-0 top-full z-40 mt-2 w-80 rounded-xl border border-border-strong bg-bg-card p-4 shadow-2xl"
+                      className="absolute right-0 top-full z-40 mt-2 w-80 rounded-2xl border border-border-strong bg-bg-card p-4 shadow-2xl"
                     >
                       <p className="mb-2 text-xs font-medium text-text-primary">Общий комментарий</p>
                       <textarea
@@ -340,9 +378,9 @@ export default function ReviewPage({
                 setPointMode((v) => !v);
               }}
               className={cn(
-                "flex shrink-0 items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-medium transition-colors",
+                "flex shrink-0 items-center gap-1.5 rounded-xl border px-3 py-2 text-xs font-medium transition-all",
                 pointMode
-                  ? "border-red-500/40 bg-red-500/10 text-red-400 hover:bg-red-500/20"
+                  ? "border-red-500 bg-red-500 text-white hover:bg-red-600"
                   : "border-border-strong bg-bg-input text-text-primary hover:bg-bg-cardHover"
               )}
               title={pointMode ? "Отменить добавление точки" : "Поставить точку на картинке"}
@@ -367,7 +405,7 @@ export default function ReviewPage({
               type="button"
               onClick={() => setMarkersVisible((v) => !v)}
               className={cn(
-                "shrink-0 rounded-lg border px-2.5 py-1.5 text-xs font-medium transition-colors",
+                "shrink-0 rounded-xl border px-3 py-2 text-xs font-medium transition-colors",
                 markersVisible
                   ? "border-border-strong bg-bg-input text-text-primary hover:bg-bg-cardHover"
                   : "border-border-strong bg-bg-card text-text-muted hover:text-text-primary"
@@ -379,7 +417,7 @@ export default function ReviewPage({
             <button
               type="button"
               onClick={handleDoneClick}
-              className="rounded-lg bg-text-primary px-3.5 py-1.5 text-xs font-semibold text-bg-page transition-all hover:opacity-90 active:scale-[0.98]"
+              className="rounded-xl bg-text-primary px-4 py-2 text-sm font-medium text-bg-page transition-all hover:opacity-90 active:scale-[0.98]"
             >
               Готово
             </button>

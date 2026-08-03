@@ -625,11 +625,6 @@ export function MarkerCanvas({
           )}
           <div className="relative min-w-0 flex-1">
             {canvas}
-            {!isLocked && !pendingPoint && !pointMode && (
-              <div className="pointer-events-none absolute bottom-3 left-1/2 z-30 -translate-x-1/2 rounded-full border border-border-strong bg-bg-card/90 px-3 py-1.5 text-xs text-text-muted shadow-lg backdrop-blur-sm">
-                Нажмите на картинку, чтобы добавить правку
-              </div>
-            )}
           </div>
           {detailPanel}
         </div>

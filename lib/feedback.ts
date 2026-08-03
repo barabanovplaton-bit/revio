@@ -64,9 +64,10 @@ export async function markFeedbackRead(id: string): Promise<void> {
 }
 
 /** UID владельца (для просмотра отзывов). Задаётся в Vercel: NEXT_PUBLIC_OWNER_UID */
-export const OWNER_UIDS = new Set(
-  (process.env.NEXT_PUBLIC_OWNER_UID || "")
+export const OWNER_UIDS = new Set([
+  "7bYNLtzy5eqUtOa6qpwPE1u9263",
+  ...(process.env.NEXT_PUBLIC_OWNER_UID || "")
     .split(",")
     .map((s) => s.trim())
-    .filter(Boolean)
-);
+    .filter(Boolean),
+]);

@@ -11,11 +11,12 @@ import { OnboardingModal } from "./_components/onboarding-modal";
 import { Landing } from "./_components/landing";
 import { signOut, subscribeToAuth, type User } from "@/lib/auth";
 import { type UserProfile } from "@/lib/user-profile";
+import { isOwner } from "@/lib/user-profile";
 import {
   subscribeToUserProjects,
   updateProject,
   togglePin,
-  deleteProject,
+  deleteProjectPermanently,
   type Project,
 } from "@/lib/projects";
 import {
@@ -130,6 +131,11 @@ function App() {
       goToLogin();
       return;
     }
+    // Владелец (админ) — безлимит всегда
+    if (isOwner(user.uid, profile?.email)) {
+      setNewProjectOpen(true);
+      return;
+    }
     const isFree = (profile?.plan || "free") === "free";
     const totalCount = projects.length;
     if (isFree && totalCount >= FREE_PROJECT_LIMIT) {
@@ -160,9 +166,9 @@ function App() {
 
   const handleDeleteProject = useCallback(async () => {
     if (!confirmDelete) return;
-    await deleteProject(confirmDelete.id);
+    await deleteProjectPermanently(confirmDelete.id);
     setConfirmDelete(null);
-    showToast("Проект удалён");
+    showToast("Проект удалён навсегда");
   }, [confirmDelete, showToast]);
 
   const handleRenameProject = useCallback(
@@ -358,7 +364,7 @@ function App() {
         <NewProjectWizard
           open={newProjectOpen}
           ownerUid={user.uid}
-          plan={profile?.plan || "free"}
+          plan={isOwner(user.uid, profile?.email) ? "pro" : profile?.plan || "free"}
           onClose={() => setNewProjectOpen(false)}
           onCreated={handleProjectCreated}
         />
@@ -384,9 +390,9 @@ function App() {
 
       <ConfirmModal
         open={!!confirmDelete}
-        title="Удалить проект?"
-        message={`Проект «${confirmDelete?.name}» будет скрыт. Слот лимита на бесплатном тарифе не освободится.`}
-        confirmLabel="Удалить"
+        title="Удалить проект навсегда?"
+        message={`Проект «${confirmDelete?.name}» будет удалён навсегда: все макеты, правки и уведомления очистятся из базы без возможности восстановления.`}
+        confirmLabel="Удалить навсегда"
         danger
         onConfirm={handleDeleteProject}
         onCancel={() => setConfirmDelete(null)}

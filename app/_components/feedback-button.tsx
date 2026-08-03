@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { usePathname } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { onAuthStateChanged } from "firebase/auth";
@@ -13,24 +13,81 @@ const TYPES: { value: FeedbackCategory; label: string }[] = [
   { value: "other", label: "Другое" },
 ];
 
+const FEEDBACK_DRAFT_KEY = "revio:feedback:draft";
+
 export function FeedbackButton() {
   const [open, setOpen] = useState(false);
   const [type, setType] = useState<FeedbackCategory>("other");
   const [text, setText] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [sent, setSent] = useState(false);
+  const [mounted, setMounted] = useState(false);
+  const [navBusy, setNavBusy] = useState(false);
 
   const pathname = usePathname();
+
+  // Не показываем кнопку, пока страница грузится (перезагрузка/переход)
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const nav = (
+      window as unknown as { navigation?: EventTarget }
+    ).navigation;
+    if (!nav) return;
+    const start = () => setNavBusy(true);
+    const end = () => setNavBusy(false);
+    nav.addEventListener("navigate", start);
+    nav.addEventListener("navigatesuccess", end);
+    nav.addEventListener("navigateerror", end);
+    return () => {
+      nav.removeEventListener("navigate", start);
+      nav.removeEventListener("navigatesuccess", end);
+      nav.removeEventListener("navigateerror", end);
+    };
+  }, []);
+
+  // Сохраняем черновик, чтобы не пропадало при случайном закрытии
+  useEffect(() => {
+    if (!open) return;
+    try {
+      window.localStorage.setItem(
+        FEEDBACK_DRAFT_KEY,
+        JSON.stringify({ type, text })
+      );
+    } catch {
+      /* ignore */
+    }
+  }, [open, type, text]);
+
   // На странице клиента кнопку не показываем (не мешает при загрузке и работе)
   if (pathname?.startsWith("/review/")) return null;
+  if (!mounted || navBusy) return null;
+
+  const openForm = () => {
+    try {
+      const raw = window.localStorage.getItem(FEEDBACK_DRAFT_KEY);
+      if (raw) {
+        const d = JSON.parse(raw);
+        if (d && typeof d.text === "string") setText(d.text);
+        if (
+          d &&
+          (d.type === "bug" || d.type === "idea" || d.type === "other")
+        ) {
+          setType(d.type);
+        }
+      }
+    } catch {
+      /* ignore */
+    }
+    setSent(false);
+    setOpen(true);
+  };
 
   const close = () => {
     setOpen(false);
-    setTimeout(() => {
-      setSent(false);
-      setText("");
-      setType("other");
-    }, 300);
   };
 
   const submit = async () => {
@@ -62,6 +119,13 @@ export function FeedbackButton() {
         userId,
         url: typeof window !== "undefined" ? window.location.pathname : undefined,
       });
+      try {
+        window.localStorage.removeItem(FEEDBACK_DRAFT_KEY);
+      } catch {
+        /* ignore */
+      }
+      setText("");
+      setType("other");
       setSent(true);
     } catch (e) {
       console.error("addFeedback error:", e);
@@ -75,7 +139,7 @@ export function FeedbackButton() {
       {/* Плавающая кнопка */}
       <button
         type="button"
-        onClick={() => setOpen(true)}
+        onClick={openForm}
         aria-label="Обратная связь"
         className="fixed bottom-5 right-5 z-50 flex h-12 w-12 items-center justify-center rounded-full border border-border-strong bg-bg-card text-text-primary shadow-2xl transition-all hover:scale-105 hover:bg-bg-cardHover"
       >
