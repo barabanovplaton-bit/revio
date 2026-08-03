@@ -89,9 +89,12 @@ export function ProjectHub({
   const [canvasIndex, setCanvasIndex] = useState(0);
   const [histViewIndex, setHistViewIndex] = useState(0);
   const [viewIdx, setViewIdx] = useState(0);
+  // Выбранная правка на холсте (правая деталь-панель фрилансера)
+  const [canvasSelectedId, setCanvasSelectedId] = useState<string | null>(null);
 
   useEffect(() => {
     setCanvasIndex(0);
+    setCanvasSelectedId(null);
   }, [viewRound, canvasOpen]);
 
   useEffect(() => {
@@ -206,10 +209,12 @@ export function ProjectHub({
   };
 
   // --- Delete ---
-  const handleDelete = async () => {
+  const handleDelete = () => {
     setConfirmDelete(false);
-    await deleteProjectPermanently(projectId);
     onProjectDeleted();
+    deleteProjectPermanently(projectId).catch((e) => {
+      console.error("Failed to permanently delete project:", e);
+    });
   };
 
   // --- File handling ---
@@ -460,11 +465,12 @@ export function ProjectHub({
   const roundsTotal = project.roundsTotal ?? 0;
   const maxRounds = getMaxRoundsForPlan(plan);
   const canBuyRounds = canAddRounds(project, maxRounds);
+  const isProPlan = plan === "pro";
   // Правки текущего раунда (в `markers` приходят все раунды — для холста и истории)
   const roundMarkers = markers.filter((m) => m.round === currentRound);
   // Есть ли правки клиента (можно ли заменять макеты) — только после «Готово»
   const hasClientRevisions = !!project.clientSubmitted;
-  const replaceBlocked = !hasRoundsLeft(project) || !hasClientRevisions;
+  const replaceBlocked = !isProPlan && (!hasRoundsLeft(project) || !hasClientRevisions);
 
   const shareUrl =
     typeof window !== "undefined"
@@ -633,7 +639,6 @@ export function ProjectHub({
                 <h1
                   className="truncate text-sm font-semibold text-text-primary cursor-pointer hover:text-text-secondary transition-colors"
                   onClick={startRename}
-                  title="Нажмите, чтобы переименовать"
                 >
                   {project.name}
                 </h1>
@@ -641,7 +646,6 @@ export function ProjectHub({
                   type="button"
                   onClick={startRename}
                   className="shrink-0 rounded-md p-1 text-text-muted transition-all hover:text-text-primary"
-                  title="Переименовать"
                 >
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" className="h-3.5 w-3.5">
                     <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
@@ -654,7 +658,6 @@ export function ProjectHub({
             type="button"
             onClick={() => setConfirmDelete(true)}
             className="shrink-0 rounded-lg p-2 text-text-muted transition-colors hover:bg-red-500/10 hover:text-red-400"
-            title="Удалить проект навсегда"
           >
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
               <path d="M3 6h18" />
@@ -716,7 +719,7 @@ export function ProjectHub({
             <div className="space-y-2">
               {previewUrls.map((url, index) => (
                 <Fragment key={index}>
-                  {isDragging && (
+                  {isDragging && index > 0 && (
                     <DropIndicator
                       active={dragOverIndex === index}
                       onDragOver={handleDragOverAt(index)}
@@ -728,6 +731,10 @@ export function ProjectHub({
                     onDragStart={(e) => {
                       e.dataTransfer.effectAllowed = "move";
                       e.dataTransfer.setData("text/plain", String(index));
+                      const thumb = e.currentTarget.querySelector("img");
+                      if (thumb) {
+                        e.dataTransfer.setDragImage(thumb, 32, 32);
+                      }
                       setDragIndex(index);
                       setDragOverIndex(index);
                     }}
@@ -739,9 +746,9 @@ export function ProjectHub({
                     }}
                     className={`group flex items-center gap-3 rounded-xl border bg-bg-card p-2 transition-all cursor-grab active:cursor-grabbing ${
                       dragIndex === index
-                        ? "border-text-primary/60"
+                        ? "opacity-10"
                         : dragOverIndex === index && dragIndex !== null
-                          ? "border-border-strong"
+                          ? "border-text-primary/40"
                           : "border-border-strong hover:border-text-primary/30"
                     }`}
                   >
@@ -827,7 +834,11 @@ export function ProjectHub({
 
             {/* Rounds status */}
             <div className="mb-4 flex flex-wrap items-center gap-2">
-              {hasRoundsLeft(project) ? (
+              {isProPlan ? (
+                <span className="rounded-lg border border-border-strong bg-bg-card px-3 py-1.5 text-xs text-text-muted">
+                  Раунд {currentRound} · правки без ограничений
+                </span>
+              ) : hasRoundsLeft(project) ? (
                 <span className="rounded-lg border border-border-strong bg-bg-card px-3 py-1.5 text-xs text-text-muted">
                   Раунд {currentRound} из {roundsTotal || "∞"} · осталось раундов правок: {roundsLeft}
                 </span>
@@ -836,7 +847,7 @@ export function ProjectHub({
                   Раунды правок исчерпаны — клиент не может оставить новые правки
                 </span>
               )}
-              {!hasRoundsLeft(project) && canBuyRounds && (
+              {!isProPlan && !hasRoundsLeft(project) && canBuyRounds && (
                 <button
                   type="button"
                   onClick={handleAddRound}
@@ -845,7 +856,7 @@ export function ProjectHub({
                   + Добавить раунд
                 </button>
               )}
-              {project.clientSubmitted && hasRoundsLeft(project) && (
+              {project.clientSubmitted && (isProPlan || hasRoundsLeft(project)) && (
                 <span className="rounded-lg border border-green-500/30 bg-green-500/10 px-3 py-1.5 text-xs text-green-400">
                   Клиент прислал правки
                 </span>
@@ -853,7 +864,7 @@ export function ProjectHub({
             </div>
 
             {/* Promo: раунды кончились и докупить больше нельзя */}
-            {!hasRoundsLeft(project) && !canBuyRounds && (
+            {!isProPlan && !hasRoundsLeft(project) && !canBuyRounds && (
               <div className="mb-4 rounded-xl border border-text-primary/20 bg-bg-card p-4">
                 <p className="text-sm font-medium text-text-primary">
                   У вас закончились раунды правок
@@ -891,7 +902,7 @@ export function ProjectHub({
               <button
                 type="button"
                 onClick={() => {
-                  if (!hasRoundsLeft(project)) {
+                  if (!isProPlan && !hasRoundsLeft(project)) {
                     showToast("Раунды правок исчерпаны — добавьте раунд или перейдите на Pro");
                     return;
                   }
@@ -913,7 +924,7 @@ export function ProjectHub({
                   <polyline points="17,8 12,3 7,8" />
                   <line x1="12" y1="3" x2="12" y2="15" />
                 </svg>
-                {hasRoundsLeft(project) ? "Заменить макеты" : "Раунды исчерпаны"}
+                {isProPlan || hasRoundsLeft(project) ? "Заменить макеты" : "Раунды исчерпаны"}
               </button>
             </div>
             {!hasClientRevisions && hasRoundsLeft(project) && (
@@ -1011,65 +1022,68 @@ export function ProjectHub({
       {/* Canvas: просмотр макетов с маячками, переключение раундов */}
       {canvasOpen && (
         <div className="fixed inset-0 z-50 flex flex-col bg-bg-page">
-          <div className="flex items-center gap-3 border-b border-border-strong bg-bg-card px-4 py-3">
-            <button
-              type="button"
-              onClick={() => setCanvasOpen(false)}
-              title="Назад"
-              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-text-primary transition-all hover:bg-bg-cardHover hover:ring-1 hover:ring-border-strong"
-            >
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5">
-                <path d="M19 12H5" /><path d="m12 19-7-7 7-7" />
-              </svg>
-            </button>
-            <p className="min-w-0 flex-1 truncate text-sm font-semibold text-text-primary">
-              {project.name}
-            </p>
-            {availableRounds.length > 1 && (
-              <div className="flex items-center gap-0.5 rounded-xl border border-border-strong bg-bg-input p-1">
-                <button
-                  type="button"
-                  onClick={() => setViewRound((r) => Math.max(availableRounds[0], (r ?? currentRound) - 1))}
-                  disabled={(viewRound ?? currentRound) <= availableRounds[0]}
-                  className="flex h-7 w-7 items-center justify-center rounded-lg text-text-muted transition-colors hover:bg-bg-cardHover hover:text-text-primary disabled:opacity-30"
-                >
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4"><path d="m15 18-6-6 6-6"/></svg>
-                </button>
-                <span className="min-w-0 px-1 text-center text-xs font-medium text-text-primary">
-                  Раунд {viewRound ?? currentRound}/{availableRounds.length}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => setViewRound((r) => Math.min(availableRounds[availableRounds.length - 1], (r ?? currentRound) + 1))}
-                  disabled={(viewRound ?? currentRound) >= availableRounds[availableRounds.length - 1]}
-                  className="flex h-7 w-7 items-center justify-center rounded-lg text-text-muted transition-colors hover:bg-bg-cardHover hover:text-text-primary disabled:opacity-30"
-                >
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4"><path d="m9 18 6-6-6-6"/></svg>
-                </button>
-              </div>
-            )}
-            {(() => {
-              const n = imagesForRound(viewRound ?? currentRound).length;
-              return n > 1 ? (
-                <span className="shrink-0 rounded-lg border border-border-strong bg-bg-input px-2.5 py-1 text-xs font-medium text-text-primary">
-                  {Math.min(canvasIndex + 1, n)} / {n}
-                </span>
-              ) : null;
-            })()}
-            <button
-              type="button"
-              onClick={() => setMarkersVisible((v) => !v)}
-              className={cn(
-                "shrink-0 rounded-xl border px-3 py-2 text-xs font-medium transition-colors",
-                markersVisible
-                  ? "border-border-strong bg-bg-input text-text-primary hover:bg-bg-cardHover"
-                  : "border-border-strong bg-bg-card text-text-muted hover:text-text-primary"
+          <div className="flex items-center justify-between gap-3 border-b border-border-strong bg-bg-card px-4 py-2.5">
+            <div className="flex min-w-0 flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setCanvasOpen(false)}
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-text-primary transition-colors hover:bg-bg-cardHover"
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5">
+                  <path d="M19 12H5" /><path d="m12 19-7-7 7-7" />
+                </svg>
+              </button>
+              <p className="min-w-0 truncate text-sm font-medium text-text-primary">
+                {project.name}
+              </p>
+              {availableRounds.length > 1 && (
+                <div className="flex items-center gap-0.5 rounded-xl border border-border-strong bg-bg-input p-1">
+                  <button
+                    type="button"
+                    onClick={() => setViewRound((r) => Math.max(availableRounds[0], (r ?? currentRound) - 1))}
+                    disabled={(viewRound ?? currentRound) <= availableRounds[0]}
+                    className="flex h-7 w-7 items-center justify-center rounded-lg text-text-muted transition-colors hover:bg-bg-cardHover hover:text-text-primary disabled:opacity-30"
+                  >
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4"><path d="m15 18-6-6 6-6"/></svg>
+                  </button>
+                  <span className="min-w-0 px-1 text-center text-xs font-medium text-text-primary">
+                    Раунд {viewRound ?? currentRound}/{availableRounds.length}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setViewRound((r) => Math.min(availableRounds[availableRounds.length - 1], (r ?? currentRound) + 1))}
+                    disabled={(viewRound ?? currentRound) >= availableRounds[availableRounds.length - 1]}
+                    className="flex h-7 w-7 items-center justify-center rounded-lg text-text-muted transition-colors hover:bg-bg-cardHover hover:text-text-primary disabled:opacity-30"
+                  >
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4"><path d="m9 18 6-6-6-6"/></svg>
+                  </button>
+                </div>
               )}
-            >
-              {markersVisible ? "Без маячков" : "С маячками"}
-            </button>
+              {(() => {
+                const n = imagesForRound(viewRound ?? currentRound).length;
+                return n > 1 ? (
+                  <span className="shrink-0 rounded-lg border border-border-strong bg-bg-input px-2.5 py-1 text-xs font-medium text-text-primary">
+                    {Math.min(canvasIndex + 1, n)} / {n}
+                  </span>
+                ) : null;
+              })()}
+            </div>
+            <div className="flex shrink-0 items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setMarkersVisible((v) => !v)}
+                className={cn(
+                  "shrink-0 rounded-xl border px-3 py-2 text-xs font-medium transition-colors",
+                  markersVisible
+                    ? "border-border-strong bg-bg-input text-text-primary hover:bg-bg-cardHover"
+                    : "border-border-strong bg-bg-card text-text-muted hover:text-text-primary"
+                )}
+              >
+                {markersVisible ? "Без маячков" : "С маячками"}
+              </button>
+            </div>
           </div>
-          <div className="flex-1 overflow-hidden">
+          <div className="flex flex-1 overflow-hidden">
             <CanvasViewer
               imageUrls={imagesForRound(viewRound ?? currentRound)}
               markers={markersForRound(viewRound ?? currentRound)}
@@ -1080,7 +1094,67 @@ export function ProjectHub({
               onToggleMarkers={() => setMarkersVisible((v) => !v)}
               onToggleDone={handleToggleDone}
               onImageChange={setCanvasIndex}
+              selectedId={canvasSelectedId}
+              onSelectMarker={(id) => setCanvasSelectedId(id)}
+              showBottomCard={false}
             />
+            {(() => {
+              const list = markersForRound(viewRound ?? currentRound);
+              const selected = canvasSelectedId
+                ? list.find((m) => m.id === canvasSelectedId) ?? null
+                : null;
+              if (!selected) return null;
+              const pointOrder = list
+                .filter((m) => m.type === "point")
+                .sort(
+                  (a, b) =>
+                    (a.createdAt?.toMillis() || 0) -
+                    (b.createdAt?.toMillis() || 0)
+                );
+              const num =
+                selected.type === "point"
+                  ? pointOrder.findIndex((m) => m.id === selected.id) + 1
+                  : null;
+              return (
+                <aside className="flex w-[19rem] shrink-0 flex-col border-l border-border-strong bg-bg-card">
+                  <div className="flex items-center justify-between border-b border-border-strong px-4 py-3">
+                    <p className="text-sm font-medium text-text-primary">
+                      {selected.type === "general"
+                        ? "Общая правка"
+                        : `Правка №${num}`}
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => setCanvasSelectedId(null)}
+                      className="rounded-lg p-1 text-text-muted transition-colors hover:bg-bg-cardHover hover:text-text-primary"
+                    >
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" className="h-4 w-4">
+                        <path d="M18 6 6 18M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </div>
+                  <div className="flex-1 overflow-y-auto p-4">
+                    <p className="break-words text-sm leading-relaxed text-text-primary">
+                      {selected.text}
+                    </p>
+                  </div>
+                  <div className="flex gap-2 border-t border-border-strong p-3">
+                    <button
+                      type="button"
+                      onClick={() => handleToggleDone(selected.id, !selected.done)}
+                      className={cn(
+                        "flex-1 rounded-xl px-3 py-2 text-sm font-medium transition-all",
+                        selected.done
+                          ? "bg-green-500 text-white"
+                          : "border border-border-strong text-text-primary hover:bg-bg-cardHover"
+                      )}
+                    >
+                      {selected.done ? "Сделано ✓" : "Отметить сделанным"}
+                    </button>
+                  </div>
+                </aside>
+              );
+            })()}
           </div>
         </div>
       )}
@@ -1119,8 +1193,8 @@ function DropIndicator({
     <div
       onDragOver={onDragOver}
       onDrop={onDrop}
-      className={`flex h-2 items-center transition-colors ${
-        active ? "bg-bg-cardHover/60" : ""
+      className={`flex h-7 items-center px-1 transition-colors ${
+        active ? "bg-text-primary/10" : ""
       }`}
     >
       <div

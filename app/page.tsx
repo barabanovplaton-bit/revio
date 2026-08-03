@@ -28,7 +28,7 @@ export default function Page() {
   return <App />;
 }
 
-/** Лимит активных проектов на бесплатном тарифе (считаются ВСЕ созданные, включая удалённые) */
+/** Лимит активных проектов на бесплатном тарифе (удалённые навсегда не считаются) */
 const FREE_PROJECT_LIMIT = 3;
 
 function App() {
@@ -137,7 +137,7 @@ function App() {
       return;
     }
     const isFree = (profile?.plan || "free") === "free";
-    const totalCount = projects.length;
+    const totalCount = projects.filter((p) => !p.deleted).length;
     if (isFree && totalCount >= FREE_PROJECT_LIMIT) {
       setLimitOpen(true);
       return;
@@ -166,9 +166,14 @@ function App() {
 
   const handleDeleteProject = useCallback(async () => {
     if (!confirmDelete) return;
-    await deleteProjectPermanently(confirmDelete.id);
+    const { id } = confirmDelete;
+    setProjects((prev) => prev.filter((p) => p.id !== id));
     setConfirmDelete(null);
     showToast("Проект удалён навсегда");
+    deleteProjectPermanently(id).catch((e) => {
+      console.error("Failed to permanently delete project:", e);
+      showToast("Не удалось удалить проект в базе");
+    });
   }, [confirmDelete, showToast]);
 
   const handleRenameProject = useCallback(
@@ -198,6 +203,7 @@ function App() {
       )
     : projects;
 
+  const activeProjects = projects.filter((p) => !p.deleted);
   const visibleProjects = filtered.filter((p) => !p.deleted);
 
   return (
@@ -298,12 +304,14 @@ function App() {
               </button>
             </div>
 
-            {(profile?.plan || "free") === "free" && projects.length > 0 && (
+            {!isOwner(user.uid, profile?.email) &&
+              (profile?.plan || "free") === "free" &&
+              activeProjects.length > 0 && (
               <div className="mb-4 flex items-center justify-between rounded-xl border border-border-strong bg-bg-card px-4 py-2.5">
                 <p className="text-xs text-text-muted">
                   Проекты:{" "}
                   <span className="font-medium text-text-primary">
-                    {projects.length} из {FREE_PROJECT_LIMIT}
+                    {activeProjects.length} из {FREE_PROJECT_LIMIT}
                   </span>{" "}
                   на бесплатном тарифе
                 </p>

@@ -318,7 +318,7 @@ export function MarkerCanvas({
                   <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-text-primary text-[10px] font-bold text-bg-page">
                     {sentPointCount + i + 1}
                   </span>
-                  <span className="line-clamp-2 min-w-0 flex-1 break-words text-xs leading-snug text-text-primary">
+                  <span className="line-clamp-1 min-w-0 flex-1 break-words text-xs leading-snug text-text-primary">
                     {d.text}
                   </span>
                   <span
@@ -329,7 +329,6 @@ export function MarkerCanvas({
                       requestDelete(d);
                     }}
                     className="shrink-0 rounded-lg p-1 text-text-muted transition-colors hover:bg-bg-cardHover hover:text-red-400"
-                    title="Удалить"
                   >
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-3.5 w-3.5">
                       <path d="M18 6 6 18M6 6l12 12" />
@@ -362,7 +361,7 @@ export function MarkerCanvas({
                     <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-text-primary/15 text-[10px] font-bold text-text-primary">
                       !
                     </span>
-                    <span className="line-clamp-2 min-w-0 flex-1 break-words text-xs leading-snug text-text-primary">
+                    <span className="line-clamp-1 min-w-0 flex-1 break-words text-xs leading-snug text-text-primary">
                       {d.text}
                     </span>
                     <span
@@ -373,7 +372,6 @@ export function MarkerCanvas({
                         requestDelete(d);
                       }}
                       className="shrink-0 rounded-lg p-1 text-text-muted transition-colors hover:bg-bg-cardHover hover:text-red-400"
-                      title="Удалить"
                     >
                       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-3.5 w-3.5">
                         <path d="M18 6 6 18M6 6l12 12" />
@@ -406,7 +404,6 @@ export function MarkerCanvas({
                 if (pointMode) onTogglePointMode?.();
               }}
               className="rounded-lg p-1 text-text-muted transition-colors hover:bg-bg-cardHover hover:text-text-primary"
-              title="Отмена"
             >
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" className="h-4 w-4">
                 <path d="M18 6 6 18M6 6l12 12" />
@@ -457,7 +454,6 @@ export function MarkerCanvas({
               type="button"
               onClick={() => setSelectedDraftId(null)}
               className="rounded-lg p-1 text-text-muted transition-colors hover:bg-bg-cardHover hover:text-text-primary"
-              title="Закрыть"
             >
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" className="h-4 w-4">
                 <path d="M18 6 6 18M6 6l12 12" />
@@ -639,7 +635,7 @@ export function MarkerCanvas({
                 ? `Удалить правку №${deleteConfirm.number}?`
                 : "Удалить общий комментарий?"}
             </h2>
-            <p className="mb-6 text-sm leading-relaxed text-text-muted">
+            <p className="mb-6 max-h-32 overflow-y-auto break-words text-sm leading-relaxed text-text-muted">
               «{deleteConfirm.item.text}» будет удалено из черновика.
             </p>
             <div className="flex gap-2">

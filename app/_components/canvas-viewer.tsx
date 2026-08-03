@@ -338,7 +338,7 @@ export function CanvasViewer({
         "flex shrink-0 flex-col overflow-hidden bg-bg-card",
         mobile
           ? "h-2/5 border-t border-border-strong"
-          : "my-3 ml-3 max-h-full w-72 rounded-2xl border border-border-strong shadow-xl"
+          : "w-60 border-r border-border-strong"
       )}
     >
       <div className="flex items-center justify-between border-b border-border-strong px-3 py-2">
@@ -387,7 +387,7 @@ export function CanvasViewer({
             >
               {numberById.get(m.id)}
             </span>
-            <span className="min-w-0 flex-1 break-words text-xs leading-snug text-text-primary">
+            <span className="line-clamp-1 min-w-0 flex-1 break-words text-xs leading-snug text-text-primary">
               {filter === "page" && (
                 <span className="mr-1 text-[10px] text-text-muted">
                   стр. {(m.imageIndex ?? 0) + 1} ·
@@ -422,7 +422,7 @@ export function CanvasViewer({
             </p>
             {generalMarkers.map((m) => (
               <div key={m.id} className="flex items-center gap-2 px-2 py-1.5">
-                <span className="min-w-0 flex-1 break-words text-xs leading-snug text-text-primary">
+                <span className="line-clamp-1 min-w-0 flex-1 break-words text-xs leading-snug text-text-primary">
                   {m.text}
                 </span>
                 {onToggleDone && (
@@ -450,12 +450,11 @@ export function CanvasViewer({
 
   return (
     <div className={cn("relative flex h-full w-full overflow-hidden", className)}>
-      {/* Затемнение всего экрана (режим «Точечный комментарий»): панели/фон темнеют, фото яркое */}
+      {/* Затемнение всего экрана (режим «Точечный комментарий»): всё затемнено, фото яркое */}
       {dimAroundZone && (
         <div
-          className="fixed inset-0 z-40 bg-black/70"
+          className="fixed inset-0 z-[70] bg-black/70"
           onClick={onDimClick}
-          title="Отменить режим точечного комментария"
         />
       )}
 
@@ -465,7 +464,7 @@ export function CanvasViewer({
       <div
         className={cn(
           "relative flex-1 overflow-hidden bg-bg-page",
-          dimAroundZone && "z-50"
+          dimAroundZone && "z-[80]"
         )}
         ref={zoneRef}
         onWheel={handleWheel}

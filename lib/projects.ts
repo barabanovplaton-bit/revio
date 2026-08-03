@@ -176,10 +176,14 @@ export async function deleteProject(id: string): Promise<void> {
 
 /**
  * Удалить проект НАВСЕГДА (без восстановления).
- * Очищает сабколлекции: маркеры, уведомления, затем сам документ проекта.
+ * Сначала удаляется документ проекта (мгновенно исчезает из интерфейса),
+ * затем фоновые данные: маркеры и уведомления.
  */
 export async function deleteProjectPermanently(id: string): Promise<void> {
   const { deleteAllProjectMarkers } = await import("./markers");
+
+  // Сам проект — первым делом
+  await deleteDoc(doc(db, COLLECTION, id));
 
   // Маркеры проекта (все раунды)
   await deleteAllProjectMarkers(id);
@@ -193,9 +197,6 @@ export async function deleteProjectPermanently(id: string): Promise<void> {
   await Promise.all(
     notifSnap.docs.map((d) => deleteDoc(doc(db, "notifications", d.id)))
   );
-
-  // Сам проект
-  await deleteDoc(doc(db, COLLECTION, id));
 }
 
 /** Обновить картинки проекта */

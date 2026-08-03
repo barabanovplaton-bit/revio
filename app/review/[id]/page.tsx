@@ -220,10 +220,10 @@ export default function ReviewPage({
           projectId: id,
           round,
           type: d.type,
-          x: d.x,
-          y: d.y,
-          imageIndex: d.imageIndex,
           text: d.text,
+          ...(d.type === "point"
+            ? { x: d.x, y: d.y, imageIndex: d.imageIndex }
+            : {}),
         }))
       );
       await updateProject(id, { clientSubmitted: true });
@@ -321,7 +321,6 @@ export default function ReviewPage({
                   setGeneralOpen((v) => !v);
                 }}
                 className="flex items-center gap-1.5 rounded-xl border border-text-primary/40 bg-text-primary/10 px-3 py-2 text-xs font-semibold text-text-primary transition-all hover:bg-text-primary/20"
-                title="Добавить общий комментарий"
               >
                 <svg
                   viewBox="0 0 24 24"
@@ -378,12 +377,11 @@ export default function ReviewPage({
                 setPointMode((v) => !v);
               }}
               className={cn(
-                "flex shrink-0 items-center gap-1.5 rounded-xl border px-3 py-2 text-xs font-medium transition-all",
+                "flex shrink-0 items-center gap-1.5 rounded-xl border px-3 py-2 text-xs font-semibold transition-all",
                 pointMode
                   ? "border-red-500 bg-red-500 text-white hover:bg-red-600"
-                  : "border-border-strong bg-bg-input text-text-primary hover:bg-bg-cardHover"
+                  : "border-text-primary/40 bg-text-primary/10 text-text-primary hover:bg-text-primary/20"
               )}
-              title={pointMode ? "Отменить добавление точки" : "Поставить точку на картинке"}
             >
               {pointMode ? (
                 <>
@@ -410,7 +408,6 @@ export default function ReviewPage({
                   ? "border-border-strong bg-bg-input text-text-primary hover:bg-bg-cardHover"
                   : "border-border-strong bg-bg-card text-text-muted hover:text-text-primary"
               )}
-              title={markersVisible ? "Скрыть маячки" : "Показать маячки"}
             >
               {markersVisible ? "Без маячков" : "С маячками"}
             </button>

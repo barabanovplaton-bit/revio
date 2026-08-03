@@ -28,7 +28,13 @@ export function FeedbackButton() {
 
   // Не показываем кнопку, пока страница грузится (перезагрузка/переход)
   useEffect(() => {
-    setMounted(true);
+    if (document.readyState === "complete") {
+      setMounted(true);
+      return;
+    }
+    const onLoad = () => setMounted(true);
+    window.addEventListener("load", onLoad);
+    return () => window.removeEventListener("load", onLoad);
   }, []);
 
   useEffect(() => {
