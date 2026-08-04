@@ -91,6 +91,8 @@ export function CanvasViewer({
   const [natSize, setNatSize] = useState<{ w: number; h: number } | null>(null);
   const [fit, setFit] = useState<{ w: number; h: number } | null>(null);
   const [lastLoadedUrl, setLastLoadedUrl] = useState<string | null>(null);
+  // Ошибка загрузки текущего слайда (показываем заглушку вместо «тёмного экрана»)
+  const [imgFailed, setImgFailed] = useState(false);
 
   // Выбранный маркер: внешнее управление (правая панель клиента) или внутреннее
   const selectedMarkerId = selectedId !== undefined ? selectedId : internalSelectedId;
@@ -162,6 +164,7 @@ export function CanvasViewer({
     setScale(1);
     setPosition({ x: 0, y: 0 });
     setSelectedMarkerId(null);
+    setImgFailed(false);
   }, [currentIndex]);
 
   // Сортировка точек по времени создания (для нумерации)
@@ -198,8 +201,8 @@ export function CanvasViewer({
     if (s <= 1) return { x: 0, y: 0 };
     const rect = zoneRef.current?.getBoundingClientRect();
     if (!rect || !fit) return pos;
-    const maxX = Math.max(0, (fit.w * s - rect.width) / 2 - ZOOM_EDGE_PADDING);
-    const maxY = Math.max(0, (fit.h * s - rect.height) / 2 - ZOOM_EDGE_PADDING);
+    const maxX = Math.max(0, (fit.w * s - rect.width) / 2 + ZOOM_EDGE_PADDING);
+    const maxY = Math.max(0, (fit.h * s - rect.height) / 2 + ZOOM_EDGE_PADDING);
     return {
       x: clamp(pos.x, -maxX, maxX),
       y: clamp(pos.y, -maxY, maxY),
@@ -516,16 +519,37 @@ export function CanvasViewer({
                     }
                   />
                 )}
-                <img
-                  src={currentUrl}
-                  alt={`Макет ${currentIndex + 1}`}
-                  draggable={false}
-                  style={fit ? { width: fit.w, height: fit.h, display: "block" } : undefined}
-                  className={cn(
-                    fit ? undefined : "max-h-full max-w-full object-contain",
-                    lastLoadedUrl === currentUrl ? undefined : "opacity-0"
-                  )}
-                />
+                {imgFailed &&
+                !(lastLoadedUrl && lastLoadedUrl !== currentUrl) ? (
+                  <div
+                    style={
+                      fit
+                        ? { width: fit.w, height: fit.h }
+                        : undefined
+                    }
+                    className="flex flex-col items-center justify-center gap-2 rounded-lg bg-bg-input/40 px-6 py-8 text-text-muted"
+                  >
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" className="h-8 w-8">
+                      <rect x="3" y="3" width="18" height="18" rx="2" />
+                      <circle cx="9" cy="9" r="2" />
+                      <path d="m21 15-5-5L5 21" />
+                    </svg>
+                    <p className="text-center text-sm">
+                      Не удалось загрузить макет
+                    </p>
+                  </div>
+                ) : (
+                  <img
+                    src={currentUrl}
+                    alt={`Макет ${currentIndex + 1}`}
+                    draggable={false}
+                    onError={() => setImgFailed(true)}
+                    style={fit ? { width: fit.w, height: fit.h, display: "block" } : undefined}
+                    className={
+                      fit ? undefined : "max-h-full max-w-full object-contain"
+                    }
+                  />
+                )}
               </>
             )}
 

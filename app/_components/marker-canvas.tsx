@@ -387,8 +387,9 @@ export function MarkerCanvas({
     );
   })();
 
-  // Правая деталь-панель (десктоп): форма добавления или просмотр правки
-  const detailPanel = !isMobile ? (
+  // Правая деталь-панель (десктоп): форма добавления или просмотр правки.
+  // Показывается только когда есть контент (иначе после отправки остаётся пустой столбец)
+  const detailPanel = !isMobile && (pendingPoint || selectedDraft) ? (
     <aside className="absolute right-0 top-0 bottom-0 z-40 flex w-[19rem] flex-col border-l border-border-strong bg-bg-card shadow-2xl">
       {pendingPoint ? (
         <>

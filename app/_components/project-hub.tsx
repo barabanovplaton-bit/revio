@@ -517,7 +517,8 @@ export function ProjectHub({
   const roundMarkers = markers.filter((m) => m.round === currentRound);
   // Есть ли правки клиента (можно ли заменять макеты) — только после «Готово»
   const hasClientRevisions = !!project.clientSubmitted;
-  const replaceBlocked = !isProPlan && (!hasRoundsLeft(project) || !hasClientRevisions);
+  const replaceBlocked =
+    !hasClientRevisions || (!isProPlan && !hasRoundsLeft(project));
 
   const shareUrl =
     typeof window !== "undefined"

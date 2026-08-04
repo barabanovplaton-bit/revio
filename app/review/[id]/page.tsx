@@ -422,7 +422,7 @@ export default function ReviewPage({
         )}
       </header>
 
-      <main className="flex-1 overflow-hidden">
+      <main className="relative flex-1 overflow-hidden">
         {viewRound === round ? (
           <MarkerCanvas
             imageUrls={imagesForRound(viewRound)}
@@ -447,6 +447,26 @@ export default function ReviewPage({
             onImageChange={setViewIndex}
             showBottomCard={false}
           />
+        )}
+
+        {/* Правки отправлены: блок по центру, фото остаётся видимым */}
+        {submitted && viewRound === round && (
+          <div className="pointer-events-none absolute inset-0 z-[60] flex items-center justify-center p-4">
+            <div className="max-w-md rounded-2xl border border-white/10 bg-bg-card/90 px-6 py-5 text-center shadow-2xl backdrop-blur-sm">
+              <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-green-500/15">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="h-6 w-6 text-green-400">
+                  <path d="M20 6 9 17l-5-5" />
+                </svg>
+              </div>
+              <h2 className="mb-1 text-lg font-semibold text-text-primary">
+                Правки отправлены
+              </h2>
+              <p className="text-sm leading-relaxed text-text-muted">
+                В этом раунде вы отправили правки и не можете их изменить.
+                Дизайнер скоро пришлёт исправленную версию.
+              </p>
+            </div>
+          </div>
         )}
       </main>
 
