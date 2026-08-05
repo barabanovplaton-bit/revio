@@ -613,7 +613,7 @@ export function MarkerCanvas({
           setSelectedDraftId(id);
           setEditing(false);
         }}
-        showBottomCard={!isMobile}
+        showBottomCard={false}
         dimAroundZone={pointMode && !isMobile}
         onDimClick={() => {
           setPendingPoint(null);

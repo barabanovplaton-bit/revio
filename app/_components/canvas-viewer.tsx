@@ -328,6 +328,16 @@ export function CanvasViewer({
     setSelectedMarkerId(m.id);
   };
 
+  // При внешнем выборе маркера (клик в левой панели) — переходим на его страницу
+  useEffect(() => {
+    const m = markers.find((x) => x.id === selectedMarkerId);
+    if (m && m.imageIndex !== undefined && m.imageIndex < imageUrls.length) {
+      setCurrentIndex(m.imageIndex);
+      onImageChange?.(m.imageIndex);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedMarkerId]);
+
   // Панель списка правок (кабинет)
   const panelList = useMemo(() => {
     let arr = [...sortedPoints];
@@ -596,7 +606,7 @@ export function CanvasViewer({
                       m.done
                         ? "bg-green-500 text-white"
                         : "bg-text-primary text-bg-page",
-                      selectedMarkerId === m.id && "scale-125 ring-2 ring-white"
+                      selectedMarkerId === m.id && "scale-150 ring-2 ring-white"
                     )}
                   >
                     {numberById.get(m.id)}
