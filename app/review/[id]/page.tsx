@@ -443,6 +443,15 @@ export default function ReviewPage({
         )}
       </main>
 
+      {/* ДИАГНОСТИКА (временная) */}
+      <div className="pointer-events-none fixed inset-x-0 top-24 z-[100] flex justify-center px-4">
+        <pre className="pointer-events-auto max-w-full overflow-auto rounded-lg border border-yellow-500/40 bg-black/80 px-3 py-2 text-[10px] leading-tight text-yellow-300">
+{`viewRound=${viewRound} imageCount=${imagesForRound(viewRound).length}
+firstUrl=${imagesForRound(viewRound)[0] ?? "EMPTY"}
+lastUrl=${imagesForRound(viewRound)[imagesForRound(viewRound).length - 1] ?? "EMPTY"}`}
+        </pre>
+      </div>
+
       {locked && !submitted && (
         <div className="pointer-events-none fixed inset-x-0 bottom-0 z-40 flex justify-center p-4">
           <div className="pointer-events-auto max-w-md rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-center text-sm text-red-400 backdrop-blur-sm">
