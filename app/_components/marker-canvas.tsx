@@ -593,7 +593,7 @@ export function MarkerCanvas({
   ) : null;
 
   const canvas = (
-    <div className="relative min-w-0 flex-1">
+    <div className="relative min-w-0 flex-1 h-full">
       <CanvasViewer
         imageUrls={imageUrls}
         markers={markers}
