@@ -24,6 +24,12 @@ interface MarkerCanvasProps {
   /** Режим «Точечный комментарий» (затемнение вокруг фото) */
   pointMode?: boolean;
   onTogglePointMode?: () => void;
+  /** Общий комментарий (управляется с review-страницы) */
+  generalOpen?: boolean;
+  generalText?: string;
+  onGeneralTextChange?: (t: string) => void;
+  onAddGeneral?: () => void;
+  onGeneralClose?: () => void;
 }
 
 export function MarkerCanvas({
@@ -36,6 +42,11 @@ export function MarkerCanvas({
   onImageChange,
   pointMode = false,
   onTogglePointMode,
+  generalOpen = false,
+  generalText = "",
+  onGeneralTextChange,
+  onAddGeneral,
+  onGeneralClose,
 }: MarkerCanvasProps) {
   const [sentMarkers, setSentMarkers] = useState<Marker[]>([]);
   const [draft, setDraft] = useState<ReviewDraftItem[]>([]);
@@ -387,11 +398,53 @@ export function MarkerCanvas({
     );
   })();
 
-  // Правая деталь-панель (десктоп): форма добавления или просмотр правки.
-  // Показывается только когда есть контент (иначе после отправки остаётся пустой столбец)
-  const detailPanel = !isMobile && (pendingPoint || selectedDraft) ? (
-    <aside className="absolute right-0 top-0 bottom-0 z-40 flex w-[19rem] flex-col border-l border-border-strong bg-bg-card shadow-2xl">
-      {pendingPoint ? (
+  // Правая деталь-панель (десктоп): форма общего/точечного комментария
+  // или просмотр правки. Всегда видна на десктопе — вместо оверлея на фото.
+  const detailPanel = !isMobile ? (
+    <aside className="flex w-[19rem] shrink-0 flex-col border-l border-border-strong bg-bg-card">
+      {generalOpen ? (
+        <>
+          <div className="flex items-center justify-between border-b border-border-strong px-4 py-3">
+            <p className="text-sm font-medium text-text-primary">Общий комментарий</p>
+            <button
+              type="button"
+              onClick={() => onGeneralClose?.()}
+              className="rounded-lg p-1 text-text-muted transition-colors hover:bg-bg-cardHover hover:text-text-primary"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" className="h-4 w-4">
+                <path d="M18 6 6 18M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+          <div className="flex-1 overflow-y-auto p-4">
+            <textarea
+              value={generalText}
+              onChange={(e) => onGeneralTextChange?.(e.target.value)}
+              placeholder="Опишите общие правки..."
+              rows={6}
+              autoFocus
+              className="w-full resize-none rounded-lg border border-border-strong bg-bg-input px-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:border-text-primary focus:outline-none"
+            />
+          </div>
+          <div className="flex gap-2 border-t border-border-strong p-3">
+            <button
+              type="button"
+              onClick={() => onGeneralClose?.()}
+              className="flex-1 rounded-xl border border-border-strong px-3 py-2 text-sm text-text-primary transition-all hover:bg-bg-cardHover"
+            >
+              Отмена
+            </button>
+            <button
+              type="button"
+              onClick={() => onAddGeneral?.()}
+              disabled={!generalText.trim()}
+              className="flex-1 rounded-xl bg-text-primary px-3 py-2 text-sm font-medium text-bg-page transition-all hover:opacity-90 disabled:opacity-50"
+            >
+              Добавить
+            </button>
+          </div>
+        </>
+      ) : pendingPoint ? (
         <>
           <div className="flex items-center justify-between border-b border-border-strong px-4 py-3">
             <p className="text-sm font-medium text-text-primary">
@@ -524,7 +577,18 @@ export function MarkerCanvas({
             )}
           </div>
         </>
-      ) : null}
+      ) : (
+        <div className="flex flex-1 flex-col items-center justify-center gap-2 p-4 text-center">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" className="h-8 w-8 text-text-muted">
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+          </svg>
+          <p className="text-xs leading-relaxed text-text-muted">
+            Нажмите на макет, чтобы добавить правку,
+            <br />
+            или добавьте общий комментарий.
+          </p>
+        </div>
+      )}
     </aside>
   ) : null;
 

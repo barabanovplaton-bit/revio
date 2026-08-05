@@ -672,7 +672,8 @@ export function ProjectHub({
               <input
                 type="text"
                 value={renameValue}
-                onChange={(e) => setRenameValue(e.target.value)}
+                maxLength={80}
+                onChange={(e) => setRenameValue(e.target.value.slice(0, 80))}
                 onClick={(e) => e.stopPropagation()}
                 onKeyDown={(e) => {
                   if (e.key === "Enter") commitRename();
@@ -948,10 +949,21 @@ export function ProjectHub({
               </button>
               <button
                 type="button"
-                disabled={replaceBlocked}
-                onClick={() => setReplaceConfirm(true)}
+                onClick={() => {
+                  if (replaceBlocked) {
+                    if (!hasClientRevisions) {
+                      showToast("Клиент ещё не прислал правки — «Заменить макеты» станет доступно, когда он нажмёт «Готово»");
+                    } else if (!isProPlan && !hasRoundsLeft(project)) {
+                      showToast("Раунды правок исчерпаны — добавьте раунд или перейдите на Pro");
+                    } else {
+                      showToast("Сейчас заменить макеты нельзя");
+                    }
+                    return;
+                  }
+                  setReplaceConfirm(true);
+                }}
                 className={cn(
-                  "flex flex-1 items-center justify-center gap-2 rounded-xl border border-border-strong bg-bg-card px-4 py-3 text-sm font-medium transition-all disabled:cursor-not-allowed disabled:opacity-40",
+                  "flex flex-1 items-center justify-center gap-2 rounded-xl border border-border-strong bg-bg-card px-4 py-3 text-sm font-medium transition-all",
                   replaceBlocked
                     ? "text-text-muted"
                     : "text-text-primary hover:bg-bg-cardHover"

@@ -92,7 +92,8 @@ export function NewProjectWizard({
         <input
           type="text"
           value={name}
-          onChange={(e) => setName(e.target.value)}
+          maxLength={80}
+          onChange={(e) => setName(e.target.value.slice(0, 80))}
           placeholder="Например: Лендинг для кафе"
           autoFocus
           onKeyDown={(e) => {
@@ -100,9 +101,14 @@ export function NewProjectWizard({
           }}
           className="h-12 w-full rounded-xl border border-border-strong bg-bg-input px-4 text-center text-sm text-text-primary placeholder:text-text-muted focus:border-text-primary focus:outline-none"
         />
-        <p className="mt-1.5 text-center text-[11px] text-text-muted">
-          Имя видно только вам — клиент видит правки, а не название проекта
-        </p>
+        <div className="mt-1.5 flex w-full items-center justify-between">
+          <p className="text-[11px] text-text-muted">
+            Имя видно только вам — клиент видит правки, а не название проекта
+          </p>
+          <span className="shrink-0 pl-2 text-[11px] tabular-nums text-text-muted">
+            {name.length} / 80
+          </span>
+        </div>
 
         <label className="mb-1.5 mt-6 block w-full text-center text-xs font-medium uppercase tracking-wide text-text-muted">
           Раунды правок

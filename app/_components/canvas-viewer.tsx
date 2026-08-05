@@ -53,7 +53,9 @@ interface CanvasViewerProps {
 
 const MAX_SCALE = 3;
 /** Зазор от краёв рабочей зоны при максимальном приближении (чтобы был виден край) */
-const ZOOM_EDGE_PADDING = 16;
+const ZOOM_EDGE_PADDING = 48;
+/** Внешний отступ картинки от краёв рабочей зоны (чтобы не прилипало к панелям) */
+const FIT_PADDING = 32;
 
 export function CanvasViewer({
   imageUrls,
@@ -93,6 +95,8 @@ export function CanvasViewer({
   const [lastLoadedUrl, setLastLoadedUrl] = useState<string | null>(null);
   // Ошибка загрузки текущего слайда (показываем заглушку вместо «тёмного экрана»)
   const [imgFailed, setImgFailed] = useState(false);
+  // Счётчик попыток повторной загрузки (для кнопки «Повторить» в заглушке)
+  const [retryNonce, setRetryNonce] = useState(0);
 
   // Выбранный маркер: внешнее управление (правая панель клиента) или внутреннее
   const selectedMarkerId = selectedId !== undefined ? selectedId : internalSelectedId;
@@ -127,17 +131,22 @@ export function CanvasViewer({
     });
   }, [imageUrls]);
 
-  // Натуральный размер текущей картинки
+  // Натуральный размер текущей картинки. Обновляется при смене страницы и при
+  // повторной попытке (retryNonce) — сброс ошибки при успешной загрузке.
   useEffect(() => {
     const url = imageUrls[currentIndex];
-    if (lastLoadedUrl === url) return;
+    if (!url) return;
     const img = new Image();
-    img.onload = () => {
+    const onLoad = () => {
       setNatSize({ w: img.naturalWidth, h: img.naturalHeight });
       setLastLoadedUrl(url);
+      setImgFailed(false);
     };
+    const onError = () => setImgFailed(true);
+    img.onload = onLoad;
+    img.onerror = onError;
     img.src = url;
-  }, [imageUrls, currentIndex, lastLoadedUrl]);
+  }, [imageUrls, currentIndex, retryNonce]);
 
   // Подгон размера картинки под зону (с сохранением пропорций, без увеличения мелких)
   useEffect(() => {
@@ -145,8 +154,8 @@ export function CanvasViewer({
     if (!zone || !natSize) return;
     const compute = () => {
       const rect = zone.getBoundingClientRect();
-      const availW = Math.max(1, rect.width - 4);
-      const availH = Math.max(1, rect.height - 4);
+      const availW = Math.max(1, rect.width - FIT_PADDING);
+      const availH = Math.max(1, rect.height - FIT_PADDING);
       const s = Math.min(availW / natSize.w, availH / natSize.h, 1);
       setFit({
         w: Math.max(1, Math.round(natSize.w * s)),
@@ -519,15 +528,14 @@ export function CanvasViewer({
                     }
                   />
                 )}
-                {imgFailed &&
-                !(lastLoadedUrl && lastLoadedUrl !== currentUrl) ? (
+                {imgFailed && !(lastLoadedUrl && lastLoadedUrl !== currentUrl) ? (
                   <div
                     style={
                       fit
                         ? { width: fit.w, height: fit.h }
                         : undefined
                     }
-                    className="flex flex-col items-center justify-center gap-2 rounded-lg bg-bg-input/40 px-6 py-8 text-text-muted"
+                    className="flex flex-col items-center justify-center gap-3 rounded-lg bg-bg-input/40 px-6 py-8 text-text-muted"
                   >
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" className="h-8 w-8">
                       <rect x="3" y="3" width="18" height="18" rx="2" />
@@ -537,9 +545,20 @@ export function CanvasViewer({
                     <p className="text-center text-sm">
                       Не удалось загрузить макет
                     </p>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setImgFailed(false);
+                        setRetryNonce((n) => n + 1);
+                      }}
+                      className="rounded-lg bg-text-primary px-3 py-1.5 text-xs font-medium text-bg-page transition-all hover:opacity-90"
+                    >
+                      Повторить
+                    </button>
                   </div>
                 ) : (
                   <img
+                    key={`${currentUrl}-${retryNonce}`}
                     src={currentUrl}
                     alt={`Макет ${currentIndex + 1}`}
                     draggable={false}
@@ -624,9 +643,9 @@ export function CanvasViewer({
           </button>
         )}
 
-        {/* Листание */}
+        {/* Листание — панель счётчика внизу по центру (не перекрывает фото) */}
         {imageUrls.length > 1 && (
-          <>
+          <div className="absolute bottom-4 left-1/2 z-20 flex -translate-x-1/2 items-center gap-1 rounded-xl border border-white/20 bg-black/50 p-1 backdrop-blur-sm">
             <button
               type="button"
               onClick={() => {
@@ -637,11 +656,12 @@ export function CanvasViewer({
                 });
               }}
               disabled={currentIndex === 0}
-              className="absolute left-3 top-1/2 z-20 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full border border-white/20 bg-white/10 text-white backdrop-blur-sm transition-all hover:bg-white/20 disabled:opacity-30"
+              aria-label="Предыдущая страница"
+              className="flex h-7 w-7 items-center justify-center rounded-lg text-white transition-colors hover:bg-white/20 disabled:opacity-30"
             >
               <svg
                 viewBox="0 0 24 24"
-                className="h-5 w-5"
+                className="h-4 w-4"
                 fill="none"
                 stroke="currentColor"
                 strokeWidth={2.5}
@@ -651,6 +671,9 @@ export function CanvasViewer({
                 <path d="M15 18l-6-6 6-6" />
               </svg>
             </button>
+            <span className="min-w-10 px-1 text-center text-xs font-medium tabular-nums text-white">
+              {currentIndex + 1} / {imageUrls.length}
+            </span>
             <button
               type="button"
               onClick={() => {
@@ -661,11 +684,12 @@ export function CanvasViewer({
                 });
               }}
               disabled={currentIndex >= imageUrls.length - 1}
-              className="absolute right-3 top-1/2 z-20 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full border border-white/20 bg-white/10 text-white backdrop-blur-sm transition-all hover:bg-white/20 disabled:opacity-30"
+              aria-label="Следующая страница"
+              className="flex h-7 w-7 items-center justify-center rounded-lg text-white transition-colors hover:bg-white/20 disabled:opacity-30"
             >
               <svg
                 viewBox="0 0 24 24"
-                className="h-5 w-5"
+                className="h-4 w-4"
                 fill="none"
                 stroke="currentColor"
                 strokeWidth={2.5}
@@ -675,7 +699,7 @@ export function CanvasViewer({
                 <path d="M9 18l6-6-6-6" />
               </svg>
             </button>
-          </>
+          </div>
         )}
 
         {/* Карточка выбранного маркера (внизу, только если включена) */}

@@ -19,7 +19,6 @@ import {
 import { MarkerCanvas } from "@/app/_components/marker-canvas";
 import { CanvasViewer } from "@/app/_components/canvas-viewer";
 import { cn } from "@/lib/utils";
-import { AnimatePresence, motion } from "framer-motion";
 
 export default function ReviewPage({
   params,
@@ -313,63 +312,32 @@ export default function ReviewPage({
           </span>
         ) : (
           <div className="flex shrink-0 items-center gap-2">
-            <div className="relative">
-              <button
-                type="button"
-                onClick={() => {
-                  setPointMode(false);
-                  setGeneralOpen((v) => !v);
-                }}
-                className="flex items-center gap-1.5 rounded-xl border border-text-primary/40 bg-text-primary/10 px-3 py-2 text-xs font-semibold text-text-primary transition-all hover:bg-text-primary/20"
+            <button
+              type="button"
+              onClick={() => {
+                setPointMode(false);
+                setGeneralOpen((v) => !v);
+              }}
+              className={cn(
+                "flex items-center gap-1.5 rounded-xl border px-3 py-2 text-xs font-semibold transition-all",
+                generalOpen
+                  ? "border-text-primary bg-text-primary/15 text-text-primary"
+                  : "border-text-primary/40 bg-text-primary/10 text-text-primary hover:bg-text-primary/20"
+              )}
+            >
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth={2}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className="h-4 w-4"
               >
-                <svg
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth={2}
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  className="h-4 w-4"
-                >
-                  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-                </svg>
-                Общий комментарий
-              </button>
-              <AnimatePresence>
-                {generalOpen && (
-                  <>
-                    <div className="fixed inset-0 z-30" onMouseDown={() => setGeneralOpen(false)} />
-                    <motion.div
-                      initial={{ opacity: 0, y: -8 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -8 }}
-                      transition={{ duration: 0.15 }}
-                      className="absolute right-0 top-full z-40 mt-2 w-80 rounded-2xl border border-border-strong bg-bg-card p-4 shadow-2xl"
-                    >
-                      <p className="mb-2 text-xs font-medium text-text-primary">Общий комментарий</p>
-                      <textarea
-                        value={generalText}
-                        onChange={(e) => setGeneralText(e.target.value)}
-                        placeholder="Опишите общие правки..."
-                        rows={3}
-                        autoFocus
-                        className="w-full resize-none rounded-lg border border-border-strong bg-bg-input px-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:border-text-primary focus:outline-none"
-                      />
-                      <div className="mt-3 flex justify-end">
-                        <button
-                          type="button"
-                          onClick={addGeneral}
-                          disabled={!generalText.trim()}
-                          className="rounded-xl bg-text-primary px-5 py-2 text-sm font-medium text-bg-page transition-all hover:opacity-90 disabled:opacity-50"
-                        >
-                          Добавить
-                        </button>
-                      </div>
-                    </motion.div>
-                  </>
-                )}
-              </AnimatePresence>
-            </div>
+                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+              </svg>
+              {generalOpen ? "Закрыть" : "Общий комментарий"}
+            </button>
             <button
               type="button"
               onClick={() => {
@@ -434,6 +402,11 @@ export default function ReviewPage({
             onImageChange={setViewIndex}
             pointMode={pointMode}
             onTogglePointMode={() => setPointMode((v) => !v)}
+            generalOpen={generalOpen}
+            generalText={generalText}
+            onGeneralTextChange={setGeneralText}
+            onAddGeneral={addGeneral}
+            onGeneralClose={() => setGeneralOpen(false)}
           />
         ) : (
           <CanvasViewer
