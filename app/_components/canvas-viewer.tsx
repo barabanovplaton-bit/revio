@@ -31,6 +31,8 @@ interface CanvasViewerProps {
   showPanel?: boolean;
   /** Точка, которую сейчас ставит клиент (превью на фото) */
   pendingPoint?: { x: number; y: number } | null;
+  /** Страница, на которой ставится pending-точка (чтобы превью не «тикало» по страницам) */
+  pendingImageIndex?: number;
   /** Форма «Опишите правку» (рендерится внизу зоны фото) */
   pointForm?: ReactNode;
   /** Показывать встроенный тумблер «С маячками» (по умолчанию да) */
@@ -67,6 +69,7 @@ export function CanvasViewer({
   onToggleDone,
   showPanel = false,
   pendingPoint = null,
+  pendingImageIndex,
   pointForm,
   showToggle = true,
   markersVisible,
@@ -586,11 +589,11 @@ export function CanvasViewer({
                       setSelectedMarkerId(m.id);
                     }}
                     className={cn(
-                      "flex h-7 min-w-7 items-center justify-center rounded-full border-2 border-white/90 px-1 text-[11px] font-bold shadow-lg transition-transform hover:scale-110",
+                      "flex h-7 min-w-7 items-center justify-center rounded-full border-2 border-black/40 bg-white px-1 text-[11px] font-bold text-black shadow-lg transition-transform",
                       m.done
                         ? "bg-green-500 text-white"
-                        : "bg-text-primary text-bg-page",
-                      selectedMarkerId === m.id && "scale-150 ring-2 ring-white"
+                        : "bg-white text-black",
+                      selectedMarkerId === m.id && "scale-125 ring-2 ring-white"
                     )}
                   >
                     {numberById.get(m.id)}
@@ -598,19 +601,23 @@ export function CanvasViewer({
                 </div>
               ))}
 
-            {/* Превью точки, которую ставит клиент */}
-            {markersShown && pendingPoint && canAdd && !locked && (
-              <div
-                className="pointer-events-none absolute z-20 flex h-7 min-w-7 items-center justify-center rounded-full border-2 border-white bg-text-primary/70 px-1 text-[11px] font-bold text-bg-page"
-                style={{
-                  left: `${pendingPoint.x * 100}%`,
-                  top: `${pendingPoint.y * 100}%`,
-                  transform: "translate(-50%, -50%)",
-                }}
-              >
-                {numberById.size + 1}
-              </div>
-            )}
+            {/* Превью точки, которую ставит клиент (только на своей странице) */}
+            {markersShown &&
+              pendingPoint &&
+              (pendingImageIndex === undefined || pendingImageIndex === currentIndex) &&
+              canAdd &&
+              !locked && (
+                <div
+                  className="pointer-events-none absolute z-20 flex h-7 min-w-7 items-center justify-center rounded-full border-2 border-black/70 bg-white px-1 text-[11px] font-bold text-black shadow-md"
+                  style={{
+                    left: `${pendingPoint.x * 100}%`,
+                    top: `${pendingPoint.y * 100}%`,
+                    transform: "translate(-50%, -50%)",
+                  }}
+                >
+                  {numberById.size + 1}
+                </div>
+              )}
 
             {/* Форма добавления правки (клиент) */}
             {pointForm}

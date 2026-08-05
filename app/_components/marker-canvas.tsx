@@ -51,6 +51,9 @@ export function MarkerCanvas({
   } | null>(null);
   const [pendingImageIndex, setPendingImageIndex] = useState(0);
   const [markerText, setMarkerText] = useState("");
+  // Сохранённый текст для ещё не добавленных точек (ключ = imageIndex:x:y),
+  // чтобы не терялся при закрытии и повторном открытии той же точки.
+  const [pendingTexts, setPendingTexts] = useState<Record<string, string>>({});
   const [isMobile, setIsMobile] = useState(false);
   const [panelOpen, setPanelOpen] = useState(false);
   // Выбранная правка для правой деталь-панели
@@ -97,6 +100,9 @@ export function MarkerCanvas({
   const nextOrder =
     draft.reduce((m, d) => Math.max(m, d.order), 0) + 1;
 
+  const pointKey = (x: number, y: number, imageIndex: number) =>
+    `${imageIndex}:${x.toFixed(3)}:${y.toFixed(3)}`;
+
   const handleAddPoint = (
     x: number,
     y: number,
@@ -105,7 +111,19 @@ export function MarkerCanvas({
     if (isLocked) return;
     setPendingPoint({ x, y });
     setPendingImageIndex(imageIndex);
-    setMarkerText("");
+    setMarkerText(pendingTexts[pointKey(x, y, imageIndex)] || "");
+    setSelectedDraftId(null);
+    setEditing(false);
+  };
+
+  const handleMarkerTextChange = (t: string) => {
+    setMarkerText(t);
+    if (pendingPoint) {
+      setPendingTexts((prev) => ({
+        ...prev,
+        [pointKey(pendingPoint.x, pendingPoint.y, pendingImageIndex)]: t,
+      }));
+    }
   };
 
   const handleAddMarker = () => {
@@ -124,6 +142,12 @@ export function MarkerCanvas({
           order: nextOrder,
         },
       ]);
+      const key = pointKey(pendingPoint.x, pendingPoint.y, pendingImageIndex);
+      setPendingTexts((prev) => {
+        const next = { ...prev };
+        delete next[key];
+        return next;
+      });
       setPendingPoint(null);
       setSelectedDraftId(null);
     } else {
@@ -257,28 +281,18 @@ export function MarkerCanvas({
       >
         <textarea
           value={markerText}
-          onChange={(e) => setMarkerText(e.target.value)}
+          onChange={(e) => handleMarkerTextChange(e.target.value)}
           placeholder="Опишите правку..."
           rows={3}
           autoFocus
           className="w-full resize-none rounded-lg border border-border-strong bg-bg-input px-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:border-text-primary focus:outline-none"
         />
-        <div className="mt-3 flex items-center justify-end gap-2">
-          <button
-            type="button"
-            onClick={() => {
-              setPendingPoint(null);
-              setMarkerText("");
-            }}
-            className="rounded-lg border border-border-strong px-3 py-1.5 text-sm text-text-primary transition-all hover:bg-bg-cardHover"
-          >
-            Отмена
-          </button>
+        <div className="mt-3">
           <button
             type="button"
             onClick={handleAddMarker}
             disabled={!markerText.trim()}
-            className="flex items-center gap-1.5 rounded-lg bg-text-primary px-3 py-1.5 text-sm font-medium text-bg-page transition-all hover:opacity-90 disabled:opacity-50"
+            className="w-full rounded-lg bg-text-primary px-3 py-2 text-sm font-medium text-bg-page transition-all hover:opacity-90 disabled:opacity-50"
           >
             Добавить
           </button>
@@ -461,29 +475,19 @@ export function MarkerCanvas({
           <div className="flex-1 overflow-y-auto p-4">
             <textarea
               value={markerText}
-              onChange={(e) => setMarkerText(e.target.value)}
+              onChange={(e) => handleMarkerTextChange(e.target.value)}
               placeholder="Опишите правку..."
               rows={4}
               autoFocus
               className="w-full resize-none rounded-lg border border-border-strong bg-bg-input px-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:border-text-primary focus:outline-none"
             />
           </div>
-          <div className="flex gap-2 border-t border-border-strong p-3">
-            <button
-              type="button"
-              onClick={() => {
-                setPendingPoint(null);
-                setMarkerText("");
-              }}
-              className="flex-1 rounded-xl border border-border-strong px-3 py-2 text-sm text-text-primary transition-all hover:bg-bg-cardHover"
-            >
-              Отмена
-            </button>
+          <div className="border-t border-border-strong p-3">
             <button
               type="button"
               onClick={handleAddMarker}
               disabled={!markerText.trim()}
-              className="flex-1 rounded-xl bg-text-primary px-3 py-2 text-sm font-medium text-bg-page transition-all hover:opacity-90 disabled:opacity-50"
+              className="w-full rounded-xl bg-text-primary px-3 py-2 text-sm font-medium text-bg-page transition-all hover:opacity-90 disabled:opacity-50"
             >
               Добавить
             </button>
@@ -596,6 +600,7 @@ export function MarkerCanvas({
         onDeleteMarker={isLocked ? undefined : onDeleteMarker}
         canDeleteIds={draftIds}
         pendingPoint={pendingPoint}
+        pendingImageIndex={pendingImageIndex}
         pointForm={pointForm}
         showToggle={false}
         markersVisible={markersVisible}
