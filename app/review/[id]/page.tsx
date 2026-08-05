@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, use, useMemo } from "react";
+import { motion } from "framer-motion";
 import {
   subscribeToProject,
   updateProject,
@@ -15,9 +16,9 @@ import {
   clearDraft,
   notifyDraftChanged,
   newDraftId,
+  clearPendingPoints,
 } from "@/lib/review-draft";
 import { MarkerCanvas } from "@/app/_components/marker-canvas";
-import { CanvasViewer } from "@/app/_components/canvas-viewer";
 import { cn } from "@/lib/utils";
 
 export default function ReviewPage({
@@ -208,18 +209,21 @@ export default function ReviewPage({
     setSending(true);
     setSendError(null);
     try {
-      await createMarkers(
-        items.map((d) => ({
-          projectId: id,
-          round,
-          type: d.type,
-          text: d.text,
-          ...(d.type === "point"
-            ? { x: d.x, y: d.y, imageIndex: d.imageIndex }
-            : {}),
-        }))
-      );
-      await updateProject(id, { clientSubmitted: true });
+      // Параллельно: пакет правок (один writeBatch) + обновление проекта
+      await Promise.all([
+        createMarkers(
+          items.map((d) => ({
+            projectId: id,
+            round,
+            type: d.type,
+            text: d.text,
+            ...(d.type === "point"
+              ? { x: d.x, y: d.y, imageIndex: d.imageIndex }
+              : {}),
+          }))
+        ),
+        updateProject(id, { clientSubmitted: true }),
+      ]);
       try {
         await createNotification({
           ownerUid: project.ownerUid,
@@ -232,6 +236,7 @@ export default function ReviewPage({
         console.error("Failed to send notification:", e);
       }
       clearDraft(id);
+      clearPendingPoints(id);
       setSendConfirmOpen(false);
       setShowDoneModal(true);
     } catch (e) {
@@ -300,56 +305,61 @@ export default function ReviewPage({
             ) : null;
           })()}
         </div>
-        {locked ? (
-          <span className="shrink-0 rounded-xl bg-green-500/15 px-3 py-1.5 text-xs font-medium text-green-400">
-            {submitted ? "Правки отправлены" : "Правки закрыты"}
-          </span>
-        ) : (
-          <div className="flex shrink-0 items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setGeneralOpen((v) => !v)}
-              className={cn(
-                "flex items-center gap-1.5 rounded-xl border px-3 py-2 text-xs font-semibold transition-all",
-                generalOpen
-                  ? "border-text-primary bg-text-primary/15 text-text-primary"
-                  : "border-text-primary/40 bg-text-primary/10 text-text-primary hover:bg-text-primary/20"
-              )}
-            >
-              <svg
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth={2}
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                className="h-4 w-4"
+        <div className="flex shrink-0 items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setMarkersVisible((v) => !v)}
+            className={cn(
+              "shrink-0 rounded-xl border px-3 py-2 text-xs font-medium transition-colors",
+              markersVisible
+                ? "border-border-strong bg-bg-input text-text-primary hover:bg-bg-cardHover"
+                : "border-border-strong bg-bg-card text-text-muted hover:text-text-primary"
+            )}
+          >
+            {markersVisible ? "Без маячков" : "С маячками"}
+          </button>
+          {!locked ? (
+            <>
+              <button
+                type="button"
+                onClick={() => setGeneralOpen((v) => !v)}
+                className={cn(
+                  "flex items-center gap-1.5 rounded-xl border px-3 py-2 text-xs font-semibold transition-all",
+                  generalOpen
+                    ? "border-text-primary bg-text-primary/15 text-text-primary"
+                    : "border-text-primary/40 bg-text-primary/10 text-text-primary hover:bg-text-primary/20"
+                )}
               >
-                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth={2}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  className="h-4 w-4"
+                >
+                  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+                </svg>
+                {generalOpen ? "Закрыть" : "Общий комментарий"}
+              </button>
+              <button
+                type="button"
+                onClick={handleDoneClick}
+                className="rounded-xl bg-text-primary px-4 py-2 text-sm font-medium text-bg-page transition-all hover:opacity-90 active:scale-[0.98]"
+              >
+                Готово
+              </button>
+            </>
+          ) : submitted ? (
+            <span className="flex shrink-0 items-center gap-1.5 rounded-xl bg-green-500/15 px-3 py-1.5 text-xs font-medium text-green-400">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
+                <path d="M20 6 9 17l-5-5" />
               </svg>
-              {generalOpen ? "Закрыть" : "Общий комментарий"}
-            </button>
-            <button
-              type="button"
-              onClick={() => setMarkersVisible((v) => !v)}
-              className={cn(
-                "shrink-0 rounded-xl border px-3 py-2 text-xs font-medium transition-colors",
-                markersVisible
-                  ? "border-border-strong bg-bg-input text-text-primary hover:bg-bg-cardHover"
-                  : "border-border-strong bg-bg-card text-text-muted hover:text-text-primary"
-              )}
-            >
-              {markersVisible ? "Без маячков" : "С маячками"}
-            </button>
-            <button
-              type="button"
-              onClick={handleDoneClick}
-              className="rounded-xl bg-text-primary px-4 py-2 text-sm font-medium text-bg-page transition-all hover:opacity-90 active:scale-[0.98]"
-            >
-              Готово
-            </button>
-          </div>
-        )}
+              Правки отправлены
+            </span>
+          ) : null}
+        </div>
       </header>
 
       <main className="relative flex-1 overflow-hidden">
@@ -369,36 +379,41 @@ export default function ReviewPage({
             onGeneralClose={() => setGeneralOpen(false)}
           />
         ) : (
-          <CanvasViewer
+          <MarkerCanvas
             imageUrls={imagesForRound(viewRound)}
-            markers={markersForRound(viewRound)}
-            readOnly
-            showPanel
-            showToggle={false}
+            projectId={id}
+            round={viewRound}
+            isLocked
             markersVisible={markersVisible}
             onToggleMarkers={() => setMarkersVisible((v) => !v)}
             onImageChange={setViewIndex}
-            showBottomCard={false}
+            sentMarkersOverride={markersForRound(viewRound)}
           />
         )}
 
-        {/* Правки отправлены: блок по центру, фото остаётся видимым */}
-        {submitted && viewRound === round && (
+        {/* Правки отправлены: компактный баннер по центру, фото остаётся видимым */}
+        {showDoneModal && (
           <div className="pointer-events-none absolute inset-0 z-[60] flex items-center justify-center p-4">
-            <div className="max-w-md rounded-2xl border border-white/10 bg-bg-card/90 px-6 py-5 text-center shadow-2xl backdrop-blur-sm">
-              <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-green-500/15">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="h-6 w-6 text-green-400">
+            <motion.div
+              initial={{ opacity: 0, y: 8, scale: 0.95 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 8, scale: 0.95 }}
+              className="flex max-w-md items-center gap-3 rounded-2xl border border-green-500/30 bg-bg-card px-5 py-4 shadow-2xl"
+            >
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-green-500/15">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5 text-green-400">
                   <path d="M20 6 9 17l-5-5" />
                 </svg>
               </div>
-              <h2 className="mb-1 text-lg font-semibold text-text-primary">
-                Правки отправлены
-              </h2>
-              <p className="text-sm leading-relaxed text-text-muted">
-                В этом раунде вы отправили правки и не можете их изменить.
-                Дизайнер скоро пришлёт исправленную версию.
-              </p>
-            </div>
+              <div>
+                <h2 className="text-sm font-semibold text-text-primary">
+                  Правки отправлены
+                </h2>
+                <p className="text-xs leading-relaxed text-text-muted">
+                  Дизайнер скоро пришлёт исправленную версию.
+                </p>
+              </div>
+            </motion.div>
           </div>
         )}
       </main>
@@ -462,30 +477,6 @@ export default function ReviewPage({
             <button
               type="button"
               onClick={() => setEmptyDraftOpen(false)}
-              className="w-full rounded-xl bg-text-primary px-4 py-2.5 text-sm font-medium text-bg-page transition-all hover:opacity-90"
-            >
-              Понятно
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Правки отправлены */}
-      {showDoneModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-sm rounded-2xl border border-border-strong bg-bg-card p-6 shadow-2xl">
-            <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-text-primary/10">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="h-6 w-6 text-text-primary">
-                <path d="M20 6 9 17l-5-5" />
-              </svg>
-            </div>
-            <h2 className="mb-2 text-lg font-semibold text-text-primary">Пакет правок отправлен</h2>
-            <p className="mb-6 text-sm leading-relaxed text-text-muted">
-              Дизайнер получит уведомление и пришлёт исправленную версию.
-            </p>
-            <button
-              type="button"
-              onClick={() => setShowDoneModal(false)}
               className="w-full rounded-xl bg-text-primary px-4 py-2.5 text-sm font-medium text-bg-page transition-all hover:opacity-90"
             >
               Понятно

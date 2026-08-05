@@ -56,6 +56,7 @@ export function ProjectHub({
   const [confirmUpload, setConfirmUpload] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [isDraggingOver, setIsDraggingOver] = useState(false);
+  const dragDepth = useRef(0);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [lastUploadErrors, setLastUploadErrors] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -198,6 +199,18 @@ export function ProjectHub({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Глобальный guard: при драге файла мимо зоны иначе браузер открывает файл.
+  useEffect(() => {
+    const onDragOver = (e: globalThis.DragEvent) => e.preventDefault();
+    const onDrop = (e: globalThis.DragEvent) => e.preventDefault();
+    window.addEventListener("dragover", onDragOver);
+    window.addEventListener("drop", onDrop);
+    return () => {
+      window.removeEventListener("dragover", onDragOver);
+      window.removeEventListener("drop", onDrop);
+    };
+  }, []);
+
   // --- Rename ---
   const startRename = () => {
     setRenameValue(project?.name || "");
@@ -259,13 +272,6 @@ export function ProjectHub({
     setPreviewUrls((prev) => [...prev, ...urls]);
     setUploadError(null);
   };
-
-  const handleDrop = useCallback((e: DragEvent) => {
-    e.preventDefault();
-    setIsDraggingOver(false);
-    handleFiles(e.dataTransfer.files);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [project]);
 
   const removePreview = (index: number) => {
     URL.revokeObjectURL(previewUrls[index]);
@@ -724,9 +730,23 @@ export function ProjectHub({
         {/* ===== EMPTY STATE ===== */}
         {!hasImages && !hasPending && (
           <div
-            onDragOver={(e) => { e.preventDefault(); setIsDraggingOver(true); }}
-            onDragLeave={() => setIsDraggingOver(false)}
-            onDrop={handleDrop}
+            onDragEnter={(e) => {
+              e.preventDefault();
+              dragDepth.current += 1;
+              setIsDraggingOver(true);
+            }}
+            onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = "copy"; }}
+            onDragLeave={(e) => {
+              e.preventDefault();
+              dragDepth.current = Math.max(0, dragDepth.current - 1);
+              if (dragDepth.current === 0) setIsDraggingOver(false);
+            }}
+            onDrop={(e) => {
+              e.preventDefault();
+              dragDepth.current = 0;
+              setIsDraggingOver(false);
+              handleFiles(e.dataTransfer.files);
+            }}
             onClick={() => fileInputRef.current?.click()}
             className={`flex cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed py-24 text-center transition-all ${
               isDraggingOver
@@ -1204,7 +1224,7 @@ export function ProjectHub({
                               : "border border-border-strong text-text-primary hover:bg-bg-cardHover"
                           )}
                         >
-                          {selected.done ? "Сделано ✓" : "Отметить сделанным"}
+                          {selected.done ? "Сделано ✓" : "Сделать сделанным"}
                         </button>
                       </div>
                     </>

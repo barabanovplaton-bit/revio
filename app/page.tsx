@@ -7,7 +7,6 @@ import { BellIcon } from "./_components/bell-icon";
 import { Avatar } from "./_components/avatar";
 import { ConfirmModal } from "./_components/confirm-modal";
 import { NewProjectWizard } from "./_components/new-project-wizard";
-import { OnboardingModal } from "./_components/onboarding-modal";
 import { Landing } from "./_components/landing";
 import { FeedbackButton } from "./_components/feedback-button";
 import { signOut, subscribeToAuth, type User } from "@/lib/auth";
@@ -39,10 +38,8 @@ function App() {
   const [authLoading, setAuthLoading] = useState(true);
   const [showLoading, setShowLoading] = useState(false);
   const [profileLoaded, setProfileLoaded] = useState(false);
-
-  const [projects, setProjects] = useState<Project[]>([]);
+const [projects, setProjects] = useState<Project[]>([]);
   const [newProjectOpen, setNewProjectOpen] = useState(false);
-  const [onboardingNeeded, setOnboardingNeeded] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [notifications, setNotifications] = useState<Notification[]>([]);
@@ -82,18 +79,14 @@ function App() {
         setShowLoading(false);
       }
       if (u) {
-        const { profile: p, isNew } = await import("@/lib/user-profile").then(
+        const { profile: p } = await import("@/lib/user-profile").then(
           (m) => m.getOrCreateUserProfile(u)
         );
         setProfile(p);
         setProfileLoaded(true);
-        if (isNew || (p && !p.onboardingCompleted)) {
-          setOnboardingNeeded(true);
-        }
       } else {
         setProfile(null);
         setProjects([]);
-        setOnboardingNeeded(false);
         setProfileLoaded(true);
       }
     });
@@ -375,24 +368,6 @@ function App() {
           plan={isOwner(user.uid, profile?.email) ? "pro" : profile?.plan || "free"}
           onClose={() => setNewProjectOpen(false)}
           onCreated={handleProjectCreated}
-        />
-      )}
-
-      {onboardingNeeded && user && (
-        <OnboardingModal
-          uid={user.uid}
-          defaultName={
-            profile?.displayName || user.email?.split("@")[0] || ""
-          }
-          email={user.email}
-          photoURL={user.photoURL}
-          onComplete={() => {
-            setOnboardingNeeded(false);
-            setProfile((prev) =>
-              prev ? { ...prev, onboardingCompleted: true } : prev
-            );
-            showToast("Добро пожаловать!");
-          }}
         />
       )}
 

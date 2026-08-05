@@ -33,6 +33,8 @@ export interface Marker {
   done?: boolean;
   /** Текст правки */
   text: string;
+  /** Несохранённая точечная правка клиента (в localStorage, ещё не «Добавить») */
+  pending?: boolean;
   /** Создан в */
   createdAt: Timestamp | null;
 }

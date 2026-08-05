@@ -111,6 +111,9 @@ export function CanvasViewer({
   const draggingRef = useRef(false);
   const suppressClickRef = useRef(false);
   const dragStartRef = useRef({ x: 0, y: 0, posX: 0, posY: 0 });
+  // Флаг: смена страницы произошла из-за выбора маркера (навигация по клику),
+  // а не вручную — тогда не сбрасывать выделение.
+  const navFromMarkerRef = useRef(false);
 
   // Мобилка (грубый курсор / touch)
   useEffect(() => {
@@ -170,7 +173,10 @@ export function CanvasViewer({
   useEffect(() => {
     setScale(1);
     setPosition({ x: 0, y: 0 });
-    setSelectedMarkerId(null);
+    if (!navFromMarkerRef.current) {
+      setSelectedMarkerId(null);
+    }
+    navFromMarkerRef.current = false;
     setImgFailed(false);
   }, [currentIndex]);
 
@@ -321,7 +327,10 @@ export function CanvasViewer({
 
   const goToMarker = (m: Marker) => {
     if (m.imageIndex !== undefined && m.imageIndex < imageUrls.length) {
-      setCurrentIndex(m.imageIndex);
+      if (m.imageIndex !== currentIndex) {
+        navFromMarkerRef.current = true;
+        setCurrentIndex(m.imageIndex);
+      }
     }
     setSelectedMarkerId(m.id);
   };
@@ -330,7 +339,10 @@ export function CanvasViewer({
   useEffect(() => {
     const m = markers.find((x) => x.id === selectedMarkerId);
     if (m && m.imageIndex !== undefined && m.imageIndex < imageUrls.length) {
-      setCurrentIndex(m.imageIndex);
+      if (m.imageIndex !== currentIndex) {
+        navFromMarkerRef.current = true;
+        setCurrentIndex(m.imageIndex);
+      }
       onImageChange?.(m.imageIndex);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -737,7 +749,7 @@ export function CanvasViewer({
                       : "border border-border-strong text-text-primary hover:bg-bg-cardHover"
                   )}
                 >
-                  {selectedMarker.done ? "Сделано ✓" : "Отметить сделанным"}
+                  {selectedMarker.done ? "Сделано ✓" : "Сделать сделанным"}
                 </button>
               )}
               {onDeleteMarker && !locked && canDeleteIds?.has(selectedMarker.id) && (

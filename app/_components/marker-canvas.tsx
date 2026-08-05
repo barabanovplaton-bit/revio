@@ -9,7 +9,10 @@ import {
   loadDraft,
   saveDraft,
   newDraftId,
+  loadPendingPoints,
+  savePendingPoints,
   type ReviewDraftItem,
+  type PendingPoint,
 } from "@/lib/review-draft";
 import { cn } from "@/lib/utils";
 
@@ -27,6 +30,8 @@ interface MarkerCanvasProps {
   onGeneralTextChange?: (t: string) => void;
   onAddGeneral?: () => void;
   onGeneralClose?: () => void;
+  /** Переопределить отправленные маркеры (для просмотра старых раундов) */
+  sentMarkersOverride?: Marker[];
 }
 
 export function MarkerCanvas({
@@ -42,18 +47,16 @@ export function MarkerCanvas({
   onGeneralTextChange,
   onAddGeneral,
   onGeneralClose,
+  sentMarkersOverride,
 }: MarkerCanvasProps) {
   const [sentMarkers, setSentMarkers] = useState<Marker[]>([]);
   const [draft, setDraft] = useState<ReviewDraftItem[]>([]);
-  const [pendingPoint, setPendingPoint] = useState<{
-    x: number;
-    y: number;
-  } | null>(null);
-  const [pendingImageIndex, setPendingImageIndex] = useState(0);
   const [markerText, setMarkerText] = useState("");
-  // Сохранённый текст для ещё не добавленных точек (ключ = imageIndex:x:y),
-  // чтобы не терялся при закрытии и повторном открытии той же точки.
-  const [pendingTexts, setPendingTexts] = useState<Record<string, string>>({});
+  // Несохранённые точечные правки: поставлены, но не «Добавить». Хранятся в
+  // localStorage и рисуются на фото, чтобы текст не терялся при закрытии.
+  const [pendingPoints, setPendingPoints] = useState<PendingPoint[]>([]);
+  // id точки, которую сейчас редактируем (в правой панели)
+  const [activePendingId, setActivePendingId] = useState<string | null>(null);
   const [isMobile, setIsMobile] = useState(false);
   const [panelOpen, setPanelOpen] = useState(false);
   // Выбранная правка для правой деталь-панели
@@ -75,11 +78,15 @@ export function MarkerCanvas({
   }, []);
 
   useEffect(() => {
+    if (sentMarkersOverride) {
+      setSentMarkers(sentMarkersOverride);
+      return;
+    }
     const unsub = subscribeToProjectMarkers(projectId, round, (m) => {
       setSentMarkers(m);
     });
     return () => unsub();
-  }, [projectId, round]);
+  }, [projectId, round, sentMarkersOverride]);
 
   // Черновик из localStorage + обновление извне (общий комментарий из шапки)
   useEffect(() => {
@@ -87,6 +94,14 @@ export function MarkerCanvas({
     const onDraft = () => setDraft(loadDraft(projectId));
     window.addEventListener("revio:draft-changed", onDraft);
     return () => window.removeEventListener("revio:draft-changed", onDraft);
+  }, [projectId]);
+
+  // Несохранённые точки из localStorage
+  useEffect(() => {
+    setPendingPoints(loadPendingPoints(projectId));
+    const onPending = () => setPendingPoints(loadPendingPoints(projectId));
+    window.addEventListener("revio:pending-changed", onPending);
+    return () => window.removeEventListener("revio:pending-changed", onPending);
   }, [projectId]);
 
   const persist = useCallback(
@@ -100,8 +115,16 @@ export function MarkerCanvas({
   const nextOrder =
     draft.reduce((m, d) => Math.max(m, d.order), 0) + 1;
 
+  // Ключ точки (округлённые координаты), чтобы находить «ту же точку» при повторном клике
   const pointKey = (x: number, y: number, imageIndex: number) =>
     `${imageIndex}:${Math.round(x * 100)}:${Math.round(y * 100)}`;
+
+  const activePending = pendingPoints.find((p) => p.id === activePendingId) || null;
+
+  const setPending = (next: PendingPoint[]) => {
+    setPendingPoints(next);
+    savePendingPoints(projectId, next);
+  };
 
   const handleAddPoint = (
     x: number,
@@ -109,46 +132,70 @@ export function MarkerCanvas({
     imageIndex: number
   ) => {
     if (isLocked) return;
-    setPendingPoint({ x, y });
-    setPendingImageIndex(imageIndex);
-    setMarkerText(pendingTexts[pointKey(x, y, imageIndex)] || "");
+    // Если в этом месте уже есть несохранённая точка — открываем её (с текстом)
+    const existing = pendingPoints.find(
+      (p) =>
+        p.imageIndex === imageIndex &&
+        pointKey(p.x, p.y, p.imageIndex) === pointKey(x, y, imageIndex)
+    );
+    if (existing) {
+      setActivePendingId(existing.id);
+      setMarkerText(existing.text);
+      setSelectedDraftId(null);
+      setEditing(false);
+      return;
+    }
+    // Иначе создаём новую несохранённую точку
+    const pp: PendingPoint = {
+      id: newDraftId(),
+      x,
+      y,
+      imageIndex,
+      text: "",
+      order: nextOrder + pendingPoints.length,
+    };
+    setPending([...pendingPoints, pp]);
+    setActivePendingId(pp.id);
+    setMarkerText("");
     setSelectedDraftId(null);
     setEditing(false);
   };
 
   const handleMarkerTextChange = (t: string) => {
     setMarkerText(t);
-    if (pendingPoint) {
-      setPendingTexts((prev) => ({
-        ...prev,
-        [pointKey(pendingPoint.x, pendingPoint.y, pendingImageIndex)]: t,
-      }));
+    if (activePending) {
+      setPending(
+        pendingPoints.map((p) =>
+          p.id === activePending.id ? { ...p, text: t } : p
+        )
+      );
     }
+  };
+
+  // «Закрыть» форму — точка остаётся на фото с текстом
+  const closePending = () => {
+    setActivePendingId(null);
+    setMarkerText("");
   };
 
   const handleAddMarker = () => {
     const text = markerText.trim();
     if (!text) return;
-    if (pendingPoint) {
+    if (activePending) {
       persist([
         ...draft,
         {
           id: newDraftId(),
           type: "point",
-          x: pendingPoint.x,
-          y: pendingPoint.y,
-          imageIndex: pendingImageIndex,
+          x: activePending.x,
+          y: activePending.y,
+          imageIndex: activePending.imageIndex,
           text,
           order: nextOrder,
         },
       ]);
-      const key = pointKey(pendingPoint.x, pendingPoint.y, pendingImageIndex);
-      setPendingTexts((prev) => {
-        const next = { ...prev };
-        delete next[key];
-        return next;
-      });
-      setPendingPoint(null);
+      setPending(pendingPoints.filter((p) => p.id !== activePending.id));
+      setActivePendingId(null);
       setSelectedDraftId(null);
     } else {
       persist([
@@ -159,13 +206,21 @@ export function MarkerCanvas({
     setMarkerText("");
   };
 
+  const handleDeletePending = (id: string) => {
+    setPending(pendingPoints.filter((p) => p.id !== id));
+    if (activePendingId === id) {
+      setActivePendingId(null);
+      setMarkerText("");
+    }
+  };
+
   const handleDeleteDraft = (id: string) => {
     persist(draft.filter((d) => d.id !== id));
     if (selectedDraftId === id) {
       setSelectedDraftId(null);
       setEditing(false);
     }
-    if (pendingPoint) setPendingPoint(null);
+    if (activePendingId) setActivePendingId(null);
   };
 
   const draftDeleteNumber = (d: ReviewDraftItem): number | null => {
@@ -229,7 +284,7 @@ export function MarkerCanvas({
     setEditing(false);
   };
 
-  // Объединяем отправленные правки и черновик для отрисовки на фото
+  // Объединяем отправленные правки, черновик и несохранённые точки для отрисовки на фото
   const markers: Marker[] = useMemo(() => {
     const sentMax = sentMarkers.reduce(
       (m, x) => Math.max(m, x.createdAt?.toMillis() || 0),
@@ -248,15 +303,29 @@ export function MarkerCanvas({
         toMillis: () => sentMax + 1 + d.order,
       } as Marker["createdAt"],
     }));
-    return [...sentMarkers, ...drafts];
-  }, [sentMarkers, draft, projectId, round]);
+    const pendings: Marker[] = pendingPoints.map((p) => ({
+      id: p.id,
+      projectId,
+      round,
+      type: "point",
+      x: p.x,
+      y: p.y,
+      imageIndex: p.imageIndex,
+      text: p.text,
+      pending: true,
+      createdAt: {
+        toMillis: () => sentMax + 2 + p.order,
+      } as Marker["createdAt"],
+    }));
+    return [...sentMarkers, ...drafts, ...pendings];
+  }, [sentMarkers, draft, pendingPoints, projectId, round]);
 
   const draftIds = useMemo(() => new Set(draft.map((d) => d.id)), [draft]);
 
   // На десктопе форма живёт в правой панели; на мобиле — старая, у точки
-  const pointForm = isMobile && pendingPoint ? (() => {
-    const alignX = pendingPoint.x >= 0.5 ? "left" : "right";
-    const alignY = pendingPoint.y >= 0.5 ? "top" : "bottom";
+  const pointForm = isMobile && activePending ? (() => {
+    const alignX = activePending.x >= 0.5 ? "left" : "right";
+    const alignY = activePending.y >= 0.5 ? "top" : "bottom";
     const posStyle: CSSProperties =
       alignY === "top"
         ? { top: 16, bottom: undefined }
@@ -438,13 +507,6 @@ export function MarkerCanvas({
           <div className="flex gap-2 border-t border-border-strong p-3">
             <button
               type="button"
-              onClick={() => onGeneralClose?.()}
-              className="flex-1 rounded-xl border border-border-strong px-3 py-2 text-sm text-text-primary transition-all hover:bg-bg-cardHover"
-            >
-              Отмена
-            </button>
-            <button
-              type="button"
               onClick={() => onAddGeneral?.()}
               disabled={!generalText.trim()}
               className="flex-1 rounded-xl bg-text-primary px-3 py-2 text-sm font-medium text-bg-page transition-all hover:opacity-90 disabled:opacity-50"
@@ -453,7 +515,7 @@ export function MarkerCanvas({
             </button>
           </div>
         </>
-      ) : pendingPoint ? (
+      ) : activePending ? (
         <>
           <div className="flex items-center justify-between border-b border-border-strong px-4 py-3">
             <p className="text-sm font-medium text-text-primary">
@@ -461,10 +523,7 @@ export function MarkerCanvas({
             </p>
             <button
               type="button"
-              onClick={() => {
-                setPendingPoint(null);
-                setMarkerText("");
-              }}
+              onClick={closePending}
               className="rounded-lg p-1 text-text-muted transition-colors hover:bg-bg-cardHover hover:text-text-primary"
             >
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" className="h-4 w-4">
@@ -482,12 +541,19 @@ export function MarkerCanvas({
               className="w-full resize-none rounded-lg border border-border-strong bg-bg-input px-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:border-text-primary focus:outline-none"
             />
           </div>
-          <div className="border-t border-border-strong p-3">
+          <div className="flex gap-2 border-t border-border-strong p-3">
+            <button
+              type="button"
+              onClick={() => handleDeletePending(activePending.id)}
+              className="rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-400 transition-all hover:bg-red-500/20"
+            >
+              Удалить
+            </button>
             <button
               type="button"
               onClick={handleAddMarker}
               disabled={!markerText.trim()}
-              className="w-full rounded-xl bg-text-primary px-3 py-2 text-sm font-medium text-bg-page transition-all hover:opacity-90 disabled:opacity-50"
+              className="flex-1 rounded-xl bg-text-primary px-3 py-2 text-sm font-medium text-bg-page transition-all hover:opacity-90 disabled:opacity-50"
             >
               Добавить
             </button>
@@ -599,16 +665,22 @@ export function MarkerCanvas({
         onAddPoint={handleAddPoint}
         onDeleteMarker={isLocked ? undefined : onDeleteMarker}
         canDeleteIds={draftIds}
-        pendingPoint={pendingPoint}
-        pendingImageIndex={pendingImageIndex}
         pointForm={pointForm}
         showToggle={false}
         markersVisible={markersVisible}
         onToggleMarkers={onToggleMarkers}
         onImageChange={onImageChange}
-        selectedId={selectedDraftId}
+        selectedId={activePendingId ?? selectedDraftId}
         onSelectMarker={(id) => {
-          setSelectedDraftId(id);
+          if (id && pendingPoints.some((p) => p.id === id)) {
+            const pp = pendingPoints.find((p) => p.id === id);
+            setActivePendingId(id);
+            setMarkerText(pp?.text || "");
+            setSelectedDraftId(null);
+          } else {
+            setActivePendingId(null);
+            setSelectedDraftId(id);
+          }
           setEditing(false);
         }}
         showBottomCard={false}
