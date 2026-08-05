@@ -589,11 +589,11 @@ export function CanvasViewer({
                       setSelectedMarkerId(m.id);
                     }}
                     className={cn(
-                      "flex h-7 min-w-7 items-center justify-center rounded-full border-2 border-black/40 bg-white px-1 text-[11px] font-bold text-black shadow-lg transition-transform",
+                      "flex h-6 min-w-6 items-center justify-center rounded-full border-2 border-black bg-white px-1 text-[10px] font-bold text-black shadow-md transition-transform",
                       m.done
                         ? "bg-green-500 text-white"
                         : "bg-white text-black",
-                      selectedMarkerId === m.id && "scale-125 ring-2 ring-white"
+                      selectedMarkerId === m.id && "scale-110 ring-2 ring-white"
                     )}
                   >
                     {numberById.get(m.id)}

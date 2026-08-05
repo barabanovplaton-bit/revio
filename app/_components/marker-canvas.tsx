@@ -101,7 +101,7 @@ export function MarkerCanvas({
     draft.reduce((m, d) => Math.max(m, d.order), 0) + 1;
 
   const pointKey = (x: number, y: number, imageIndex: number) =>
-    `${imageIndex}:${x.toFixed(3)}:${y.toFixed(3)}`;
+    `${imageIndex}:${Math.round(x * 100)}:${Math.round(y * 100)}`;
 
   const handleAddPoint = (
     x: number,
