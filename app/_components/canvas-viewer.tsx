@@ -45,9 +45,6 @@ interface CanvasViewerProps {
   onSelectMarker?: (id: string | null) => void;
   /** Скрыть нижнюю карточку выбранного маркера (клиент использует свою панель) */
   showBottomCard?: boolean;
-  /** Затемнить всё вокруг зоны фото (режим «Точечный комментарий») */
-  dimAroundZone?: boolean;
-  onDimClick?: () => void;
   className?: string;
 }
 
@@ -78,8 +75,6 @@ export function CanvasViewer({
   selectedId,
   onSelectMarker,
   showBottomCard = true,
-  dimAroundZone = false,
-  onDimClick,
   className,
 }: CanvasViewerProps) {
   const [currentIndex, setCurrentIndex] = useState(initialIndex);
@@ -477,22 +472,11 @@ export function CanvasViewer({
 
   return (
     <div className={cn("relative flex h-full w-full overflow-hidden", className)}>
-      {/* Затемнение всего экрана (режим «Точечный комментарий»): всё затемнено, фото яркое */}
-      {dimAroundZone && (
-        <div
-          className="fixed inset-0 z-[70] bg-black/70"
-          onClick={onDimClick}
-        />
-      )}
-
       {showPanel && !mobile && panel}
 
       {/* Зона фото */}
       <div
-        className={cn(
-          "relative flex-1 overflow-hidden bg-bg-page",
-          dimAroundZone && "z-[80]"
-        )}
+        className="relative flex-1 overflow-hidden bg-bg-page"
         ref={zoneRef}
         onWheel={handleWheel}
       >

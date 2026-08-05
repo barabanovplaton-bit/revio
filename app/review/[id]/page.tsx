@@ -39,8 +39,6 @@ export default function ReviewPage({
   const [sendError, setSendError] = useState<string | null>(null);
   const [generalOpen, setGeneralOpen] = useState(false);
   const [generalText, setGeneralText] = useState("");
-  const [pointMode, setPointMode] = useState(false);
-
   // Черновик общего комментария не пропадает при случайном закрытии
   useEffect(() => {
     if (!generalOpen) return;
@@ -60,10 +58,6 @@ export default function ReviewPage({
       /* ignore */
     }
   }, [generalOpen, generalText, id]);
-
-  useEffect(() => {
-    setPointMode(false);
-  }, [project?.clientSubmitted, project?.status]);
 
   useEffect(() => {
     let cancelled = false;
@@ -314,10 +308,7 @@ export default function ReviewPage({
           <div className="flex shrink-0 items-center gap-2">
             <button
               type="button"
-              onClick={() => {
-                setPointMode(false);
-                setGeneralOpen((v) => !v);
-              }}
+              onClick={() => setGeneralOpen((v) => !v)}
               className={cn(
                 "flex items-center gap-1.5 rounded-xl border px-3 py-2 text-xs font-semibold transition-all",
                 generalOpen
@@ -337,35 +328,6 @@ export default function ReviewPage({
                 <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
               </svg>
               {generalOpen ? "Закрыть" : "Общий комментарий"}
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setGeneralOpen(false);
-                setPointMode((v) => !v);
-              }}
-              className={cn(
-                "flex shrink-0 items-center gap-1.5 rounded-xl border px-3 py-2 text-xs font-semibold transition-all",
-                pointMode
-                  ? "relative z-[80] border-red-500 bg-red-500 text-white hover:bg-red-600"
-                  : "border-text-primary/40 bg-text-primary/10 text-text-primary hover:bg-text-primary/20"
-              )}
-            >
-              {pointMode ? (
-                <>
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" className="h-4 w-4">
-                    <path d="M18 6 6 18M6 6l12 12" />
-                  </svg>
-                  Отмена
-                </>
-              ) : (
-                <>
-                  <svg viewBox="0 0 24 24" fill="currentColor" className="h-4 w-4">
-                    <circle cx="12" cy="12" r="6" />
-                  </svg>
-                  Точечный комментарий
-                </>
-              )}
             </button>
             <button
               type="button"
@@ -400,8 +362,6 @@ export default function ReviewPage({
             markersVisible={markersVisible}
             onToggleMarkers={() => setMarkersVisible((v) => !v)}
             onImageChange={setViewIndex}
-            pointMode={pointMode}
-            onTogglePointMode={() => setPointMode((v) => !v)}
             generalOpen={generalOpen}
             generalText={generalText}
             onGeneralTextChange={setGeneralText}

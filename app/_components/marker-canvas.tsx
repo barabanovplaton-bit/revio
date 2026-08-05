@@ -21,9 +21,6 @@ interface MarkerCanvasProps {
   markersVisible?: boolean;
   onToggleMarkers?: () => void;
   onImageChange?: (index: number) => void;
-  /** Режим «Точечный комментарий» (затемнение вокруг фото) */
-  pointMode?: boolean;
-  onTogglePointMode?: () => void;
   /** Общий комментарий (управляется с review-страницы) */
   generalOpen?: boolean;
   generalText?: string;
@@ -40,8 +37,6 @@ export function MarkerCanvas({
   markersVisible,
   onToggleMarkers,
   onImageChange,
-  pointMode = false,
-  onTogglePointMode,
   generalOpen = false,
   generalText = "",
   onGeneralTextChange,
@@ -455,7 +450,6 @@ export function MarkerCanvas({
               onClick={() => {
                 setPendingPoint(null);
                 setMarkerText("");
-                if (pointMode) onTogglePointMode?.();
               }}
               className="rounded-lg p-1 text-text-muted transition-colors hover:bg-bg-cardHover hover:text-text-primary"
             >
@@ -480,7 +474,6 @@ export function MarkerCanvas({
               onClick={() => {
                 setPendingPoint(null);
                 setMarkerText("");
-                onTogglePointMode?.();
               }}
               className="flex-1 rounded-xl border border-border-strong px-3 py-2 text-sm text-text-primary transition-all hover:bg-bg-cardHover"
             >
@@ -614,14 +607,6 @@ export function MarkerCanvas({
           setEditing(false);
         }}
         showBottomCard={false}
-        dimAroundZone={pointMode && !isMobile}
-        onDimClick={() => {
-          setPendingPoint(null);
-          setMarkerText("");
-          setSelectedDraftId(null);
-          setEditing(false);
-          onTogglePointMode?.();
-        }}
       />
     </div>
   );
