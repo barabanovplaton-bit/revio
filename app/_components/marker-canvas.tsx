@@ -145,7 +145,8 @@ export function MarkerCanvas({
       setEditing(false);
       return;
     }
-    // Иначе создаём новую несохранённую точку
+    // В один момент есть только ОДНА несохранённая точка: клик в новое место
+    // сбрасывает предыдущую (нескончаемые точки больше не копятся).
     const pp: PendingPoint = {
       id: newDraftId(),
       x,
@@ -154,7 +155,7 @@ export function MarkerCanvas({
       text: "",
       order: nextOrder + pendingPoints.length,
     };
-    setPending([...pendingPoints, pp]);
+    setPending([pp]);
     setActivePendingId(pp.id);
     setMarkerText("");
     setSelectedDraftId(null);
