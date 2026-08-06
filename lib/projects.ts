@@ -284,7 +284,6 @@ export async function startNewRound(
     imageUrls: newImageUrls,
     packageHistory: history,
     currentRound: current + 1,
-    roundsLeft: Math.max(0, (project.roundsLeft ?? 0) - 1),
     isLocked: false,
     clientSubmitted: false,
     status: "in_progress",

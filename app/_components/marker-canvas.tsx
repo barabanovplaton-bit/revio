@@ -104,6 +104,13 @@ export function MarkerCanvas({
     return () => window.removeEventListener("revio:pending-changed", onPending);
   }, [projectId]);
 
+  // При открытии общего комментария снимаем выделение активной точки
+  useEffect(() => {
+    if (generalOpen) {
+      setActivePendingId(null);
+    }
+  }, [generalOpen]);
+
   const persist = useCallback(
     (next: ReviewDraftItem[]) => {
       setDraft(next);
@@ -145,17 +152,18 @@ export function MarkerCanvas({
       setEditing(false);
       return;
     }
-    // В один момент есть только ОДНА несохранённая точка: клик в новое место
-    // сбрасывает предыдущую (нескончаемые точки больше не копятся).
+    // Сбрасываем несохранённые точки БЕЗ текста (чтобы не копились пустые),
+    // но точки, где юзер уже начал писать, сохраняем в черновик (текст не теряется).
+    const kept = pendingPoints.filter((p) => p.id === activePendingId ? false : (p.text || "").trim().length > 0);
     const pp: PendingPoint = {
       id: newDraftId(),
       x,
       y,
       imageIndex,
       text: "",
-      order: nextOrder + pendingPoints.length,
+      order: nextOrder + kept.length,
     };
-    setPending([pp]);
+    setPending([...kept, pp]);
     setActivePendingId(pp.id);
     setMarkerText("");
     setSelectedDraftId(null);
@@ -542,19 +550,12 @@ export function MarkerCanvas({
               className="w-full resize-none rounded-lg border border-border-strong bg-bg-input px-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:border-text-primary focus:outline-none"
             />
           </div>
-          <div className="flex gap-2 border-t border-border-strong p-3">
-            <button
-              type="button"
-              onClick={() => handleDeletePending(activePending.id)}
-              className="rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-400 transition-all hover:bg-red-500/20"
-            >
-              Удалить
-            </button>
+          <div className="flex border-t border-border-strong p-3">
             <button
               type="button"
               onClick={handleAddMarker}
               disabled={!markerText.trim()}
-              className="flex-1 rounded-xl bg-text-primary px-3 py-2 text-sm font-medium text-bg-page transition-all hover:opacity-90 disabled:opacity-50"
+              className="w-full rounded-xl bg-text-primary px-3 py-2 text-sm font-medium text-bg-page transition-all hover:opacity-90 disabled:opacity-50"
             >
               Добавить
             </button>

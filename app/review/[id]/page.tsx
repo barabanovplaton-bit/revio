@@ -222,7 +222,7 @@ export default function ReviewPage({
               : {}),
           }))
         ),
-        updateProject(id, { clientSubmitted: true }),
+        updateProject(id, { clientSubmitted: true, roundsLeft: Math.max(0, (project.roundsLeft ?? 1) - 1) }),
       ]);
       try {
         await createNotification({
@@ -296,14 +296,6 @@ export default function ReviewPage({
           ) : (
             <p className="text-xs font-medium text-text-muted">Раунд {round}</p>
           )}
-          {(() => {
-            const n = imagesForRound(viewRound).length;
-            return n > 1 ? (
-              <span className="inline-flex shrink-0 items-center rounded-lg border border-border-strong bg-bg-input px-2.5 py-1 text-xs font-medium text-text-primary">
-                {Math.min(viewIndex + 1, n)} / {n}
-              </span>
-            ) : null;
-          })()}
         </div>
         <div className="flex shrink-0 items-center gap-2">
           <button
@@ -346,7 +338,8 @@ export default function ReviewPage({
               <button
                 type="button"
                 onClick={handleDoneClick}
-                className="rounded-xl bg-text-primary px-4 py-2 text-sm font-medium text-bg-page transition-all hover:opacity-90 active:scale-[0.98]"
+                disabled={draftCount === 0}
+                className="rounded-xl bg-text-primary px-4 py-2 text-sm font-medium text-bg-page transition-all hover:opacity-90 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
               >
                 Готово
               </button>

@@ -293,34 +293,27 @@ export function ProjectHub({
 
   const isDragging = dragIndex !== null && !isTouch;
 
-  // Вставка «перед элементом index» ничего не меняет в двух случаях:
-  // на месте самой карточки (index === dragIndex) и сразу после неё (index === dragIndex + 1).
-  const isDropAllowed = (index: number, dragIdx: number | null) =>
-    dragIdx !== null && index !== dragIdx && index !== dragIdx + 1;
-
-  // Drop на позицию «перед элементом index» (index === len — в конец списка)
-  const handleDropAt = (index: number) => (e: DragEvent) => {
-    e.preventDefault();
-    const dragIdx = dragIndex;
-    if (dragIdx !== null && isDropAllowed(index, dragIdx)) {
-      const to = index > dragIdx ? index - 1 : index;
-      movePreview(dragIdx, to);
-    }
-    setDragIndex(null);
-    setDragOverIndex(null);
-  };
-
-  const handleDragOverAt = (index: number) => (e: DragEvent) => {
-    const dragIdx = dragIndex;
-    if (dragIdx === null) return;
-    if (!isDropAllowed(index, dragIdx)) {
-      // Запрещённая зона: без preventDefault браузер покажет курсор-запрет
-      setDragOverIndex(null);
-      return;
-    }
+  // Каждая карточка делится на две drop-зоны: верхняя «вставить перед этой»,
+  // нижняя «вставить после этой». Где бы ты ни взялся, позиция вставки зависит
+  // только от той половины, над которой сейчас курсор. dragOverIndex — это
+  // позиция вставки (0..len, len = в самый конец). Всегда разрешаем и рисуем
+  // линию, чтобы браузер не показывал «курсор-запрет».
+  const handleDragOverAt = (position: number) => (e: DragEvent) => {
     e.preventDefault();
     e.dataTransfer.dropEffect = "move";
-    setDragOverIndex(index);
+    setDragOverIndex(position);
+  };
+
+  const handleDropAt = (position: number) => (e: DragEvent) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    const dragIdx = dragIndex;
+    setDragOverIndex(null);
+    if (dragIdx === null) return;
+    // «Перед собой» и «сразу после себя» не меняют порядок — пропускаем.
+    if (position === dragIdx || position === dragIdx + 1) return;
+    const to = position > dragIdx ? position - 1 : position;
+    movePreview(dragIdx, to);
   };
 
   const ghostRef = useRef<HTMLDivElement | null>(null);
@@ -664,7 +657,37 @@ export function ProjectHub({
 
   // === MAIN VIEW ===
   return (
-    <div className="flex min-h-screen flex-col bg-bg-page">
+    <div
+      className="relative flex min-h-screen flex-col bg-bg-page"
+      onDragEnter={(e) => {
+        if (e.dataTransfer.types.includes("Files")) {
+          e.preventDefault();
+          dragDepth.current += 1;
+          setIsDraggingOver(true);
+        }
+      }}
+      onDragOver={(e) => {
+        if (e.dataTransfer.types.includes("Files")) {
+          e.preventDefault();
+          e.dataTransfer.dropEffect = "copy";
+        }
+      }}
+      onDragLeave={(e) => {
+        if (e.dataTransfer.types.includes("Files")) {
+          e.preventDefault();
+          dragDepth.current = Math.max(0, dragDepth.current - 1);
+          if (dragDepth.current === 0) setIsDraggingOver(false);
+        }
+      }}
+      onDrop={(e) => {
+        if (e.dataTransfer.types.includes("Files")) {
+          e.preventDefault();
+          dragDepth.current = 0;
+          setIsDraggingOver(false);
+          handleFiles(e.dataTransfer.files);
+        }
+      }}
+    >
       {/* Header */}
       <div className="sticky top-0 z-20 px-4 pt-3 md:px-6">
         <header className="mx-auto flex max-w-3xl items-center gap-3 rounded-2xl border border-border-strong bg-bg-card px-4 py-3 shadow-lg">
@@ -730,23 +753,6 @@ export function ProjectHub({
         {/* ===== EMPTY STATE ===== */}
         {!hasImages && !hasPending && (
           <div
-            onDragEnter={(e) => {
-              e.preventDefault();
-              dragDepth.current += 1;
-              setIsDraggingOver(true);
-            }}
-            onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = "copy"; }}
-            onDragLeave={(e) => {
-              e.preventDefault();
-              dragDepth.current = Math.max(0, dragDepth.current - 1);
-              if (dragDepth.current === 0) setIsDraggingOver(false);
-            }}
-            onDrop={(e) => {
-              e.preventDefault();
-              dragDepth.current = 0;
-              setIsDraggingOver(false);
-              handleFiles(e.dataTransfer.files);
-            }}
             onClick={() => fileInputRef.current?.click()}
             className={`flex cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed py-24 text-center transition-all ${
               isDraggingOver
@@ -795,61 +801,88 @@ export function ProjectHub({
                       onDrop={handleDropAt(index)}
                     />
                   )}
-                  <div
-                    draggable={!isTouch}
-                    onDragStart={(e) => {
-                      e.dataTransfer.effectAllowed = "move";
-                      e.dataTransfer.setData("text/plain", String(index));
-                      const ghost = createDragGhost(e.currentTarget);
-                      e.dataTransfer.setDragImage(ghost, 32, 16);
-                      setDragIndex(index);
-                      setDragOverIndex(null);
-                    }}
-                    onDragOver={handleDragOverAt(index)}
-                    onDrop={handleDropAt(index)}
-                    onDragEnd={() => {
-                      setDragIndex(null);
-                      setDragOverIndex(null);
-                      clearDragGhost();
-                    }}
-                    className={`group flex items-center gap-3 rounded-xl border bg-bg-card p-2 transition-all cursor-grab active:cursor-grabbing ${
-                      dragIndex === index
-                        ? "opacity-10"
-                        : dragOverIndex === index && dragIndex !== null
-                          ? "border-text-primary/40"
-                          : "border-border-strong hover:border-text-primary/30"
-                    }`}
-                  >
-                    {!isTouch && (
-                      <svg viewBox="0 0 24 24" fill="currentColor" className="h-4 w-4 shrink-0 text-text-muted">
-                        <circle cx="9" cy="6" r="1.5" /><circle cx="15" cy="6" r="1.5" />
-                        <circle cx="9" cy="12" r="1.5" /><circle cx="15" cy="12" r="1.5" />
-                        <circle cx="9" cy="18" r="1.5" /><circle cx="15" cy="18" r="1.5" />
-                      </svg>
+                  {/* Каждая карточка делится на две drop-зоны (верх/низ) */}
+                  <div className="relative">
+                    {isDragging && (
+                      <>
+                        {/* Верхняя зона: вставить перед этой карточкой */}
+                        <div
+                          onDragOver={handleDragOverAt(index)}
+                          onDrop={handleDropAt(index)}
+                          className={cn(
+                            "absolute inset-x-0 top-0 z-20 h-1/2",
+                            dragOverIndex === index
+                              ? "rounded-t-xl bg-text-primary/5"
+                              : "pointer-events-none"
+                          )}
+                        />
+                        {/* Нижняя зона: вставить после этой карточки (перед следующей) */}
+                        <div
+                          onDragOver={handleDragOverAt(index + 1)}
+                          onDrop={handleDropAt(index + 1)}
+                          className={cn(
+                            "absolute inset-x-0 bottom-0 z-20 h-1/2",
+                            dragOverIndex === index + 1
+                              ? "rounded-b-xl bg-text-primary/5"
+                              : "pointer-events-none"
+                          )}
+                        />
+                      </>
                     )}
-                    <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-text-primary text-sm font-bold text-bg-page">
-                      {index + 1}
-                    </div>
-                    <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-lg border border-border-strong bg-bg-input">
-                      <img src={url} alt="" className="h-full w-full object-cover" />
-                    </div>
-                    <div className="flex flex-1 items-center justify-end gap-1">
-                      {isTouch && (
-                        <>
-                          <button onClick={(e) => { e.stopPropagation(); movePreview(index, index - 1); }} disabled={index === 0} className="flex h-8 w-8 items-center justify-center rounded-lg text-text-muted hover:bg-bg-cardHover hover:text-text-primary disabled:opacity-20">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-4 w-4"><path d="m18 15-6-6-6 6"/></svg>
-                          </button>
-                          <button onClick={(e) => { e.stopPropagation(); movePreview(index, index + 1); }} disabled={index === pendingFiles.length - 1} className="flex h-8 w-8 items-center justify-center rounded-lg text-text-muted hover:bg-bg-cardHover hover:text-text-primary disabled:opacity-20">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-4 w-4"><path d="m6 9 6 6 6-6"/></svg>
-                          </button>
-                        </>
+                    <div
+                      draggable={!isTouch}
+                      onDragStart={(e) => {
+                        e.dataTransfer.effectAllowed = "move";
+                        e.dataTransfer.setData("text/plain", String(index));
+                        const ghost = createDragGhost(e.currentTarget);
+                        e.dataTransfer.setDragImage(ghost, 32, 16);
+                        setDragIndex(index);
+                        setDragOverIndex(null);
+                      }}
+                      onDragEnd={() => {
+                        setDragIndex(null);
+                        setDragOverIndex(null);
+                        clearDragGhost();
+                      }}
+                      className={`group flex items-center gap-3 rounded-xl border bg-bg-card p-2 transition-all cursor-grab active:cursor-grabbing ${
+                        dragIndex === index
+                          ? "opacity-10"
+                          : dragOverIndex === index || dragOverIndex === index + 1
+                            ? "border-text-primary/40"
+                            : "border-border-strong hover:border-text-primary/30"
+                      }`}
+                    >
+                      {!isTouch && (
+                        <svg viewBox="0 0 24 24" fill="currentColor" className="h-4 w-4 shrink-0 text-text-muted">
+                          <circle cx="9" cy="6" r="1.5" /><circle cx="15" cy="6" r="1.5" />
+                          <circle cx="9" cy="12" r="1.5" /><circle cx="15" cy="12" r="1.5" />
+                          <circle cx="9" cy="18" r="1.5" /><circle cx="15" cy="18" r="1.5" />
+                        </svg>
                       )}
-                      <button onClick={(e) => { e.stopPropagation(); setFullscreenIndex(index); }} className="flex h-8 w-8 items-center justify-center rounded-lg text-text-muted hover:bg-bg-cardHover hover:text-text-primary">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-4 w-4"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>
-                      </button>
-                      <button onClick={(e) => { e.stopPropagation(); removePreview(index); }} className="flex h-8 w-8 items-center justify-center rounded-lg text-red-400 hover:text-red-300">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-4 w-4"><path d="M18 6 6 18M6 6l12 12"/></svg>
-                      </button>
+                      <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-text-primary text-sm font-bold text-bg-page">
+                        {index + 1}
+                      </div>
+                      <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-lg border border-border-strong bg-bg-input">
+                        <img src={url} alt="" className="h-full w-full object-cover" />
+                      </div>
+                      <div className="flex flex-1 items-center justify-end gap-1">
+                        {isTouch && (
+                          <>
+                            <button onClick={(e) => { e.stopPropagation(); movePreview(index, index - 1); }} disabled={index === 0} className="flex h-8 w-8 items-center justify-center rounded-lg text-text-muted hover:bg-bg-cardHover hover:text-text-primary disabled:opacity-20">
+                              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-4 w-4"><path d="m18 15-6-6-6 6"/></svg>
+                            </button>
+                            <button onClick={(e) => { e.stopPropagation(); movePreview(index, index + 1); }} disabled={index === pendingFiles.length - 1} className="flex h-8 w-8 items-center justify-center rounded-lg text-text-muted hover:bg-bg-cardHover hover:text-text-primary disabled:opacity-20">
+                              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-4 w-4"><path d="m6 9 6 6 6-6"/></svg>
+                            </button>
+                          </>
+                        )}
+                        <button onClick={(e) => { e.stopPropagation(); setFullscreenIndex(index); }} className="flex h-8 w-8 items-center justify-center rounded-lg text-text-muted hover:bg-bg-cardHover hover:text-text-primary">
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-4 w-4"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>
+                        </button>
+                        <button onClick={(e) => { e.stopPropagation(); removePreview(index); }} className="flex h-8 w-8 items-center justify-center rounded-lg text-red-400 hover:text-red-300">
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-4 w-4"><path d="M18 6 6 18M6 6l12 12"/></svg>
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </Fragment>
@@ -1051,7 +1084,7 @@ export function ProjectHub({
       <ConfirmModal
         open={replaceConfirm}
         title="Заменить макеты?"
-        message={`Текущий пакет перейдёт в историю (раунд ${currentRound}), правки клиента сохранятся. Начнётся раунд ${currentRound + 1}, останется раундов: ${roundsLeft - 1}.`}
+        message={`Текущий пакет перейдёт в историю (раунд ${currentRound}), правки клиента сохранятся. Начнётся раунд ${currentRound + 1}. Осталось раундов правки: ${roundsLeft}.`}
         confirmLabel="Выбрать файлы"
         danger
         onConfirm={() => {
@@ -1129,14 +1162,6 @@ export function ProjectHub({
                   </button>
                 </div>
               )}
-              {(() => {
-                const n = imagesForRound(viewRound ?? currentRound).length;
-                return n > 1 ? (
-                  <span className="shrink-0 rounded-lg border border-border-strong bg-bg-input px-2.5 py-1 text-xs font-medium text-text-primary">
-                    {Math.min(canvasIndex + 1, n)} / {n}
-                  </span>
-                ) : null;
-              })()}
             </div>
             <div className="flex shrink-0 items-center gap-2">
               <button
@@ -1209,7 +1234,7 @@ export function ProjectHub({
                   {selected ? (
                     <>
                       <div className="flex-1 overflow-y-auto p-4">
-                        <p className="break-words text-sm leading-relaxed text-text-primary">
+                        <p className={cn("break-words text-sm leading-relaxed", selected.done ? "line-through text-text-muted" : "text-text-primary")}>
                           {selected.text}
                         </p>
                       </div>
@@ -1261,6 +1286,22 @@ export function ProjectHub({
       />
 
       <FeedbackButton />
+
+      {/* Оверлей перетаскивания файлов */}
+      {isDraggingOver && (
+        <div className="pointer-events-none fixed inset-0 z-[90] flex items-center justify-center bg-bg-page/80 p-4 backdrop-blur-sm">
+          <div className="flex flex-col items-center gap-3 rounded-2xl border-2 border-dashed border-text-primary px-10 py-8 text-center">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" className="h-10 w-10 text-text-primary">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+              <polyline points="17,8 12,3 7,8" />
+              <line x1="12" y1="3" x2="12" y2="15" />
+            </svg>
+            <p className="text-sm font-medium text-text-primary">
+              Отпустите, чтобы добавить макеты
+            </p>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

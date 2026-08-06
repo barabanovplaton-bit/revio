@@ -180,6 +180,20 @@ export function CanvasViewer({
     setImgFailed(false);
   }, [currentIndex]);
 
+  // Если число картинок уменьшилось (например смена раунда) — не даём индексу
+  // выйти за пределы массива (иначе счётчик станет «3/2»).
+  useEffect(() => {
+    if (currentIndex >= imageUrls.length && imageUrls.length > 0) {
+      const next = imageUrls.length - 1;
+      setCurrentIndex(next);
+      onImageChange?.(next);
+    } else if (imageUrls.length === 0) {
+      setCurrentIndex(0);
+      onImageChange?.(0);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [imageUrls, currentIndex]);
+
   // Сортировка точек по времени создания (для нумерации)
   const sortedPoints = useMemo(() => {
     return markers
@@ -193,12 +207,25 @@ export function CanvasViewer({
     return map;
   }, [sortedPoints]);
 
+  // Общие правки: сортировка по времени создания (для раздельной нумерации)
+  const sortedGeneral = useMemo(() => {
+    return markers
+      .filter((m) => m.type === "general")
+      .sort((a, b) => (a.createdAt?.toMillis() || 0) - (b.createdAt?.toMillis() || 0));
+  }, [markers]);
+
+  const generalNumberById = useMemo(() => {
+    const map = new Map<string, number>();
+    sortedGeneral.forEach((g, i) => map.set(g.id, i + 1));
+    return map;
+  }, [sortedGeneral]);
+
   // Точки на текущей странице (старые без imageIndex показываются на всех)
   const pageMarkers = sortedPoints.filter(
     (m) => m.imageIndex === undefined || m.imageIndex === currentIndex
   );
 
-  const generalMarkers = markers.filter((m) => m.type === "general");
+  const generalMarkers = sortedGeneral;
 
   const currentUrl = imageUrls[currentIndex];
   const selectedMarker = markers.find((m) => m.id === selectedMarkerId) || null;
@@ -401,65 +428,97 @@ export function CanvasViewer({
         ))}
       </div>
       <div className="flex-1 space-y-1 overflow-y-auto p-2">
-        {panelList.map((m) => (
-          <button
-            key={m.id}
-            type="button"
-            onClick={() => goToMarker(m)}
-            className={cn(
-              "flex w-full items-center gap-2 rounded-lg p-2 text-left transition-colors",
-              selectedMarkerId === m.id
-                ? "bg-bg-cardHover"
-                : "hover:bg-bg-cardHover/60",
-              m.done && "opacity-60"
-            )}
-          >
-            <span
-              className={cn(
-                "flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[11px] font-bold",
-                m.done
-                  ? "bg-green-500 text-white"
-                  : "bg-text-primary text-bg-page"
-              )}
-            >
-              {numberById.get(m.id)}
-            </span>
-            <span className="line-clamp-1 min-w-0 flex-1 break-words text-xs leading-snug text-text-primary">
-              {filter === "page" && (
-                <span className="mr-1 text-[10px] text-text-muted">
-                  стр. {(m.imageIndex ?? 0) + 1} ·
-                </span>
-              )}
-              {m.text}
-            </span>
-            {onToggleDone && (
-              <span
-                role="checkbox"
-                aria-checked={!!m.done}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onToggleDone(m.id, !m.done);
-                }}
+        {panelList.length > 0 && (
+          <>
+            <p className="mb-1 px-2 text-[10px] font-medium uppercase tracking-wide text-text-muted">
+              Точечные правки · {panelList.length}
+            </p>
+            {panelList.map((m) => (
+              <button
+                key={m.id}
+                type="button"
+                onClick={() => goToMarker(m)}
                 className={cn(
-                  "flex h-5 w-5 shrink-0 items-center justify-center rounded-md border text-xs transition-colors",
-                  m.done
-                    ? "border-green-500 bg-green-500 text-white"
-                    : "border-border-strong text-transparent hover:border-text-primary"
+                  "flex w-full items-center gap-2 rounded-lg p-2 text-left transition-colors",
+                  selectedMarkerId === m.id
+                    ? "bg-bg-cardHover"
+                    : "hover:bg-bg-cardHover/60",
+                  m.done && "opacity-60"
                 )}
               >
-                ✓
-              </span>
-            )}
-          </button>
-        ))}
-        {generalMarkers.length > 0 && (
-          <div className="mt-3 border-t border-border-strong pt-2">
-            <p className="mb-1 px-2 text-[10px] font-medium uppercase tracking-wide text-text-muted">
-              Общие правки · {generalMarkers.length}
-            </p>
-            {generalMarkers.map((m) => (
-              <div key={m.id} className="flex items-center gap-2 px-2 py-1.5">
+                <span
+                  className={cn(
+                    "flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[11px] font-bold",
+                    m.done
+                      ? "bg-green-500 text-white"
+                      : "bg-text-primary text-bg-page"
+                  )}
+                >
+                  {numberById.get(m.id)}
+                </span>
                 <span className="line-clamp-1 min-w-0 flex-1 break-words text-xs leading-snug text-text-primary">
+                  {filter === "page" && (
+                    <span className="mr-1 text-[10px] text-text-muted">
+                      стр. {(m.imageIndex ?? 0) + 1} ·
+                    </span>
+                  )}
+                  {m.text}
+                </span>
+                {onToggleDone && (
+                  <span
+                    role="checkbox"
+                    aria-checked={!!m.done}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onToggleDone(m.id, !m.done);
+                    }}
+                    className={cn(
+                      "flex h-5 w-5 shrink-0 items-center justify-center rounded-md border text-xs transition-colors",
+                      m.done
+                        ? "border-green-500 bg-green-500 text-white"
+                        : "border-border-strong text-transparent hover:border-text-primary"
+                    )}
+                  >
+                    ✓
+                  </span>
+                )}
+              </button>
+            ))}
+          </>
+        )}
+        {generalMarkers.length > 0 && (
+          <>
+            <div className="mt-3 border-t border-border-strong pt-2">
+              <p className="mb-1 px-2 text-[10px] font-medium uppercase tracking-wide text-text-muted">
+                Общие правки · {generalMarkers.length}
+              </p>
+            </div>
+            {generalMarkers.map((m) => (
+              <div
+                key={m.id}
+                className={cn(
+                  "flex w-full items-center gap-2 rounded-lg p-2",
+                  m.done && "opacity-60"
+                )}
+              >
+                <span
+                  className={cn(
+                    "flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[11px] font-bold",
+                    m.done
+                      ? "bg-green-500 text-white"
+                      : "bg-text-primary text-bg-page"
+                  )}
+                >
+                  {generalNumberById.get(m.id)}
+                </span>
+                <span
+                  className={cn(
+                    "line-clamp-1 min-w-0 flex-1 break-words text-xs leading-snug",
+                    m.done
+                      ? "line-through text-text-muted"
+                      : "text-text-primary"
+                  )}
+                >
                   {m.text}
                 </span>
                 {onToggleDone && (
@@ -479,7 +538,7 @@ export function CanvasViewer({
                 )}
               </div>
             ))}
-          </div>
+          </>
         )}
       </div>
     </div>
@@ -719,10 +778,10 @@ export function CanvasViewer({
         {showBottomCard && selectedMarker && (
           <div className="absolute bottom-20 left-1/2 z-30 w-[calc(100%-2rem)] max-w-md -translate-x-1/2 rounded-xl border border-white/20 bg-bg-card p-3 shadow-2xl">
             <div className="flex items-start justify-between gap-3">
-              <p className="max-h-[30vh] min-w-0 flex-1 break-words text-sm leading-relaxed text-text-primary">
+              <p className={cn("max-h-[30vh] min-w-0 flex-1 break-words text-sm leading-relaxed", selectedMarker.done ? "line-through text-text-muted" : "text-text-primary")}>
                 <span className="mr-1.5 inline-flex h-5 w-5 items-center justify-center rounded-full bg-text-primary text-[10px] font-bold text-bg-page align-middle">
                   {selectedMarker.type === "general"
-                    ? "!"
+                    ? generalNumberById.get(selectedMarker.id)
                     : numberById.get(selectedMarker.id)}
                 </span>
                 {selectedMarker.text}
