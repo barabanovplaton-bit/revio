@@ -133,6 +133,19 @@ export function MarkerCanvas({
 
   const activePending = pendingPoints.find((p) => p.id === activePendingId) || null;
 
+  // Номер активной pending-точки только среди точечных правок (общие не считаются):
+  // отправленные точки + мои точечные черновики + точечные pending раньше этой.
+  const activePendingNumber = useMemo(() => {
+    if (!activePending) return null;
+    const sentPts = sentMarkers.filter((m) => m.type === "point").length;
+    const myPointDrafts = draft.filter((d) => d.type === "point").length;
+    const earlierPending =
+      pendingPoints.filter(
+        (p) => p.id !== activePending.id && p.order < activePending.order
+      ).length;
+    return sentPts + myPointDrafts + earlierPending + 1;
+  }, [activePending, draft, pendingPoints, sentMarkers]);
+
   const setPending = (next: PendingPoint[]) => {
     setPendingPoints(next);
     savePendingPoints(projectId, next);
@@ -268,6 +281,7 @@ export function MarkerCanvas({
   };
 
   const sentPointCount = sentMarkers.filter((m) => m.type === "point").length;
+  const sentGeneralCount = sentMarkers.filter((m) => m.type === "general").length;
 
   // Выбранная правка для правой деталь-панели (из черновика или отправленных)
   const selectedDraft =
@@ -292,6 +306,17 @@ export function MarkerCanvas({
       )
       .findIndex((m) => m.id === selectedDraft.id);
     return sentIdx >= 0 ? sentIdx + 1 : null;
+  })();
+
+  // Номер выбранной общей правки (отдельная нумерация среди общих)
+  const selectedGeneralNumber = (() => {
+    if (!selectedDraft || selectedDraft.type !== "general") return null;
+    const generals = draft.filter((d) => d.type === "general");
+    const gi = generals.findIndex((d) => d.id === selectedDraft.id);
+    if (gi >= 0) return sentGeneralCount + gi + 1;
+    const sentGenerals = sentMarkers.filter((m) => m.type === "general");
+    const sgi = sentGenerals.findIndex((m) => m.id === selectedDraft.id);
+    return sgi >= 0 ? sgi + 1 : null;
   })();
 
   const saveEdit = () => {
@@ -454,7 +479,7 @@ export function MarkerCanvas({
                 </p>
               </div>
               <div className="space-y-0.5">
-                {[...generals].reverse().map((d) => (
+                {[...generals].reverse().map((d, gi) => (
                   <button
                     key={d.id}
                     type="button"
@@ -468,7 +493,7 @@ export function MarkerCanvas({
                     )}
                   >
                     <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-text-primary/15 text-[10px] font-bold text-text-primary">
-                      !
+                      {sentGeneralCount + generals.length - gi}
                     </span>
                     <span className="line-clamp-1 min-w-0 flex-1 break-words text-xs leading-snug text-text-primary">
                       {d.text}
@@ -539,7 +564,7 @@ export function MarkerCanvas({
         <>
           <div className="flex items-center justify-between border-b border-border-strong px-4 py-3">
             <p className="text-sm font-medium text-text-primary">
-              Точка №{sentPointCount + draft.length + 1}
+              Точка №{activePendingNumber}
             </p>
             <button
               type="button"
@@ -577,7 +602,7 @@ export function MarkerCanvas({
           <div className="flex items-center justify-between border-b border-border-strong px-4 py-3">
             <p className="text-sm font-medium text-text-primary">
               {selectedDraft.type === "general"
-                ? "Общая правка"
+                ? `Общая правка №${selectedGeneralNumber}`
                 : `Правка №${selectedMarkerNumber}`}
             </p>
             <button
