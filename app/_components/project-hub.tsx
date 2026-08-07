@@ -838,17 +838,22 @@ export function ProjectHub({
                       dragIndex === index ? "opacity-10" : ""
                     }`}
                   >
-                    {/* Индикатор места вставки: линия в зазоре между карточками,
-                        absolute → не меняет layout → не мигает. Одна на зазор. */}
+                    {/* Индикатор места вставки: линия по центру зазора между карточками,
+                        absolute → не меняет layout → не мигает. Одна на зазор.
+                        Серым — когда порядок не изменится (карточку вернули на своё место). */}
                     {isDragging &&
                       (dragOverIndex === index ||
                         (index === previewUrls.length - 1 && dragOverIndex === previewUrls.length)) && (
                         <span
-                          className={`pointer-events-none absolute left-2 right-2 z-10 h-[2px] rounded-full bg-white opacity-90 shadow-[0_0_0_1px_rgba(0,0,0,0.08)] ${
+                          className={`pointer-events-none absolute left-2 right-2 z-10 h-[2px] rounded-full ${
+                            dragOverIndex === dragIndex || dragOverIndex === dragIndex + 1
+                              ? "bg-text-muted opacity-80"
+                              : "bg-white opacity-90 shadow-[0_0_0_1px_rgba(0,0,0,0.08)]"
+                          } ${
                             index === previewUrls.length - 1 &&
                             dragOverIndex === previewUrls.length
-                              ? "bottom-0 translate-y-1/2"
-                              : "top-0 -translate-y-1/2"
+                              ? "bottom-0 -translate-y-[3px]"
+                              : "top-0 -translate-y-[5px]"
                           }`}
                         />
                       )}
