@@ -293,6 +293,9 @@ export function ProjectHub({
 
   const isDragging = dragIndex !== null && !isTouch;
 
+  // Последняя определённая позиция вставки (для устранения дрожания на границе).
+  const lastDropPosRef = useRef<number | null>(null);
+
   // Логика «верх/низ» в одном месте: для карточки `index` определяем позицию
   // вставки по вертикальной половине того участка, над которым курсор.
   // Нижняя половина текущей карточки = «перед следующей». Всегда вызываем
@@ -302,13 +305,21 @@ export function ProjectHub({
     if (index >= pendingFiles.length) return pendingFiles.length;
     const rect = e.currentTarget.getBoundingClientRect();
     const midY = rect.top + rect.height / 2;
+    // Мёртвая зона вокруг середины: пока курсор в ней (≈28% в центре), сохраняем
+    // прошлую позицию, чтобы линия не мигала на границе между карточками.
+    const band = rect.height * 0.14;
+    if (Math.abs(e.clientY - midY) <= band) {
+      return lastDropPosRef.current ?? (e.clientY < midY ? index : index + 1);
+    }
     return e.clientY < midY ? index : index + 1;
   };
 
   const handleDragOverAt = (index: number) => (e: DragEvent) => {
     e.preventDefault();
     e.dataTransfer.dropEffect = "move";
-    setDragOverIndex(resolvePosition(index, e));
+    const pos = resolvePosition(index, e);
+    lastDropPosRef.current = pos;
+    setDragOverIndex(pos);
   };
 
   const handleDropAt = (index: number) => (e: DragEvent) => {
@@ -316,6 +327,7 @@ export function ProjectHub({
     e.dataTransfer.dropEffect = "move";
     const dragIdx = dragIndex;
     const position = resolvePosition(index, e);
+    lastDropPosRef.current = null;
     setDragOverIndex(null);
     if (dragIdx === null) return;
     // «Перед собой» и «сразу после себя» не меняют порядок — пропускаем.
@@ -818,6 +830,7 @@ export function ProjectHub({
                       e.dataTransfer.setDragImage(ghost, 32, 16);
                       setDragIndex(index);
                       setDragOverIndex(null);
+                      lastDropPosRef.current = null;
                     }}
                     // «Верх/низ» карточки считает resolvePosition по вертикали.
                     onDragOver={handleDragOverAt(index)}
@@ -825,6 +838,7 @@ export function ProjectHub({
                     onDragEnd={() => {
                       setDragIndex(null);
                       setDragOverIndex(null);
+                      lastDropPosRef.current = null;
                       clearDragGhost();
                     }}
                     className={`group flex items-center gap-3 rounded-xl border bg-bg-card p-2 transition-all cursor-grab active:cursor-grabbing ${
