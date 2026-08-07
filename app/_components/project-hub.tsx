@@ -503,6 +503,44 @@ export function ProjectHub({
     return rounds.sort((a, b) => a - b);
   }, [project?.currentRound, project?.packageHistory]);
 
+  // Список версий для «Истории»: текущий раунд (если есть изображения) + история.
+  // Текущий появляется сразу после того, как клиент нажал «Готово» — с красной
+  // точкой новых правок, чтобы фрилансер увидел и открыл его.
+  const versionList = useMemo(() => {
+    const items: {
+      round: number;
+      imageCount: number;
+      isCurrent: boolean;
+      submitted: boolean;
+    }[] = [];
+    for (const pkg of project?.packageHistory || []) {
+      items.push({
+        round: pkg.round,
+        imageCount: pkg.imageUrls.length,
+        isCurrent: false,
+        submitted: false,
+      });
+    }
+    const curRound = project?.currentRound || 1;
+    const curImages = project?.imageUrls?.length || 0;
+    if (curImages > 0) {
+      items.push({
+        round: curRound,
+        imageCount: curImages,
+        isCurrent: true,
+        submitted: !!project?.clientSubmitted,
+      });
+    }
+    // Начиная с самого свежего раунда
+    return items.sort((a, b) => b.round - a.round);
+  }, [project?.currentRound, project?.packageHistory, project?.imageUrls, project?.clientSubmitted]);
+
+  // Открыть раунд на холсте (Canvas) — единая точка навигации.
+  const openRoundOnCanvas = (round: number) => {
+    setViewRound(round);
+    setCanvasOpen(true);
+  };
+
   // --- Loading/Error ---
   if (loading) {
     return (
@@ -995,7 +1033,7 @@ export function ProjectHub({
                   <circle cx="9" cy="9" r="2" />
                   <path d="m21 15-3.1-3.1a2 2 0 0 0-2.8 0L6 21" />
                 </svg>
-                Перейти на холст
+                Открыть холст
               </button>
               <button
                 type="button"
@@ -1012,11 +1050,12 @@ export function ProjectHub({
                   }
                   setReplaceConfirm(true);
                 }}
+                disabled={replaceBlocked}
                 className={cn(
-                  "flex flex-1 items-center justify-center gap-2 rounded-xl border border-border-strong bg-bg-card px-4 py-3 text-sm font-medium transition-all",
+                  "flex flex-1 items-center justify-center gap-2 rounded-xl border px-4 py-3 text-sm font-medium transition-all",
                   replaceBlocked
-                    ? "text-text-muted"
-                    : "text-text-primary hover:bg-bg-cardHover"
+                    ? "cursor-not-allowed border-border-strong bg-bg-card text-text-muted opacity-60"
+                    : "border-border-strong bg-bg-card text-text-primary hover:bg-bg-cardHover"
                 )}
               >
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
@@ -1034,23 +1073,44 @@ export function ProjectHub({
             )}
 
             {/* History versions */}
-            {(project.packageHistory?.length || 0) > 0 && (
+            {versionList.length > 0 && (
               <div className="mb-6">
                 <h3 className="mb-3 text-sm font-medium text-text-primary">История версий</h3>
                 <div className="space-y-2">
-                  {[...(project.packageHistory || [])].reverse().map((pkg) => {
-                    const pkgMarkers = markers.filter((m) => m.round === pkg.round);
+                  {versionList.map((v) => {
+                    const pkgMarkers = markers.filter((m) => m.round === v.round);
                     return (
-                      <div key={pkg.round} className="flex items-center justify-between gap-3 rounded-xl border border-border-strong bg-bg-card p-3">
-                        <div className="min-w-0">
-                          <p className="text-sm font-medium text-text-primary">Раунд {pkg.round}</p>
-                          <p className="text-xs text-text-muted">
-                            {pkg.imageUrls.length} {pkg.imageUrls.length === 1 ? "изображение" : pkg.imageUrls.length < 5 ? "изображения" : "изображений"} · {pkgMarkers.length} {pkgMarkers.length === 1 ? "правка" : pkgMarkers.length > 0 && pkgMarkers.length < 5 ? "правки" : "правок"}
-                          </p>
+                      <div key={v.round} className={cn(
+                        "flex items-center justify-between gap-3 rounded-xl border p-3",
+                        v.isCurrent
+                          ? "border-text-primary/40 bg-text-primary/5"
+                          : "border-border-strong bg-bg-card"
+                      )}>
+                        <div className="flex min-w-0 items-center gap-2.5">
+                          {v.isCurrent && v.submitted && (
+                            <span className="relative flex h-2.5 w-2.5 shrink-0">
+                              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-500 opacity-75" />
+                              <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-red-500" />
+                            </span>
+                          )}
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium text-text-primary">
+                              Раунд {v.round}
+                              {v.isCurrent && " · текущий"}
+                              {v.isCurrent && v.submitted && (
+                                <span className="ml-2 rounded bg-red-500/15 px-1.5 py-0.5 text-[10px] font-medium text-red-400">
+                                  новые правки
+                                </span>
+                              )}
+                            </p>
+                            <p className="text-xs text-text-muted">
+                              {v.imageCount} {v.imageCount === 1 ? "изображение" : v.imageCount < 5 ? "изображения" : "изображений"} · {pkgMarkers.length} {pkgMarkers.length === 1 ? "правка" : pkgMarkers.length > 0 && pkgMarkers.length < 5 ? "правки" : "правок"}
+                            </p>
+                          </div>
                         </div>
                         <button
                           type="button"
-                          onClick={() => setHistoryView({ round: pkg.round, index: 0 })}
+                          onClick={() => openRoundOnCanvas(v.round)}
                           className="shrink-0 rounded-lg bg-text-primary px-3 py-1.5 text-xs font-medium text-bg-page transition-all hover:opacity-90"
                         >
                           Открыть
