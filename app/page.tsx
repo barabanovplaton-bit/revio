@@ -463,6 +463,9 @@ function ProjectCard({
               <div className="truncate text-sm font-medium text-text-primary">
                 {project.name}
               </div>
+              {project.clientSubmitted && !project.clientSubmittedRead && (
+                <span className="ml-1 h-2 w-2 shrink-0 rounded-full bg-red-500" title="Новые правки" />
+              )}
             </>
           )}
         </div>

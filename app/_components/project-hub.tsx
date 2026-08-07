@@ -539,6 +539,15 @@ export function ProjectHub({
   const openRoundOnCanvas = (round: number) => {
     setViewRound(round);
     setCanvasOpen(true);
+    // Отметить текущий раунд прочитанным — сбрасывает красные точки (и в шапке, и в истории, и на главной)
+    if (
+      project &&
+      round === project.currentRound &&
+      project.clientSubmitted &&
+      !project.clientSubmittedRead
+    ) {
+      updateProject(projectId, { clientSubmittedRead: true });
+    }
   };
 
   // --- Loading/Error ---
@@ -574,6 +583,8 @@ export function ProjectHub({
   const roundMarkers = markers.filter((m) => m.round === currentRound);
   // Есть ли правки клиента (можно ли заменять макеты) — только после «Готово»
   const hasClientRevisions = !!project.clientSubmitted;
+  // Есть ли непрочитанные новые правки клиента (показываются красные точки)
+  const hasNewRevisions = !!project.clientSubmitted && !project.clientSubmittedRead;
   const replaceBlocked =
     !hasClientRevisions || (!isProPlan && !hasRoundsLeft(project));
 
@@ -778,6 +789,9 @@ export function ProjectHub({
                 >
                   {project.name}
                 </h1>
+                {hasNewRevisions && (
+                  <span className="ml-1 h-2 w-2 shrink-0 rounded-full bg-red-500" title="Новые правки" />
+                )}
                 <button
                   type="button"
                   onClick={startRename}
@@ -1087,11 +1101,8 @@ export function ProjectHub({
                           : "border-border-strong bg-bg-card"
                       )}>
                         <div className="flex min-w-0 items-center gap-2.5">
-                          {v.isCurrent && v.submitted && (
-                            <span className="relative flex h-2.5 w-2.5 shrink-0">
-                              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-500 opacity-75" />
-                              <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-red-500" />
-                            </span>
+                          {v.isCurrent && hasNewRevisions && (
+                            <span className="h-2 w-2 shrink-0 rounded-full bg-red-500" />
                           )}
                           <div className="min-w-0">
                             <p className="text-sm font-medium text-text-primary">
