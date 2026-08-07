@@ -293,21 +293,29 @@ export function ProjectHub({
 
   const isDragging = dragIndex !== null && !isTouch;
 
-  // Каждая карточка делится на две drop-зоны: верхняя «вставить перед этой»,
-  // нижняя «вставить после этой». Где бы ты ни взялся, позиция вставки зависит
-  // только от той половины, над которой сейчас курсор. dragOverIndex — это
-  // позиция вставки (0..len, len = в самый конец). Всегда разрешаем и рисуем
-  // линию, чтобы браузер не показывал «курсор-запрет».
-  const handleDragOverAt = (position: number) => (e: DragEvent) => {
-    e.preventDefault();
-    e.dataTransfer.dropEffect = "move";
-    setDragOverIndex(position);
+  // Логика «верх/низ» в одном месте: для карточки `index` определяем позицию
+  // вставки по вертикальной половине того участка, над которым курсор.
+  // Нижняя половина текущей карточки = «перед следующей». Всегда вызываем
+  // preventDefault → браузер не показывает «курсор-запрет».
+  const resolvePosition = (index: number, e: DragEvent): number => {
+    // Позиция len — это «самый конец»: всегда вставляем в конец.
+    if (index >= pendingFiles.length) return pendingFiles.length;
+    const rect = e.currentTarget.getBoundingClientRect();
+    const midY = rect.top + rect.height / 2;
+    return e.clientY < midY ? index : index + 1;
   };
 
-  const handleDropAt = (position: number) => (e: DragEvent) => {
+  const handleDragOverAt = (index: number) => (e: DragEvent) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    setDragOverIndex(resolvePosition(index, e));
+  };
+
+  const handleDropAt = (index: number) => (e: DragEvent) => {
     e.preventDefault();
     e.dataTransfer.dropEffect = "move";
     const dragIdx = dragIndex;
+    const position = resolvePosition(index, e);
     setDragOverIndex(null);
     if (dragIdx === null) return;
     // «Перед собой» и «сразу после себя» не меняют порядок — пропускаем.
@@ -801,88 +809,62 @@ export function ProjectHub({
                       onDrop={handleDropAt(index)}
                     />
                   )}
-                  {/* Каждая карточка делится на две drop-зоны (верх/низ) */}
-                  <div className="relative">
-                    {isDragging && (
-                      <>
-                        {/* Верхняя зона: вставить перед этой карточкой */}
-                        <div
-                          onDragOver={handleDragOverAt(index)}
-                          onDrop={handleDropAt(index)}
-                          className={cn(
-                            "absolute inset-x-0 top-0 z-20 h-1/2",
-                            dragOverIndex === index
-                              ? "rounded-t-xl bg-text-primary/5"
-                              : "pointer-events-none"
-                          )}
-                        />
-                        {/* Нижняя зона: вставить после этой карточки (перед следующей) */}
-                        <div
-                          onDragOver={handleDragOverAt(index + 1)}
-                          onDrop={handleDropAt(index + 1)}
-                          className={cn(
-                            "absolute inset-x-0 bottom-0 z-20 h-1/2",
-                            dragOverIndex === index + 1
-                              ? "rounded-b-xl bg-text-primary/5"
-                              : "pointer-events-none"
-                          )}
-                        />
-                      </>
+                  <div
+                    draggable={!isTouch}
+                    onDragStart={(e) => {
+                      e.dataTransfer.effectAllowed = "move";
+                      e.dataTransfer.setData("text/plain", String(index));
+                      const ghost = createDragGhost(e.currentTarget);
+                      e.dataTransfer.setDragImage(ghost, 32, 16);
+                      setDragIndex(index);
+                      setDragOverIndex(null);
+                    }}
+                    // «Верх/низ» карточки считает resolvePosition по вертикали.
+                    onDragOver={handleDragOverAt(index)}
+                    onDrop={handleDropAt(index)}
+                    onDragEnd={() => {
+                      setDragIndex(null);
+                      setDragOverIndex(null);
+                      clearDragGhost();
+                    }}
+                    className={`group flex items-center gap-3 rounded-xl border bg-bg-card p-2 transition-all cursor-grab active:cursor-grabbing ${
+                      dragIndex === index
+                        ? "opacity-10"
+                        : dragOverIndex === index || dragOverIndex === index + 1
+                          ? "border-text-primary/40"
+                          : "border-border-strong hover:border-text-primary/30"
+                    }`}
+                  >
+                    {!isTouch && (
+                      <svg viewBox="0 0 24 24" fill="currentColor" className="h-4 w-4 shrink-0 text-text-muted">
+                        <circle cx="9" cy="6" r="1.5" /><circle cx="15" cy="6" r="1.5" />
+                        <circle cx="9" cy="12" r="1.5" /><circle cx="15" cy="12" r="1.5" />
+                        <circle cx="9" cy="18" r="1.5" /><circle cx="15" cy="18" r="1.5" />
+                      </svg>
                     )}
-                    <div
-                      draggable={!isTouch}
-                      onDragStart={(e) => {
-                        e.dataTransfer.effectAllowed = "move";
-                        e.dataTransfer.setData("text/plain", String(index));
-                        const ghost = createDragGhost(e.currentTarget);
-                        e.dataTransfer.setDragImage(ghost, 32, 16);
-                        setDragIndex(index);
-                        setDragOverIndex(null);
-                      }}
-                      onDragEnd={() => {
-                        setDragIndex(null);
-                        setDragOverIndex(null);
-                        clearDragGhost();
-                      }}
-                      className={`group flex items-center gap-3 rounded-xl border bg-bg-card p-2 transition-all cursor-grab active:cursor-grabbing ${
-                        dragIndex === index
-                          ? "opacity-10"
-                          : dragOverIndex === index || dragOverIndex === index + 1
-                            ? "border-text-primary/40"
-                            : "border-border-strong hover:border-text-primary/30"
-                      }`}
-                    >
-                      {!isTouch && (
-                        <svg viewBox="0 0 24 24" fill="currentColor" className="h-4 w-4 shrink-0 text-text-muted">
-                          <circle cx="9" cy="6" r="1.5" /><circle cx="15" cy="6" r="1.5" />
-                          <circle cx="9" cy="12" r="1.5" /><circle cx="15" cy="12" r="1.5" />
-                          <circle cx="9" cy="18" r="1.5" /><circle cx="15" cy="18" r="1.5" />
-                        </svg>
+                    <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-text-primary text-sm font-bold text-bg-page">
+                      {index + 1}
+                    </div>
+                    <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-lg border border-border-strong bg-bg-input">
+                      <img src={url} alt="" className="h-full w-full object-cover" />
+                    </div>
+                    <div className="flex flex-1 items-center justify-end gap-1">
+                      {isTouch && (
+                        <>
+                          <button onClick={(e) => { e.stopPropagation(); movePreview(index, index - 1); }} disabled={index === 0} className="flex h-8 w-8 items-center justify-center rounded-lg text-text-muted hover:bg-bg-cardHover hover:text-text-primary disabled:opacity-20">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-4 w-4"><path d="m18 15-6-6-6 6"/></svg>
+                          </button>
+                          <button onClick={(e) => { e.stopPropagation(); movePreview(index, index + 1); }} disabled={index === pendingFiles.length - 1} className="flex h-8 w-8 items-center justify-center rounded-lg text-text-muted hover:bg-bg-cardHover hover:text-text-primary disabled:opacity-20">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-4 w-4"><path d="m6 9 6 6 6-6"/></svg>
+                          </button>
+                        </>
                       )}
-                      <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-text-primary text-sm font-bold text-bg-page">
-                        {index + 1}
-                      </div>
-                      <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-lg border border-border-strong bg-bg-input">
-                        <img src={url} alt="" className="h-full w-full object-cover" />
-                      </div>
-                      <div className="flex flex-1 items-center justify-end gap-1">
-                        {isTouch && (
-                          <>
-                            <button onClick={(e) => { e.stopPropagation(); movePreview(index, index - 1); }} disabled={index === 0} className="flex h-8 w-8 items-center justify-center rounded-lg text-text-muted hover:bg-bg-cardHover hover:text-text-primary disabled:opacity-20">
-                              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-4 w-4"><path d="m18 15-6-6-6 6"/></svg>
-                            </button>
-                            <button onClick={(e) => { e.stopPropagation(); movePreview(index, index + 1); }} disabled={index === pendingFiles.length - 1} className="flex h-8 w-8 items-center justify-center rounded-lg text-text-muted hover:bg-bg-cardHover hover:text-text-primary disabled:opacity-20">
-                              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-4 w-4"><path d="m6 9 6 6 6-6"/></svg>
-                            </button>
-                          </>
-                        )}
-                        <button onClick={(e) => { e.stopPropagation(); setFullscreenIndex(index); }} className="flex h-8 w-8 items-center justify-center rounded-lg text-text-muted hover:bg-bg-cardHover hover:text-text-primary">
-                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-4 w-4"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>
-                        </button>
-                        <button onClick={(e) => { e.stopPropagation(); removePreview(index); }} className="flex h-8 w-8 items-center justify-center rounded-lg text-red-400 hover:text-red-300">
-                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-4 w-4"><path d="M18 6 6 18M6 6l12 12"/></svg>
-                        </button>
-                      </div>
+                      <button onClick={(e) => { e.stopPropagation(); setFullscreenIndex(index); }} className="flex h-8 w-8 items-center justify-center rounded-lg text-text-muted hover:bg-bg-cardHover hover:text-text-primary">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-4 w-4"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>
+                      </button>
+                      <button onClick={(e) => { e.stopPropagation(); removePreview(index); }} className="flex h-8 w-8 items-center justify-center rounded-lg text-red-400 hover:text-red-300">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-4 w-4"><path d="M18 6 6 18M6 6l12 12"/></svg>
+                      </button>
                     </div>
                   </div>
                 </Fragment>
