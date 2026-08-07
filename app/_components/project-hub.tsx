@@ -589,6 +589,8 @@ export function ProjectHub({
   const hasNewRevisions = !!project.clientSubmitted && !project.clientSubmittedRead;
   const replaceBlocked =
     !hasClientRevisions || (!isProPlan && !hasRoundsLeft(project));
+  // Раунды полностью исчерпаны (например, клиент отправил правки по последнему 2 из 2)
+  const allRoundsExhausted = !isProPlan && !hasRoundsLeft(project);
 
   const shareUrl =
     typeof window !== "undefined"
@@ -1035,22 +1037,7 @@ export function ProjectHub({
             )}
 
             {/* Actions */}
-            <div className="mb-4 flex flex-col gap-2 sm:flex-row">
-              <button
-                type="button"
-                onClick={() => {
-                  setViewRound(currentRound);
-                  setCanvasOpen(true);
-                }}
-                className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-border-strong bg-bg-card px-4 py-3 text-sm font-medium text-text-primary transition-all hover:bg-bg-cardHover"
-              >
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
-                  <rect x="3" y="3" width="18" height="18" rx="2" />
-                  <circle cx="9" cy="9" r="2" />
-                  <path d="m21 15-3.1-3.1a2 2 0 0 0-2.8 0L6 21" />
-                </svg>
-                Открыть холст
-              </button>
+            <div className="mb-4 flex flex-col gap-2">
               <button
                 type="button"
                 onClick={() => {
@@ -1068,10 +1055,10 @@ export function ProjectHub({
                 }}
                 disabled={replaceBlocked}
                 className={cn(
-                  "flex flex-1 items-center justify-center gap-2 rounded-xl border px-4 py-3 text-sm font-medium transition-all",
+                  "group relative flex w-full items-center justify-center gap-2 rounded-xl border px-4 py-3 text-sm font-medium transition-all",
                   replaceBlocked
                     ? "cursor-not-allowed border-border-strong bg-bg-card text-text-muted opacity-60"
-                    : "border-border-strong bg-bg-card text-text-primary hover:bg-bg-cardHover"
+                    : "border-text-primary bg-text-primary text-bg-page hover:opacity-90"
                 )}
               >
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
@@ -1079,7 +1066,14 @@ export function ProjectHub({
                   <polyline points="17,8 12,3 7,8" />
                   <line x1="12" y1="3" x2="12" y2="15" />
                 </svg>
-                {isProPlan || hasRoundsLeft(project) ? "Заменить макеты" : "Раунды исчерпаны"}
+                {allRoundsExhausted ? "Все раунды правок завершены" : "Заменить макеты"}
+                {/* Иконка-подсказка «?» с тултипом */}
+                <span className="relative flex h-4 w-4 items-center justify-center rounded-full border border-current text-[10px] font-bold">
+                  ?
+                  <span className="pointer-events-none absolute bottom-full left-1/2 mb-2 w-60 -translate-x-1/2 rounded-lg border border-border-strong bg-bg-card p-2.5 text-left text-[11px] leading-relaxed text-text-primary opacity-0 shadow-xl transition-opacity duration-150 group-hover:opacity-100">
+                    Загрузите обновленные файлы после получения правок от клиента. Это запустит следующий раунд правок.
+                  </span>
+                </span>
               </button>
             </div>
             {!hasClientRevisions && hasRoundsLeft(project) && (

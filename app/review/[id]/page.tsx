@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, use, useMemo } from "react";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   subscribeToProject,
   updateProject,
@@ -40,6 +40,7 @@ export default function ReviewPage({
   const [sendError, setSendError] = useState<string | null>(null);
   const [generalOpen, setGeneralOpen] = useState(false);
   const [generalText, setGeneralText] = useState("");
+  const [helpOpen, setHelpOpen] = useState(false);
   // Черновик общего комментария не пропадает при случайном закрытии
   useEffect(() => {
     if (!generalOpen) return;
@@ -114,6 +115,13 @@ export default function ReviewPage({
   useEffect(() => {
     setViewIndex(0);
   }, [viewRound]);
+
+  // При переключении раундов сбрасываем незафиксированные черновики (точки не «протекают»)
+  useEffect(() => {
+    if (viewRound !== (project?.currentRound || 1)) {
+      clearPendingPoints(id);
+    }
+  }, [viewRound, project?.currentRound, id]);
 
   // Раунды с изображениями, доступные клиенту для просмотра
   const availableRounds = useMemo(() => {
@@ -298,60 +306,71 @@ export default function ReviewPage({
           )}
         </div>
         <div className="flex shrink-0 items-center gap-2">
-          <button
-            type="button"
-            onClick={() => setMarkersVisible((v) => !v)}
-            className={cn(
-              "shrink-0 rounded-xl border px-3 py-2 text-xs font-medium transition-colors",
-              markersVisible
-                ? "border-border-strong bg-bg-input text-text-primary hover:bg-bg-cardHover"
-                : "border-border-strong bg-bg-card text-text-muted hover:text-text-primary"
-            )}
-          >
-            {markersVisible ? "Без маячков" : "С маячками"}
-          </button>
-          {!locked ? (
+          {viewRound === round ? (
             <>
               <button
                 type="button"
-                onClick={() => setGeneralOpen((v) => !v)}
+                onClick={() => setMarkersVisible((v) => !v)}
                 className={cn(
-                  "flex items-center gap-1.5 rounded-xl border px-3 py-2 text-xs font-semibold transition-all",
-                  generalOpen
-                    ? "border-text-primary bg-text-primary/15 text-text-primary"
-                    : "border-text-primary/40 bg-text-primary/10 text-text-primary hover:bg-text-primary/20"
+                  "shrink-0 rounded-xl border px-3 py-2 text-xs font-medium transition-colors",
+                  markersVisible
+                    ? "border-border-strong bg-bg-input text-text-primary hover:bg-bg-cardHover"
+                    : "border-border-strong bg-bg-card text-text-muted hover:text-text-primary"
                 )}
               >
-                <svg
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth={2}
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  className="h-4 w-4"
-                >
-                  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-                </svg>
-                {generalOpen ? "Закрыть" : "Общий комментарий"}
+                {markersVisible ? "Без маячков" : "С маячками"}
               </button>
-              <button
-                type="button"
-                onClick={handleDoneClick}
-                disabled={draftCount === 0}
-                className="rounded-xl bg-text-primary px-4 py-2 text-sm font-medium text-bg-page transition-all hover:opacity-90 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                Готово
-              </button>
+              {!locked ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => setGeneralOpen((v) => !v)}
+                    className={cn(
+                      "flex items-center gap-1.5 rounded-xl border px-3 py-2 text-xs font-semibold transition-all",
+                      generalOpen
+                        ? "border-text-primary bg-text-primary/15 text-text-primary"
+                        : "border-text-primary/40 bg-text-primary/10 text-text-primary hover:bg-text-primary/20"
+                    )}
+                  >
+                    <svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth={2}
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      className="h-4 w-4"
+                    >
+                      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+                    </svg>
+                    {generalOpen ? "Закрыть" : "Общий комментарий"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleDoneClick}
+                    disabled={draftCount === 0}
+                    className="rounded-xl bg-text-primary px-4 py-2 text-sm font-medium text-bg-page transition-all hover:opacity-90 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    Готово
+                  </button>
+                </>
+              ) : submitted ? (
+                <span className="flex shrink-0 items-center gap-1.5 rounded-xl bg-green-500/15 px-3 py-1.5 text-xs font-medium text-green-400">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
+                    <path d="M20 6 9 17l-5-5" />
+                  </svg>
+                  Правки отправлены
+                </span>
+              ) : null}
             </>
-          ) : submitted ? (
-            <span className="flex shrink-0 items-center gap-1.5 rounded-xl bg-green-500/15 px-3 py-1.5 text-xs font-medium text-green-400">
+          ) : (
+            <span className="flex shrink-0 items-center gap-1.5 rounded-xl border border-border-strong bg-bg-card px-3 py-2 text-xs font-medium text-text-muted">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
-                <path d="M20 6 9 17l-5-5" />
+                <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
               </svg>
-              Правки отправлены
+              Раунд №{viewRound} завершен. Правки отправлены
             </span>
-          ) : null}
+          )}
         </div>
       </header>
 
@@ -385,30 +404,33 @@ export default function ReviewPage({
         )}
 
         {/* Правки отправлены: компактный баннер по центру, фото остаётся видимым */}
-        {showDoneModal && (
-          <div className="pointer-events-none absolute inset-0 z-[60] flex items-center justify-center p-4">
-            <motion.div
-              initial={{ opacity: 0, y: 8, scale: 0.95 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: 8, scale: 0.95 }}
-              className="flex max-w-md items-center gap-3 rounded-2xl border border-green-500/30 bg-bg-card px-5 py-4 shadow-2xl"
-            >
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-green-500/15">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5 text-green-400">
-                  <path d="M20 6 9 17l-5-5" />
-                </svg>
-              </div>
-              <div>
-                <h2 className="text-sm font-semibold text-text-primary">
-                  Правки отправлены
-                </h2>
-                <p className="text-xs leading-relaxed text-text-muted">
-                  Дизайнер скоро пришлёт исправленную версию.
-                </p>
-              </div>
-            </motion.div>
-          </div>
-        )}
+        <AnimatePresence>
+          {showDoneModal && (
+            <div className="pointer-events-none absolute inset-0 z-[60] flex items-center justify-center p-4">
+              <motion.div
+                initial={{ opacity: 0, y: 16, scale: 0.95 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: 8, scale: 0.9 }}
+                transition={{ duration: 0.22, ease: "easeOut" }}
+                className="flex max-w-md items-center gap-3 rounded-2xl border border-green-500/30 bg-bg-card px-5 py-4 shadow-2xl"
+              >
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-green-500/15">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5 text-green-400">
+                    <path d="M20 6 9 17l-5-5" />
+                  </svg>
+                </div>
+                <div>
+                  <h2 className="text-sm font-semibold text-text-primary">
+                    Правки отправлены
+                  </h2>
+                  <p className="text-xs leading-relaxed text-text-muted">
+                    Дизайнер скоро пришлёт исправленную версию.
+                  </p>
+                </div>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>
       </main>
 
       {locked && !submitted && (
@@ -477,6 +499,57 @@ export default function ReviewPage({
           </div>
         </div>
       )}
+
+      {/* Плавающая кнопка помощи */}
+      <div className="fixed bottom-5 right-5 z-[70] flex flex-col items-end gap-3">
+        <AnimatePresence>
+          {helpOpen && (
+            <motion.div
+              initial={{ opacity: 0, y: 12, scale: 0.95 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 12, scale: 0.95 }}
+              transition={{ duration: 0.18, ease: "easeOut" }}
+              className="w-80 max-w-[calc(100vw-2.5rem)] rounded-2xl border border-border-strong bg-bg-card p-5 shadow-2xl"
+            >
+              <div className="mb-3 flex items-center justify-between">
+                <h3 className="text-sm font-semibold text-text-primary">Как оставить правки</h3>
+                <button
+                  type="button"
+                  onClick={() => setHelpOpen(false)}
+                  className="rounded-lg p-1 text-text-muted transition-colors hover:bg-bg-cardHover hover:text-text-primary"
+                  aria-label="Закрыть справку"
+                >
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" className="h-4 w-4">
+                    <path d="M18 6 6 18M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+              <ol className="space-y-3 text-sm leading-relaxed text-text-muted">
+                <li className="flex gap-2.5">
+                  <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-text-primary text-[11px] font-bold text-bg-page">1</span>
+                  <span>Кликните по холсту, чтобы поставить точку и написать правку.</span>
+                </li>
+                <li className="flex gap-2.5">
+                  <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-text-primary text-[11px] font-bold text-bg-page">2</span>
+                  <span>Нажмите «Готово», когда добавите все комментарии.</span>
+                </li>
+                <li className="flex gap-2.5">
+                  <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-text-primary text-[11px] font-bold text-bg-page">3</span>
+                  <span>Фрилансер получит уведомление и загрузит обновленные макеты.</span>
+                </li>
+              </ol>
+            </motion.div>
+          )}
+        </AnimatePresence>
+        <button
+          type="button"
+          onClick={() => setHelpOpen((v) => !v)}
+          className="flex h-11 w-11 items-center justify-center rounded-full bg-text-primary text-lg font-bold text-bg-page shadow-xl transition-all hover:scale-105 hover:opacity-90 active:scale-95"
+          aria-label="Справка"
+        >
+          ?
+        </button>
+      </div>
     </div>
   );
 }
