@@ -838,13 +838,20 @@ export function ProjectHub({
                       dragIndex === index ? "opacity-10" : ""
                     }`}
                   >
-                    {/* Индикатор места вставки: линия на раме карточки, не влияет на layout → не мигает */}
-                    {isDragging && dragOverIndex === index && (
-                      <span className="pointer-events-none absolute -top-[3px] left-0 right-0 h-[3px] rounded-full bg-text-primary" />
-                    )}
-                    {isDragging && dragOverIndex === index + 1 && (
-                      <span className="pointer-events-none absolute -bottom-[3px] left-0 right-0 h-[3px] rounded-full bg-text-primary" />
-                    )}
+                    {/* Индикатор места вставки: линия в зазоре между карточками,
+                        absolute → не меняет layout → не мигает. Одна на зазор. */}
+                    {isDragging &&
+                      (dragOverIndex === index ||
+                        (index === previewUrls.length - 1 && dragOverIndex === previewUrls.length)) && (
+                        <span
+                          className={`pointer-events-none absolute left-2 right-2 z-10 h-[2px] rounded-full bg-white opacity-90 shadow-[0_0_0_1px_rgba(0,0,0,0.08)] ${
+                            index === previewUrls.length - 1 &&
+                            dragOverIndex === previewUrls.length
+                              ? "bottom-0 translate-y-1/2"
+                              : "top-0 -translate-y-1/2"
+                          }`}
+                        />
+                      )}
                     {!isTouch && (
                       <svg viewBox="0 0 24 24" fill="currentColor" className="h-4 w-4 shrink-0 text-text-muted">
                         <circle cx="9" cy="6" r="1.5" /><circle cx="15" cy="6" r="1.5" />
