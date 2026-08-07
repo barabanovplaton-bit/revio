@@ -814,13 +814,6 @@ export function ProjectHub({
             <div className="space-y-2">
               {previewUrls.map((url, index) => (
                 <Fragment key={index}>
-                  {isDragging && dragOverIndex === index && (
-                    <DropIndicator
-                      active
-                      onDragOver={handleDragOverAt(index)}
-                      onDrop={handleDropAt(index)}
-                    />
-                  )}
                   <div
                     draggable={!isTouch}
                     onDragStart={(e) => {
@@ -841,14 +834,17 @@ export function ProjectHub({
                       lastDropPosRef.current = null;
                       clearDragGhost();
                     }}
-                    className={`group flex items-center gap-3 rounded-xl border bg-bg-card p-2 transition-all cursor-grab active:cursor-grabbing ${
-                      dragIndex === index
-                        ? "opacity-10"
-                        : dragOverIndex === index || dragOverIndex === index + 1
-                          ? "border-text-primary/40"
-                          : "border-border-strong hover:border-text-primary/30"
+                    className={`relative flex items-center gap-3 rounded-xl border bg-bg-card p-2 transition-all cursor-grab active:cursor-grabbing hover:border-text-primary/30 ${
+                      dragIndex === index ? "opacity-10" : ""
                     }`}
                   >
+                    {/* Индикатор места вставки: линия на раме карточки, не влияет на layout → не мигает */}
+                    {isDragging && dragOverIndex === index && (
+                      <span className="pointer-events-none absolute -top-[3px] left-0 right-0 h-[3px] rounded-full bg-text-primary" />
+                    )}
+                    {isDragging && dragOverIndex === index + 1 && (
+                      <span className="pointer-events-none absolute -bottom-[3px] left-0 right-0 h-[3px] rounded-full bg-text-primary" />
+                    )}
                     {!isTouch && (
                       <svg viewBox="0 0 24 24" fill="currentColor" className="h-4 w-4 shrink-0 text-text-muted">
                         <circle cx="9" cy="6" r="1.5" /><circle cx="15" cy="6" r="1.5" />
@@ -883,13 +879,6 @@ export function ProjectHub({
                   </div>
                 </Fragment>
               ))}
-              {isDragging && dragOverIndex === pendingFiles.length && (
-                <DropIndicator
-                  active
-                  onDragOver={handleDragOverAt(pendingFiles.length)}
-                  onDrop={handleDropAt(pendingFiles.length)}
-                />
-              )}
             </div>
 
             {(uploadError || lastUploadErrors) && (
@@ -1298,32 +1287,6 @@ export function ProjectHub({
           </div>
         </div>
       )}
-    </div>
-  );
-}
-
-function DropIndicator({
-  active,
-  onDragOver,
-  onDrop,
-}: {
-  active: boolean;
-  onDragOver: (e: DragEvent) => void;
-  onDrop: (e: DragEvent) => void;
-}) {
-  return (
-    <div
-      onDragOver={onDragOver}
-      onDrop={onDrop}
-      className={`flex h-1 items-center px-1 transition-colors ${
-        active ? "bg-text-primary/10" : ""
-      }`}
-    >
-      <div
-        className={`h-0.5 flex-1 rounded-full transition-colors ${
-          active ? "bg-white" : "bg-transparent"
-        }`}
-      />
     </div>
   );
 }
