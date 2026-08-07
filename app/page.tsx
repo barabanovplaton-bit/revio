@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
-import { BellIcon } from "./_components/bell-icon";
+
 import { Avatar } from "./_components/avatar";
 import { ConfirmModal } from "./_components/confirm-modal";
 import { NewProjectWizard } from "./_components/new-project-wizard";
@@ -19,10 +19,6 @@ import {
   deleteProjectPermanently,
   type Project,
 } from "@/lib/projects";
-import {
-  subscribeToUserNotifications,
-  type Notification,
-} from "@/lib/notifications";
 
 export default function Page() {
   return <App />;
@@ -100,17 +96,6 @@ const [projects, setProjects] = useState<Project[]>([]);
     }
     const unsub = subscribeToUserProjects(user.uid, (list) => {
       setProjects(list);
-    });
-    return () => unsub();
-  }, [user]);
-
-  useEffect(() => {
-    if (!user) {
-      setNotifications([]);
-      return;
-    }
-    const unsub = subscribeToUserNotifications(user.uid, (list) => {
-      setNotifications(list);
     });
     return () => unsub();
   }, [user]);
@@ -213,21 +198,6 @@ const [projects, setProjects] = useState<Project[]>([]);
           </div>
 
           <div className="flex items-center gap-1">
-            {user && (
-              <button
-                type="button"
-                onClick={() => router.push("/notifications")}
-                className="relative rounded-xl p-2 text-text-muted transition-colors hover:bg-bg-cardHover hover:text-text-primary"
-                aria-label="Уведомления"
-              >
-                <BellIcon className="h-5 w-5" />
-                {notifications.filter((n) => !n.read).length > 0 && (
-                  <span className="absolute right-1 top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[9px] font-bold text-white">
-                    {notifications.filter((n) => !n.read).length}
-                  </span>
-                )}
-              </button>
-            )}
             {user ? (
               <Avatar
                 name={profile?.displayName}
@@ -460,12 +430,14 @@ function ProjectCard({
             />
           ) : (
             <>
-              <div className="truncate text-sm font-medium text-text-primary">
-                {project.name}
+              <div className="flex h-5 items-center gap-1.5 overflow-hidden">
+                {project.clientSubmitted && !project.clientSubmittedRead && (
+                  <span className="mr-1.5 inline-block h-2 w-2 shrink-0 rounded-full bg-red-500" title="Новые правки" />
+                )}
+                <span className="truncate align-middle text-sm font-medium text-text-primary">
+                  {project.name}
+                </span>
               </div>
-              {project.clientSubmitted && !project.clientSubmittedRead && (
-                <span className="ml-1 h-2 w-2 shrink-0 rounded-full bg-red-500" title="Новые правки" />
-              )}
             </>
           )}
         </div>

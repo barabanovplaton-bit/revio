@@ -546,6 +546,8 @@ export function ProjectHub({
       project.clientSubmitted &&
       !project.clientSubmittedRead
     ) {
+      // Мгновенный сброс точек в истории и шапке (без ожидания сети)
+      setProject((p) => (p ? { ...p, clientSubmittedRead: true } : p));
       updateProject(projectId, { clientSubmittedRead: true });
     }
   };
@@ -783,15 +785,15 @@ export function ProjectHub({
               />
             ) : (
               <>
+                {hasNewRevisions && (
+                  <span className="mr-1.5 h-2 w-2 shrink-0 rounded-full bg-red-500" title="Новые правки" />
+                )}
                 <h1
                   className="truncate text-sm font-semibold text-text-primary cursor-pointer hover:text-text-secondary transition-colors"
                   onClick={startRename}
                 >
                   {project.name}
                 </h1>
-                {hasNewRevisions && (
-                  <span className="ml-1 h-2 w-2 shrink-0 rounded-full bg-red-500" title="Новые правки" />
-                )}
                 <button
                   type="button"
                   onClick={startRename}
