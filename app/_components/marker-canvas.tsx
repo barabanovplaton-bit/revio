@@ -550,6 +550,105 @@ onClick={() => {
     );
   })();
 
+  // Read-only панель после отправки (isLocked): показываем отправленные правки,
+  // чтобы клиент видел, что он написал, но без возможности добавлять новые.
+  const lockedSortedPoints = useMemo(
+    () =>
+      sentMarkers
+        .filter((m) => m.type === "point")
+        .sort(
+          (a, b) => (a.createdAt?.toMillis() || 0) - (b.createdAt?.toMillis() || 0)
+        ),
+    [sentMarkers]
+  );
+  const lockedSortedGenerals = useMemo(
+    () =>
+      sentMarkers
+        .filter((m) => m.type === "general")
+        .sort(
+          (a, b) => (a.createdAt?.toMillis() || 0) - (b.createdAt?.toMillis() || 0)
+        ),
+    [sentMarkers]
+  );
+  const lockedListCount = lockedSortedPoints.length + lockedSortedGenerals.length;
+
+  const lockedPanel = (
+    <>
+      <div className="border-b border-border-strong px-4 py-2.5 text-xs font-medium text-text-primary">
+        Отправленные правки ({lockedListCount})
+      </div>
+      <div className="flex-1 overflow-y-auto p-2">
+        {lockedListCount === 0 && (
+          <p className="px-2 py-3 text-center text-xs leading-relaxed text-text-muted">
+            Пока нет отправленных правок.
+          </p>
+        )}
+        {lockedSortedPoints.length > 0 && (
+          <>
+            <p className="mb-1 px-2 text-[10px] font-medium uppercase tracking-wide text-text-muted">
+              Точечные правки · {lockedSortedPoints.length}
+            </p>
+            <div className="space-y-0.5">
+              {lockedSortedPoints
+                .map((m, i) => ({ m, i }))
+                .reverse()
+                .map(({ m, i }) => (
+                  <button
+                    key={m.id}
+                    type="button"
+                    onClick={() => setSelectedDraftId(m.id)}
+                    className={cn(
+                      "flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left transition-colors hover:bg-bg-cardHover",
+                      selectedDraftId === m.id && "bg-bg-cardHover"
+                    )}
+                  >
+                    <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-text-primary text-center text-[10px] font-bold leading-none text-bg-page">
+                      {lockedSortedPoints.length - i}
+                    </span>
+                    <span className="line-clamp-1 min-w-0 flex-1 break-words text-xs leading-snug text-text-primary">
+                      {m.text}
+                    </span>
+                  </button>
+                ))}
+            </div>
+          </>
+        )}
+        {lockedSortedGenerals.length > 0 && (
+          <>
+            <div className="mt-3 border-t border-border-strong pt-2">
+              <p className="mb-1 px-2 text-[10px] font-medium uppercase tracking-wide text-text-muted">
+                Общие правки · {lockedSortedGenerals.length}
+              </p>
+            </div>
+            <div className="space-y-0.5">
+              {lockedSortedGenerals
+                .map((m, gi) => ({ m, gi }))
+                .reverse()
+                .map(({ m, gi }) => (
+                  <button
+                    key={m.id}
+                    type="button"
+                    onClick={() => setSelectedDraftId(m.id)}
+                    className={cn(
+                      "flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left transition-colors hover:bg-bg-cardHover",
+                      selectedDraftId === m.id && "bg-bg-cardHover"
+                    )}
+                  >
+                    <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-text-primary/15 text-center text-[10px] font-bold leading-none text-text-primary">
+                      {lockedSortedGenerals.length - gi}
+                    </span>
+                    <span className="line-clamp-1 min-w-0 flex-1 break-words text-xs leading-snug text-text-primary">
+                      {m.text}
+                    </span>
+                  </button>
+                ))}
+            </div>
+          </>
+        )}
+      </div>
+    </>
+  );
+
   // Правая деталь-панель (десктоп): форма общего/точечного комментария
   // или просмотр правки. Всегда видна на десктопе — вместо оверлея на фото.
   const detailPanel = !isMobile ? (
@@ -765,15 +864,14 @@ onClick={() => {
           {canvas}
 
           {/* Мобильная панель «Мои правки» */}
-          {!isLocked && (
-            <AnimatePresence>
-              {panelOpen ? (
-                <motion.div
-                  initial={{ opacity: 0, y: 40 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: 40 }}
-                  className="absolute inset-x-0 bottom-0 z-40 flex max-h-[45%] flex-col overflow-hidden rounded-t-2xl border-t border-border-strong bg-bg-card shadow-2xl"
-                >
+          <AnimatePresence>
+            {panelOpen ? (
+              <motion.div
+                initial={{ opacity: 0, y: 40 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: 40 }}
+                className="absolute inset-x-0 bottom-0 z-40 flex max-h-[45%] flex-col overflow-hidden rounded-t-2xl border-t border-border-strong bg-bg-card shadow-2xl"
+              >
                   <button
                     type="button"
                     onClick={() => setPanelOpen(false)}
@@ -792,7 +890,7 @@ onClick={() => {
                     </svg>
                     Свернуть
                   </button>
-                  {draftPanel}
+                  {isLocked ? lockedPanel : draftPanel}
                 </motion.div>
               ) : (
                 <motion.button
@@ -803,19 +901,16 @@ onClick={() => {
                   onClick={() => setPanelOpen(true)}
                   className="absolute bottom-4 left-1/2 z-30 -translate-x-1/2 rounded-full border border-border-strong bg-bg-card px-4 py-2 text-sm font-medium text-text-primary shadow-2xl"
                 >
-                  Мои правки ({draft.length})
+                  Мои правки ({isLocked ? lockedListCount : draft.length})
                 </motion.button>
               )}
             </AnimatePresence>
-          )}
         </>
       ) : (
         <div className="flex h-full w-full">
-          {!isLocked && (
-            <div className="flex w-60 shrink-0 flex-col overflow-hidden border-r border-border-strong bg-bg-card">
-              {draftPanel}
-            </div>
-          )}
+          <div className="flex w-60 shrink-0 flex-col overflow-hidden border-r border-border-strong bg-bg-card">
+            {isLocked ? lockedPanel : draftPanel}
+          </div>
           <div className="relative min-w-0 flex-1">
             {canvas}
           </div>
