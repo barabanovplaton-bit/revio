@@ -415,7 +415,7 @@ export function MarkerCanvas({
           placeholder="Опишите правку..."
           rows={3}
           autoFocus
-          className="w-full resize-none rounded-lg border border-border-strong bg-bg-input px-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:border-text-primary focus:outline-none"
+          className="max-h-40 w-full resize-none overflow-y-auto rounded-lg border border-border-strong bg-bg-input px-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:border-text-primary focus:outline-none"
         />
         <div className="mt-3">
           <button
@@ -562,7 +562,7 @@ export function MarkerCanvas({
               placeholder="Опишите общие правки..."
               rows={6}
               autoFocus
-              className="w-full resize-none rounded-lg border border-border-strong bg-bg-input px-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:border-text-primary focus:outline-none"
+              className="max-h-40 w-full resize-none overflow-y-auto rounded-lg border border-border-strong bg-bg-input px-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:border-text-primary focus:outline-none"
             />
           </div>
           <div className="flex gap-2 border-t border-border-strong p-3">
@@ -599,7 +599,7 @@ export function MarkerCanvas({
               placeholder="Опишите правку..."
               rows={4}
               autoFocus
-              className="w-full resize-none rounded-lg border border-border-strong bg-bg-input px-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:border-text-primary focus:outline-none"
+              className="max-h-40 w-full resize-none overflow-y-auto rounded-lg border border-border-strong bg-bg-input px-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:border-text-primary focus:outline-none"
             />
           </div>
           <div className="flex border-t border-border-strong p-3">
@@ -638,7 +638,7 @@ export function MarkerCanvas({
                 onChange={(e) => setEditValue(e.target.value)}
                 rows={6}
                 autoFocus
-                className="w-full resize-none rounded-lg border border-border-strong bg-bg-input px-3 py-2 text-sm text-text-primary focus:border-text-primary focus:outline-none"
+                className="max-h-40 w-full resize-none overflow-y-auto rounded-lg border border-border-strong bg-bg-input px-3 py-2 text-sm text-text-primary focus:border-text-primary focus:outline-none"
               />
             ) : (
               <p className="break-words text-sm leading-relaxed text-text-primary">
@@ -816,8 +816,10 @@ export function MarkerCanvas({
                 ? `Удалить правку №${deleteConfirm.number}?`
                 : "Удалить общий комментарий?"}
             </h2>
-            <p className="mb-6 max-h-32 overflow-y-auto break-words text-sm leading-relaxed text-text-muted">
-              «{deleteConfirm.item.text}» будет удалено из черновика.
+            <p className="mb-6 break-words text-sm leading-relaxed text-text-muted">
+              «{deleteConfirm.item.text.length > 40
+                ? deleteConfirm.item.text.slice(0, 40) + "..."
+                : deleteConfirm.item.text}» будет удалено из черновика.
             </p>
             <div className="flex gap-2">
               <button
