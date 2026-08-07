@@ -299,6 +299,15 @@ export function MarkerCanvas({
   const sentPointCount = sentMarkers.filter((m) => m.type === "point").length;
   const sentGeneralCount = sentMarkers.filter((m) => m.type === "general").length;
 
+  // Общие правки из черновика (для нумерации формы «Общая правка №...»)
+  const generalsDraft = useMemo(
+    () =>
+      draft
+        .filter((d) => d.type === "general")
+        .sort((a, b) => a.order - b.order),
+    [draft]
+  );
+
   // Выбранная правка для правой деталь-панели (из черновика или отправленных)
   const selectedDraft =
     (selectedDraftId ? draft.find((d) => d.id === selectedDraftId) : null) ??
@@ -456,18 +465,20 @@ export function MarkerCanvas({
                 <button
                   key={d.id}
                   type="button"
-                  onClick={() => {
-                    setSelectedDraftId(d.id);
-                    setEditing(false);
-                  }}
-                  className={cn(
-                    "flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left transition-colors hover:bg-bg-cardHover",
-                    selectedDraftId === d.id && "bg-bg-cardHover"
-                  )}
-                >
-                  <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-text-primary text-center text-[10px] font-bold leading-none text-bg-page">
-                    {sentPointCount + i + 1}
-                  </span>
+onClick={() => {
+                      setSelectedDraftId(d.id);
+                      setEditing(false);
+                      setActivePendingId(null);
+                      onGeneralClose?.();
+                    }}
+                    className={cn(
+                      "flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left transition-colors hover:bg-bg-cardHover",
+                      selectedDraftId === d.id && "bg-bg-cardHover"
+                    )}
+                  >
+                    <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-text-primary text-center text-[10px] font-bold leading-none text-bg-page">
+                      {sentPointCount + i + 1}
+                    </span>
                   <span className="line-clamp-1 min-w-0 flex-1 break-words text-xs leading-snug text-text-primary">
                     {d.text}
                   </span>
@@ -502,6 +513,8 @@ export function MarkerCanvas({
                     onClick={() => {
                       setSelectedDraftId(d.id);
                       setEditing(false);
+                      setActivePendingId(null);
+                      onGeneralClose?.();
                     }}
                     className={cn(
                       "flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left transition-colors hover:bg-bg-cardHover",
@@ -544,7 +557,9 @@ export function MarkerCanvas({
       {generalOpen ? (
         <>
           <div className="flex items-center justify-between border-b border-border-strong px-4 py-3">
-            <p className="text-sm font-medium text-text-primary">Общий комментарий</p>
+            <p className="text-sm font-medium text-text-primary">
+              Общая правка №{sentGeneralCount + generalsDraft.length + 1}
+            </p>
             <button
               type="button"
               onClick={() => onGeneralClose?.()}
@@ -726,6 +741,7 @@ export function MarkerCanvas({
         onImageChange={onImageChange}
         selectedId={activePendingId ?? selectedDraftId}
         onSelectMarker={(id) => {
+          onGeneralClose?.();
           if (id && pendingPoints.some((p) => p.id === id)) {
             const pp = pendingPoints.find((p) => p.id === id);
             setActivePendingId(id);
