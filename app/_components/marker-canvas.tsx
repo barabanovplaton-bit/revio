@@ -170,9 +170,25 @@ export function MarkerCanvas({
       setEditing(false);
       return;
     }
-    // Сбрасываем несохранённые точки БЕЗ текста (чтобы не копились пустые),
-    // но точки, где юзер уже начал писать, сохраняем в черновик (текст не теряется).
-    const kept = pendingPoints.filter((p) => p.id === activePendingId ? false : (p.text || "").trim().length > 0);
+    // Если уже есть незафиксированная (активная) точка-черновик — не создаём
+    // новую, а просто двигаем её в координаты нового клика. Введённый текст
+    // внутри неё сохраняется и не сбрасывается.
+    const activePoint = activePendingId
+      ? pendingPoints.find((p) => p.id === activePendingId)
+      : null;
+    if (activePoint) {
+      setPending(
+        pendingPoints.map((p) =>
+          p.id === activePoint.id ? { ...p, x, y, imageIndex } : p
+        )
+      );
+      return;
+    }
+    // Создаём новую точку. Сбрасываем несохранённые точки БЕЗ текста (чтобы не
+    // копились пустые), но точки, где юзер уже начал писать, сохраняем.
+    const kept = pendingPoints.filter(
+      (p) => (p.text || "").trim().length > 0
+    );
     const pp: PendingPoint = {
       id: newDraftId(),
       x,
@@ -449,7 +465,7 @@ export function MarkerCanvas({
                     selectedDraftId === d.id && "bg-bg-cardHover"
                   )}
                 >
-                  <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-text-primary text-[10px] font-bold text-bg-page">
+                  <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-text-primary text-center text-[10px] font-bold leading-none text-bg-page">
                     {sentPointCount + i + 1}
                   </span>
                   <span className="line-clamp-1 min-w-0 flex-1 break-words text-xs leading-snug text-text-primary">
@@ -492,7 +508,7 @@ export function MarkerCanvas({
                       selectedDraftId === d.id && "bg-bg-cardHover"
                     )}
                   >
-                    <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-text-primary/15 text-[10px] font-bold text-text-primary">
+                    <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-text-primary/15 text-center text-[10px] font-bold leading-none text-text-primary">
                       {sentGeneralCount + generals.length - gi}
                     </span>
                     <span className="line-clamp-1 min-w-0 flex-1 break-words text-xs leading-snug text-text-primary">

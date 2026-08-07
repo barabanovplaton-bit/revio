@@ -448,7 +448,7 @@ export function CanvasViewer({
               >
                 <span
                   className={cn(
-                    "flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[11px] font-bold",
+                    "flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-center text-[11px] font-bold leading-none",
                     m.done
                       ? "bg-green-500 text-white"
                       : "bg-text-primary text-bg-page"
@@ -503,7 +503,7 @@ export function CanvasViewer({
               >
                 <span
                   className={cn(
-                    "flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[11px] font-bold",
+                    "flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-center text-[11px] font-bold leading-none",
                     m.done
                       ? "bg-green-500 text-white"
                       : "bg-text-primary text-bg-page"
@@ -660,7 +660,7 @@ export function CanvasViewer({
                       setSelectedMarkerId(m.id);
                     }}
                     className={cn(
-                      "flex h-6 min-w-6 items-center justify-center rounded-full border-2 border-black bg-white px-1 text-[10px] font-bold text-black shadow-md transition-transform",
+                      "flex h-6 min-w-6 items-center justify-center rounded-full border-2 border-black bg-white px-1 text-center text-[10px] font-bold leading-none text-black shadow-md transition-transform",
                       m.done
                         ? "bg-green-500 text-white"
                         : "bg-white text-black",
@@ -679,7 +679,7 @@ export function CanvasViewer({
               canAdd &&
               !locked && (
                 <div
-                  className="pointer-events-none absolute z-20 flex h-7 min-w-7 items-center justify-center rounded-full border-2 border-black/70 bg-white px-1 text-[11px] font-bold text-black shadow-md"
+                  className="pointer-events-none absolute z-20 flex h-7 min-w-7 items-center justify-center rounded-full border-2 border-black/70 bg-white px-1 text-center text-[11px] font-bold leading-none text-black shadow-md"
                   style={{
                     left: `${pendingPoint.x * 100}%`,
                     top: `${pendingPoint.y * 100}%`,
@@ -779,7 +779,7 @@ export function CanvasViewer({
           <div className="absolute bottom-20 left-1/2 z-30 w-[calc(100%-2rem)] max-w-md -translate-x-1/2 rounded-xl border border-white/20 bg-bg-card p-3 shadow-2xl">
             <div className="flex items-start justify-between gap-3">
               <p className={cn("max-h-[30vh] min-w-0 flex-1 break-words text-sm leading-relaxed", selectedMarker.done ? "line-through text-text-muted" : "text-text-primary")}>
-                <span className="mr-1.5 inline-flex h-5 w-5 items-center justify-center rounded-full bg-text-primary text-[10px] font-bold text-bg-page align-middle">
+                <span className="mr-1.5 inline-flex h-5 w-5 items-center justify-center rounded-full bg-text-primary text-center text-[10px] font-bold leading-none text-bg-page align-middle">
                   {selectedMarker.type === "general"
                     ? generalNumberById.get(selectedMarker.id)
                     : numberById.get(selectedMarker.id)}
