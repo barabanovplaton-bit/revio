@@ -306,20 +306,78 @@ export default function ReviewPage({
           )}
         </div>
         <div className="flex shrink-0 items-center gap-2">
+          {/* Справка — кнопка в шапке, панель выезжает вниз (под оверлеем модалок) */}
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setHelpOpen((v) => !v)}
+              className={cn(
+                "flex h-9 w-9 items-center justify-center rounded-full border text-sm font-bold transition-all",
+                helpOpen
+                  ? "border-text-primary/40 bg-text-primary/15 text-text-primary"
+                  : "border-border-strong bg-bg-card text-text-muted hover:bg-bg-cardHover hover:text-text-primary"
+              )}
+              aria-label="Справка"
+            >
+              ?
+            </button>
+            <AnimatePresence>
+              {helpOpen && (
+                <motion.div
+                  initial={{ opacity: 0, y: -6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -6 }}
+                  transition={{ duration: 0.18, ease: "easeOut" }}
+                  className="absolute right-0 top-full z-10 mt-2 w-80 rounded-2xl border border-border-strong bg-bg-card p-5 shadow-2xl"
+                >
+                  <div className="mb-3 flex items-center justify-between">
+                    <h3 className="text-sm font-semibold text-text-primary">Как оставить правки</h3>
+                    <button
+                      type="button"
+                      onClick={() => setHelpOpen(false)}
+                      className="rounded-lg p-1 text-text-muted transition-colors hover:bg-bg-cardHover hover:text-text-primary"
+                      aria-label="Закрыть справку"
+                    >
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" className="h-4 w-4">
+                        <path d="M18 6 6 18M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </div>
+                  <ol className="space-y-3 text-sm leading-relaxed text-text-muted">
+                    <li className="flex gap-2.5">
+                      <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-text-primary text-[11px] font-bold text-bg-page">1</span>
+                      <span>Кликните по холсту, чтобы поставить точку и написать правку.</span>
+                    </li>
+                    <li className="flex gap-2.5">
+                      <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-text-primary text-[11px] font-bold text-bg-page">2</span>
+                      <span>Нажмите «Готово», когда добавите все комментарии.</span>
+                    </li>
+                    <li className="flex gap-2.5">
+                      <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-text-primary text-[11px] font-bold text-bg-page">3</span>
+                      <span>Фрилансер получит уведомление и загрузит обновленные макеты.</span>
+                    </li>
+                  </ol>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+
+          {/* Переключатель маячков доступен на всех раундах (текущих и закрытых) */}
+          <button
+            type="button"
+            onClick={() => setMarkersVisible((v) => !v)}
+            className={cn(
+              "shrink-0 rounded-xl border px-3 py-2 text-xs font-medium transition-colors",
+              markersVisible
+                ? "border-border-strong bg-bg-input text-text-primary hover:bg-bg-cardHover"
+                : "border-border-strong bg-bg-card text-text-muted hover:text-text-primary"
+            )}
+          >
+            {markersVisible ? "Без маячков" : "С маячками"}
+          </button>
+
           {viewRound === round ? (
             <>
-              <button
-                type="button"
-                onClick={() => setMarkersVisible((v) => !v)}
-                className={cn(
-                  "shrink-0 rounded-xl border px-3 py-2 text-xs font-medium transition-colors",
-                  markersVisible
-                    ? "border-border-strong bg-bg-input text-text-primary hover:bg-bg-cardHover"
-                    : "border-border-strong bg-bg-card text-text-muted hover:text-text-primary"
-                )}
-              >
-                {markersVisible ? "Без маячков" : "С маячками"}
-              </button>
               {!locked ? (
                 <>
                   <button
@@ -354,19 +412,19 @@ export default function ReviewPage({
                     Готово
                   </button>
                 </>
-              ) : submitted ? (
-                <span className="flex shrink-0 items-center gap-1.5 rounded-xl bg-green-500/15 px-3 py-1.5 text-xs font-medium text-green-400">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
+              ) : (
+                <span className="flex shrink-0 items-center gap-1.5 rounded-xl border border-green-500/30 bg-green-500/15 px-3 py-1.5 text-xs font-medium text-green-400">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
                     <path d="M20 6 9 17l-5-5" />
                   </svg>
-                  Правки отправлены
+                  Раунд №{round} завершен. Правки отправлены
                 </span>
-              ) : null}
+              )}
             </>
           ) : (
-            <span className="flex shrink-0 items-center gap-1.5 rounded-xl border border-border-strong bg-bg-card px-3 py-2 text-xs font-medium text-text-muted">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
-                <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
+            <span className="flex shrink-0 items-center gap-1.5 rounded-xl border border-green-500/30 bg-green-500/15 px-3 py-1.5 text-xs font-medium text-green-400">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
+                <path d="M20 6 9 17l-5-5" />
               </svg>
               Раунд №{viewRound} завершен. Правки отправлены
             </span>
@@ -500,56 +558,6 @@ export default function ReviewPage({
         </div>
       )}
 
-      {/* Плавающая кнопка помощи */}
-      <div className="fixed bottom-5 right-5 z-[70] flex flex-col items-end gap-3">
-        <AnimatePresence>
-          {helpOpen && (
-            <motion.div
-              initial={{ opacity: 0, y: 12, scale: 0.95 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: 12, scale: 0.95 }}
-              transition={{ duration: 0.18, ease: "easeOut" }}
-              className="w-80 max-w-[calc(100vw-2.5rem)] rounded-2xl border border-border-strong bg-bg-card p-5 shadow-2xl"
-            >
-              <div className="mb-3 flex items-center justify-between">
-                <h3 className="text-sm font-semibold text-text-primary">Как оставить правки</h3>
-                <button
-                  type="button"
-                  onClick={() => setHelpOpen(false)}
-                  className="rounded-lg p-1 text-text-muted transition-colors hover:bg-bg-cardHover hover:text-text-primary"
-                  aria-label="Закрыть справку"
-                >
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" className="h-4 w-4">
-                    <path d="M18 6 6 18M6 6l12 12" />
-                  </svg>
-                </button>
-              </div>
-              <ol className="space-y-3 text-sm leading-relaxed text-text-muted">
-                <li className="flex gap-2.5">
-                  <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-text-primary text-[11px] font-bold text-bg-page">1</span>
-                  <span>Кликните по холсту, чтобы поставить точку и написать правку.</span>
-                </li>
-                <li className="flex gap-2.5">
-                  <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-text-primary text-[11px] font-bold text-bg-page">2</span>
-                  <span>Нажмите «Готово», когда добавите все комментарии.</span>
-                </li>
-                <li className="flex gap-2.5">
-                  <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-text-primary text-[11px] font-bold text-bg-page">3</span>
-                  <span>Фрилансер получит уведомление и загрузит обновленные макеты.</span>
-                </li>
-              </ol>
-            </motion.div>
-          )}
-        </AnimatePresence>
-        <button
-          type="button"
-          onClick={() => setHelpOpen((v) => !v)}
-          className="flex h-11 w-11 items-center justify-center rounded-full bg-text-primary text-lg font-bold text-bg-page shadow-xl transition-all hover:scale-105 hover:opacity-90 active:scale-95"
-          aria-label="Справка"
-        >
-          ?
-        </button>
-      </div>
     </div>
   );
 }

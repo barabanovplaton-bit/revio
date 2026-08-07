@@ -82,6 +82,7 @@ export function ProjectHub({
   // Fullscreen preview
   const [fullscreenIndex, setFullscreenIndex] = useState<number | null>(null);
   const [replaceConfirm, setReplaceConfirm] = useState(false);
+  const [replaceHelpOpen, setReplaceHelpOpen] = useState(false);
 
   // Canvas (просмотр макетов с маячками текущего раунда)
   const [canvasOpen, setCanvasOpen] = useState(false);
@@ -1037,15 +1038,15 @@ export function ProjectHub({
             )}
 
             {/* Actions */}
-            <div className="mb-4 flex flex-col gap-2">
+            <div className="mb-4 flex items-stretch gap-2">
               <button
                 type="button"
                 onClick={() => {
                   if (replaceBlocked) {
-                    if (!hasClientRevisions) {
+                    if (allRoundsExhausted) {
+                      showToast("Все раунды правок завершены. Чтобы добавить новые раунды, обновите тариф");
+                    } else if (!hasClientRevisions) {
                       showToast("Клиент ещё не прислал правки — «Заменить макеты» станет доступно, когда он нажмёт «Готово»");
-                    } else if (!isProPlan && !hasRoundsLeft(project)) {
-                      showToast("Раунды правок исчерпаны — добавьте раунд или перейдите на Pro");
                     } else {
                       showToast("Сейчас заменить макеты нельзя");
                     }
@@ -1053,9 +1054,9 @@ export function ProjectHub({
                   }
                   setReplaceConfirm(true);
                 }}
-                disabled={replaceBlocked}
+                                aria-disabled={replaceBlocked}
                 className={cn(
-                  "group relative flex w-full items-center justify-center gap-2 rounded-xl border px-4 py-3 text-sm font-medium transition-all",
+                  "flex flex-1 items-center justify-center gap-2 rounded-xl border px-4 py-3 text-sm font-medium transition-all",
                   replaceBlocked
                     ? "cursor-not-allowed border-border-strong bg-bg-card text-text-muted opacity-60"
                     : "border-text-primary bg-text-primary text-bg-page hover:opacity-90"
@@ -1067,14 +1068,35 @@ export function ProjectHub({
                   <line x1="12" y1="3" x2="12" y2="15" />
                 </svg>
                 {allRoundsExhausted ? "Все раунды правок завершены" : "Заменить макеты"}
-                {/* Иконка-подсказка «?» с тултипом */}
-                <span className="relative flex h-4 w-4 items-center justify-center rounded-full border border-current text-[10px] font-bold">
-                  ?
-                  <span className="pointer-events-none absolute bottom-full left-1/2 mb-2 w-60 -translate-x-1/2 rounded-lg border border-border-strong bg-bg-card p-2.5 text-left text-[11px] leading-relaxed text-text-primary opacity-0 shadow-xl transition-opacity duration-150 group-hover:opacity-100">
-                    Загрузите обновленные файлы после получения правок от клиента. Это запустит следующий раунд правок.
-                  </span>
-                </span>
               </button>
+
+              {/* Отдельная иконка-кнопка «?» (тултип — только по клику на неё) */}
+              <div className="relative flex shrink-0 items-center justify-center">
+                <button
+                  type="button"
+                  onClick={() => setReplaceHelpOpen((v) => !v)}
+                  aria-label="Подсказка"
+                  className={cn(
+                    "flex h-full min-h-[2.75rem] w-11 items-center justify-center rounded-xl border text-xs font-bold transition-all",
+                    "border-border-strong text-text-muted hover:border-text-primary/40 hover:bg-bg-cardHover hover:text-text-primary"
+                  )}
+                >
+                  ?
+                </button>
+                <AnimatePresence>
+                  {replaceHelpOpen && (
+                    <motion.span
+                      initial={{ opacity: 0, y: 6 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: 6 }}
+                      transition={{ duration: 0.16, ease: "easeOut" }}
+                      className="pointer-events-none absolute bottom-full right-0 mb-2 w-64 rounded-lg border border-border-strong bg-bg-card p-2.5 text-left text-[11px] leading-relaxed text-text-primary opacity-100 shadow-xl"
+                    >
+                      Загрузите обновленные файлы после получения правок от клиента. Это запустит следующий раунд правок.
+                    </motion.span>
+                  )}
+                </AnimatePresence>
+              </div>
             </div>
             {!hasClientRevisions && hasRoundsLeft(project) && (
               <p className="mb-4 -mt-2 text-center text-xs text-text-muted">
