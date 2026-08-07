@@ -104,11 +104,16 @@ export function MarkerCanvas({
     return () => window.removeEventListener("revio:pending-changed", onPending);
   }, [projectId]);
 
-  // При открытии общего комментария снимаем выделение активной точки
+  // При открытии общего комментария снимаем выделение активной точки.
+  // Пустая (без текста) активная точка при этом удаляется с холста.
   useEffect(() => {
     if (generalOpen) {
+      if (activePendingId && activePending && !(activePending.text || "").trim()) {
+        setPending(pendingPoints.filter((p) => p.id !== activePendingId));
+      }
       setActivePendingId(null);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [generalOpen]);
 
   const persist = useCallback(
@@ -181,8 +186,14 @@ export function MarkerCanvas({
     }
   };
 
-  // «Закрыть» форму — точка остаётся на фото с текстом
+  // «Закрыть» форму. Если в точке нет текста — она полностью пропадает с холста
+  // (не остаётся пустой). Если текст есть — точка сохраняется на фото с текстом.
   const closePending = () => {
+    if (activePending) {
+      if (!(activePending.text || "").trim()) {
+        setPending(pendingPoints.filter((p) => p.id !== activePending.id));
+      }
+    }
     setActivePendingId(null);
     setMarkerText("");
   };
