@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, use, useMemo } from "react";
+import { useState, useEffect, use, useMemo, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   subscribeToProject,
@@ -41,6 +41,24 @@ export default function ReviewPage({
   const [generalOpen, setGeneralOpen] = useState(false);
   const [generalText, setGeneralText] = useState("");
   const [helpOpen, setHelpOpen] = useState(false);
+  const helpRef = useRef<HTMLDivElement>(null);
+
+  // Авто-закрытие справки при клике за пределами плашки
+  useEffect(() => {
+    if (!helpOpen) return;
+    const onDocClick = (e: MouseEvent | TouchEvent) => {
+      if (helpRef.current && !helpRef.current.contains(e.target as Node)) {
+        setHelpOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", onDocClick);
+    document.addEventListener("touchstart", onDocClick);
+    return () => {
+      document.removeEventListener("mousedown", onDocClick);
+      document.removeEventListener("touchstart", onDocClick);
+    };
+  }, [helpOpen]);
+
   // Черновик общего комментария не пропадает при случайном закрытии
   useEffect(() => {
     if (!generalOpen) return;
@@ -184,6 +202,8 @@ export default function ReviewPage({
   const locked =
     !hasRoundsLeft(project) || project.status === "exhausted" || submitted;
   const round = project.currentRound || 1;
+  // Режим Read-Only: просмотр архивного раунда или текущий завершён
+  const readOnly = viewRound !== round || locked;
 
   const imagesForRound = (r: number) => {
     if (r === round) {
@@ -306,61 +326,63 @@ export default function ReviewPage({
           )}
         </div>
         <div className="flex shrink-0 items-center gap-2">
-          {/* Справка — кнопка в шапке, панель выезжает вниз (под оверлеем модалок) */}
-          <div className="relative">
-            <button
-              type="button"
-              onClick={() => setHelpOpen((v) => !v)}
-              className={cn(
-                "flex h-9 w-9 items-center justify-center rounded-full border text-sm font-bold transition-all",
-                helpOpen
-                  ? "border-text-primary/40 bg-text-primary/15 text-text-primary"
-                  : "border-border-strong bg-bg-card text-text-muted hover:bg-bg-cardHover hover:text-text-primary"
-              )}
-              aria-label="Справка"
-            >
-              ?
-            </button>
-            <AnimatePresence>
-              {helpOpen && (
-                <motion.div
-                  initial={{ opacity: 0, y: -6 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -6 }}
-                  transition={{ duration: 0.18, ease: "easeOut" }}
-                  className="absolute right-0 top-full z-10 mt-2 w-80 rounded-2xl border border-border-strong bg-bg-card p-5 shadow-2xl"
-                >
-                  <div className="mb-3 flex items-center justify-between">
-                    <h3 className="text-sm font-semibold text-text-primary">Как оставить правки</h3>
-                    <button
-                      type="button"
-                      onClick={() => setHelpOpen(false)}
-                      className="rounded-lg p-1 text-text-muted transition-colors hover:bg-bg-cardHover hover:text-text-primary"
-                      aria-label="Закрыть справку"
-                    >
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" className="h-4 w-4">
-                        <path d="M18 6 6 18M6 6l12 12" />
-                      </svg>
-                    </button>
-                  </div>
-                  <ol className="space-y-3 text-sm leading-relaxed text-text-muted">
-                    <li className="flex gap-2.5">
-                      <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-text-primary text-[11px] font-bold text-bg-page">1</span>
-                      <span>Кликните по холсту, чтобы поставить точку и написать правку.</span>
-                    </li>
-                    <li className="flex gap-2.5">
-                      <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-text-primary text-[11px] font-bold text-bg-page">2</span>
-                      <span>Нажмите «Готово», когда добавите все комментарии.</span>
-                    </li>
-                    <li className="flex gap-2.5">
-                      <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-text-primary text-[11px] font-bold text-bg-page">3</span>
-                      <span>Фрилансер получит уведомление и загрузит обновленные макеты.</span>
-                    </li>
-                  </ol>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
+          {/* Справка — кнопка в шапке (скрыта в закрытых раундах Read-Only) */}
+          {!readOnly && (
+            <div ref={helpRef} className="relative">
+              <button
+                type="button"
+                onClick={() => setHelpOpen((v) => !v)}
+                className={cn(
+                  "flex h-9 w-9 items-center justify-center rounded-xl border text-xs font-bold transition-all",
+                  helpOpen
+                    ? "border-text-primary/60 bg-text-primary text-bg-page"
+                    : "border-border-strong bg-bg-input text-text-primary hover:bg-bg-cardHover hover:text-white"
+                )}
+                aria-label="Справка"
+              >
+                ?
+              </button>
+              <AnimatePresence>
+                {helpOpen && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -4 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -4 }}
+                    transition={{ duration: 0.18, ease: "easeOut" }}
+                    className="absolute right-0 top-full w-80 rounded-b-2xl rounded-tl-2xl border border-t-0 border-border-strong bg-bg-card p-5 shadow-2xl"
+                  >
+                    <div className="mb-3 flex items-center justify-between">
+                      <h3 className="text-sm font-semibold text-text-primary">Как оставить правки</h3>
+                      <button
+                        type="button"
+                        onClick={() => setHelpOpen(false)}
+                        className="rounded-lg p-1 text-text-muted transition-colors hover:bg-bg-cardHover hover:text-text-primary"
+                        aria-label="Закрыть справку"
+                      >
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" className="h-4 w-4">
+                          <path d="M18 6 6 18M6 6l12 12" />
+                        </svg>
+                      </button>
+                    </div>
+                    <ol className="space-y-3 text-sm leading-relaxed text-text-muted">
+                      <li className="flex gap-2.5">
+                        <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-text-primary text-[11px] font-bold text-bg-page">1</span>
+                        <span>Кликните по холсту, чтобы поставить точку и написать правку.</span>
+                      </li>
+                      <li className="flex gap-2.5">
+                        <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-text-primary text-[11px] font-bold text-bg-page">2</span>
+                        <span>Нажмите «Готово», когда добавите все комментарии.</span>
+                      </li>
+                      <li className="flex gap-2.5">
+                        <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-text-primary text-[11px] font-bold text-bg-page">3</span>
+                        <span>Фрилансер получит уведомление и загрузит обновленные макеты.</span>
+                      </li>
+                    </ol>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+          )}
 
           {/* Переключатель маячков доступен на всех раундах (текущих и закрытых) */}
           <button
