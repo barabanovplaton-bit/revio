@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
+import { MousePointer2 } from "lucide-react";
 
 const STEPS = [
   {
@@ -41,14 +42,14 @@ const FAQ = [
   },
 ];
 
-/* Координаты (в %) внутри демо-окна: точки прямоугольников-карточек */
+/* Координаты (в %) внутри демо-окна: курсор двигается по порядку (левый верх, центр, право) */
 const DEMO_STEPS = [
-  { l: "21%", t: "52%", n: 1, text: "Увеличь логотип" },
-  { l: "50%", t: "52%", n: 2, text: "Поправить отступы" },
-  { l: "79%", t: "52%", n: 3, text: "Заменить цвет" },
+  { l: "15%", t: "22%", n: 1, text: "Увеличь логотип" },
+  { l: "52%", t: "52%", n: 2, text: "Поправить отступы" },
+  { l: "80%", t: "42%", n: 3, text: "Изменить цвет" },
 ];
 
-const CURSOR_ORIGIN = { l: "3%", t: "5%" };
+const CURSOR_ORIGIN = { l: "90%", t: "90%"};
 
 const fadeUp = {
   hidden: { opacity: 0, y: 24 },
@@ -59,7 +60,7 @@ const fadeUp = {
   }),
 };
 
-function Check({ className }: { className?: string }) {
+function Check({ className, accent }: { className?: string; accent?: boolean }) {
   return (
     <svg
       viewBox="0 0 24 24"
@@ -68,7 +69,7 @@ function Check({ className }: { className?: string }) {
       strokeWidth={2.5}
       strokeLinecap="round"
       strokeLinejoin="round"
-      className={className}
+      className={`${accent ? "text-accent" : "text-white/40"} ${className ?? ""}`}
     >
       <path d="M20 6 9 17l-5-5" />
     </svg>
@@ -100,7 +101,7 @@ function DemoMockup() {
           await wait(120);
           if (!alive) return;
           setClicking(false);
-          await wait(210); // пауза 0.2с -> появится точка + бабл
+          await wait(150); // пауза 0.15с -> появится точка + бабл
           if (!alive) return;
           setRevealed((r) => Math.max(r, s.n));
         }
@@ -131,9 +132,6 @@ function DemoMockup() {
           <span className="h-2.5 w-2.5 rounded-full bg-red-500/70" />
           <span className="h-2.5 w-2.5 rounded-full bg-yellow-500/70" />
           <span className="h-2.5 w-2.5 rounded-full bg-green-500/70" />
-          <span className="ml-2 truncate text-xs text-text-muted">
-            Раунд 1 · холст правок
-          </span>
         </div>
 
         <div className="relative mt-4 aspect-[16/10] overflow-hidden rounded-xl bg-bg-input">
@@ -162,49 +160,41 @@ function DemoMockup() {
             <div key={s.n} className="absolute z-20" style={{ left: s.l, top: s.t }}>
               {/* точка */}
               <div
-                className="flex h-7 w-7 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border-2 border-white bg-black text-[11px] font-bold text-white shadow-lg transition-all duration-300"
+                className="flex h-7 w-7 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border border-black/40 bg-white text-[11px] font-bold text-black shadow-lg transition-all duration-300"
                 style={{ opacity: revealed >= s.n ? 1 : 0, scale: revealed >= s.n ? 1 : 0.4 }}
               >
                 {s.n}
               </div>
               {/* бабл рядом */}
               <div
-                className="translate-x-2 -translate-y-1/2 whitespace-nowrap rounded-lg border border-white/20 bg-white/10 px-2.5 py-1.5 text-xs text-white backdrop-blur-sm transition-all duration-300"
-                style={{ opacity: revealed >= s.n ? 1 : 0, transform: revealed >= s.n ? `translate(8px, -50%)` : `translate(8px, -30%)` }}
+                className="rounded-lg border border-white/20 bg-white/10 px-2.5 py-1.5 text-xs text-white backdrop-blur-sm transition-all duration-300"
+                style={{ opacity: revealed >= s.n ? 1 : 0, transform: revealed >= s.n ? `translate(14px, -50%)` : `translate(14px, -30%)` }}
               >
                 {s.n}. {s.text}
               </div>
             </div>
           ))}
 
-          {/* курсор */}
+          {/* курсор (иконка из lucide-react) */}
           <div
-            className="pointer-events-none absolute z-30"
+            className="pointer-events-none absolute z-20"
             style={{
               left: pos.l,
               top: pos.t,
-              transform: "translate(-50%, -20%)",
+              transform: "translate(-10%, -10%)",
               transition:
                 "left 0.8s cubic-bezier(0.4, 0, 0.2, 1), top 0.8s cubic-bezier(0.4, 0, 0.2, 1)",
             }}
           >
-            <svg
-              viewBox="0 0 24 24"
-              className="h-6 w-6 drop-shadow-lg"
+            <MousePointer2
+              size={18}
+              className="text-white drop-shadow-[0_1px_0_theme(colors.black)]"
               style={{
                 transformOrigin: "30% 30%",
-                transform: clicking ? "scale(0.75)" : "scale(1)",
+                transform: clicking ? "scale(0.85)" : "scale(1)",
                 transition: "transform 0.15s ease",
               }}
-            >
-              <path
-                d="M5 3l7 6-3 6 2-1 1.5 4 2-1.5-1.5-4 3 2.5z"
-                fill="#EDEDED"
-                stroke="#0A0A0A"
-                strokeWidth="1.2"
-                strokeLinejoin="round"
-              />
-            </svg>
+            />
           </div>
         </div>
       </div>
@@ -384,7 +374,7 @@ export function Landing() {
               {["До 3 проектов", "До 10 изображений на проект", "До 5 раундов правок"].map(
                 (li) => (
                   <li key={li} className="flex items-start gap-2">
-                    <Check className="mt-0.5 h-4 w-4 shrink-0 text-accent" />
+                    <Check className="mt-0.5 h-4 w-4 shrink-0" />
                     <span>{li}</span>
                   </li>
                 )
@@ -420,7 +410,7 @@ export function Landing() {
               {["Неограниченные проекты", "Неограниченные изображения", "Неограниченные правки"].map(
                 (li) => (
                   <li key={li} className="flex items-start gap-2">
-                    <Check className="mt-0.5 h-4 w-4 shrink-0 text-accent" />
+                    <Check accent className="mt-0.5 h-4 w-4 shrink-0" />
                     <span>{li}</span>
                   </li>
                 )

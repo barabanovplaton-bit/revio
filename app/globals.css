@@ -57,9 +57,9 @@
   --avatar-bg: #FFFFFF;
   --avatar-fg: #0A0A0A;
   --shadow-glow: rgba(255, 255, 255, 0.06);
-  --accent: #8B5CF6;
-  --accent-soft: rgba(139, 92, 246, 0.15);
-  --accent-glow: rgba(139, 92, 246, 0.35);
+  --accent: #E880FC;
+  --accent-soft: rgba(232, 128, 252, 0.15);
+  --accent-glow: rgba(232, 128, 252, 0.35);
   color-scheme: dark;
 }
 
@@ -77,9 +77,9 @@
   --avatar-bg: #0A0A0A;
   --avatar-fg: #FFFFFF;
   --shadow-glow: rgba(0, 0, 0, 0.05);
-  --accent: #7C3AED;
-  --accent-soft: rgba(124, 58, 237, 0.12);
-  --accent-glow: rgba(124, 58, 237, 0.25);
+  --accent: #E880FC;
+  --accent-soft: rgba(232, 128, 252, 0.12);
+  --accent-glow: rgba(232, 128, 252, 0.25);
   color-scheme: light;
 }
 
@@ -99,9 +99,9 @@
     --avatar-bg: #0A0A0A;
     --avatar-fg: #FFFFFF;
     --shadow-glow: rgba(0, 0, 0, 0.05);
-    --accent: #7C3AED;
-    --accent-soft: rgba(124, 58, 237, 0.12);
-    --accent-glow: rgba(124, 58, 237, 0.25);
+    --accent: #E880FC;
+    --accent-soft: rgba(232, 128, 252, 0.12);
+    --accent-glow: rgba(232, 128, 252, 0.25);
     color-scheme: light;
   }
 }
