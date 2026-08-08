@@ -31,13 +31,13 @@ export default function LoginPage() {
     handleRedirectResult().then((user) => {
       if (user) {
         setLoading(true);
-        router.push("/?loading=true");
+        router.push("/projects");
       }
     });
     const unsub = subscribeToAuth((user) => {
       if (user) {
         setLoading(true);
-        router.push("/?loading=true");
+        router.push("/projects");
       }
     });
     return () => unsub();
@@ -47,7 +47,7 @@ export default function LoginPage() {
     try {
       setLoading(true);
       await signInWithGoogle();
-      router.push("/?loading=true");
+      router.push("/projects");
     } catch (e: any) {
       setLoading(false);
       console.error("Login error:", e);
@@ -60,7 +60,7 @@ export default function LoginPage() {
     try {
       const cred = await signInWithEmailAndPassword(auth, email, password);
       await getOrCreateUserProfile(cred.user);
-      router.push("/?loading=true");
+      router.push("/projects");
     } catch (e: any) {
       const code = e?.code || "";
       if (code === "auth/user-not-found") {
@@ -86,7 +86,7 @@ export default function LoginPage() {
     try {
       const cred = await createUserWithEmailAndPassword(auth, email, password);
       await getOrCreateUserProfile(cred.user);
-      router.push("/?loading=true");
+      router.push("/projects");
     } catch (e: any) {
       const code = e?.code || "";
       if (code === "auth/email-already-in-use") {

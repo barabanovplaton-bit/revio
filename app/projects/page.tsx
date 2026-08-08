@@ -1,0 +1,492 @@
+"use client";
+
+import { useState, useEffect, useCallback } from "react";
+import { useRouter } from "next/navigation";
+import { motion, AnimatePresence } from "framer-motion";
+
+import { Avatar } from "../_components/avatar";
+import { ConfirmModal } from "../_components/confirm-modal";
+import { NewProjectWizard } from "../_components/new-project-wizard";
+import { FeedbackButton } from "../_components/feedback-button";
+import { signOut, subscribeToAuth, type User } from "@/lib/auth";
+import { type UserProfile } from "@/lib/user-profile";
+import { isOwner } from "@/lib/user-profile";
+import {
+  subscribeToUserProjects,
+  updateProject,
+  togglePin,
+  deleteProjectPermanently,
+  type Project,
+} from "@/lib/projects";
+
+export default function ProjectsPage() {
+  return <Dashboard />;
+}
+
+/** Лимит активных проектов на бесплатном тарифе (удалённые навсегда не считаются) */
+const FREE_PROJECT_LIMIT = 3;
+
+function Dashboard() {
+  const router = useRouter();
+  const [user, setUser] = useState<User | null>(null);
+  const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [authLoading, setAuthLoading] = useState(true);
+  const [profileLoaded, setProfileLoaded] = useState(false);
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [newProjectOpen, setNewProjectOpen] = useState(false);
+  const [toast, setToast] = useState<string | null>(null);
+  const [query, setQuery] = useState("");
+  const [menuFor, setMenuFor] = useState<string | null>(null);
+
+  const [confirmDelete, setConfirmDelete] = useState<{
+    id: string;
+    name: string;
+  } | null>(null);
+  const [limitOpen, setLimitOpen] = useState(false);
+
+  const showToast = useCallback((msg: string) => {
+    setToast(msg);
+    setTimeout(() => setToast(null), 2400);
+  }, []);
+
+  const goToLogin = useCallback(() => {
+    router.push("/login");
+  }, [router]);
+
+  // Неавторизованный пользователь не должен видеть личный кабинет
+  useEffect(() => {
+    if (!authLoading && !user) {
+      router.replace("/");
+    }
+  }, [authLoading, user, router]);
+
+  useEffect(() => {
+    const unsub = subscribeToAuth(async (u) => {
+      setUser(u);
+      setAuthLoading(false);
+      if (u) {
+        const { profile: p } = await import("@/lib/user-profile").then(
+          (m) => m.getOrCreateUserProfile(u)
+        );
+        setProfile(p);
+        setProfileLoaded(true);
+      } else {
+        setProfile(null);
+        setProjects([]);
+        setProfileLoaded(true);
+      }
+    });
+    return () => unsub();
+  }, []);
+
+  useEffect(() => {
+    if (!user) {
+      setProjects([]);
+      return;
+    }
+    const unsub = subscribeToUserProjects(user.uid, (list) => {
+      setProjects(list);
+    });
+    return () => unsub();
+  }, [user]);
+
+  const handleSignOut = useCallback(async () => {
+    await signOut();
+    showToast("Вы вышли");
+  }, [showToast]);
+
+  const handleNewProject = useCallback(() => {
+    if (!user) {
+      goToLogin();
+      return;
+    }
+    // Владелец (админ) — безлимит всегда
+    if (isOwner(user.uid, profile?.email)) {
+      setNewProjectOpen(true);
+      return;
+    }
+    const isFree = (profile?.plan || "free") === "free";
+    const totalCount = projects.filter((p) => !p.deleted).length;
+    if (isFree && totalCount >= FREE_PROJECT_LIMIT) {
+      setLimitOpen(true);
+      return;
+    }
+    setNewProjectOpen(true);
+  }, [user, goToLogin, profile, projects]);
+
+  const handleSelectProject = useCallback(
+    (id: string) => {
+      if (!user) {
+        goToLogin();
+        return;
+      }
+      router.push(`/project/${id}`);
+    },
+    [user, goToLogin, router]
+  );
+
+  const handleProjectCreated = useCallback(
+    (id: string) => {
+      router.push(`/project/${id}?created=1`);
+    },
+    [router]
+  );
+
+  const handleDeleteProject = useCallback(async () => {
+    if (!confirmDelete) return;
+    const { id } = confirmDelete;
+    setProjects((prev) => prev.filter((p) => p.id !== id));
+    setConfirmDelete(null);
+    showToast("Проект удалён навсегда");
+    deleteProjectPermanently(id).catch((e) => {
+      console.error("Failed to permanently delete project:", e);
+      showToast("Не удалось удалить проект в базе");
+    });
+  }, [confirmDelete, showToast]);
+
+  const handleRenameProject = useCallback(
+    async (id: string, name: string) => {
+      await updateProject(id, { name });
+      showToast("Переименовано");
+    },
+    [showToast]
+  );
+
+  const handlePinProject = useCallback(async (id: string) => {
+    const p = projects.find((x) => x.id === id);
+    if (p) await togglePin(id, !p.pinned);
+  }, [projects]);
+
+  if (authLoading || !profileLoaded) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-bg-page">
+        <div className="h-8 w-8 animate-spin rounded-full border-2 border-border-strong border-t-text-primary" />
+      </div>
+    );
+  }
+
+  const filtered = query.trim()
+    ? projects.filter((p) =>
+        p.name.toLowerCase().includes(query.toLowerCase())
+      )
+    : projects;
+
+  const activeProjects = projects.filter((p) => !p.deleted);
+  const visibleProjects = filtered.filter((p) => !p.deleted);
+
+  return (
+    <div className="flex min-h-screen flex-col bg-bg-page">
+      <div className="sticky top-0 z-20 px-4 pt-3 md:px-6">
+        <header className="mx-auto flex max-w-3xl items-center justify-between rounded-2xl border border-border-strong bg-bg-card px-5 py-3 shadow-lg">
+          <button type="button" onClick={() => router.push("/")} className="flex items-center gap-2.5">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-text-primary text-bg-page">
+              <span className="font-display text-xs font-bold">R</span>
+            </div>
+            <span className="font-display text-lg font-semibold text-text-primary">
+              Revio
+            </span>
+          </button>
+
+          <div className="flex items-center gap-1">
+            {user ? (
+              <Avatar
+                name={profile?.displayName}
+                email={user.email}
+                photoURL={user.photoURL}
+                onSignInClick={goToLogin}
+                onSignOut={handleSignOut}
+              />
+            ) : (
+              <button
+                type="button"
+                onClick={goToLogin}
+                className="rounded-xl bg-text-primary px-4 py-2 text-sm font-medium text-bg-page transition-all hover:opacity-90"
+              >
+                Войти
+              </button>
+            )}
+          </div>
+        </header>
+      </div>
+
+      <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-6 md:px-6 md:py-8">
+        <div className="mb-6 flex items-center gap-3">
+          <div className="relative h-10 flex-1">
+            <input
+              type="text"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Поиск проектов..."
+              className="h-full w-full rounded-xl border border-border-strong bg-bg-input px-3 pl-10 text-sm text-text-primary placeholder:text-text-muted focus:border-text-primary focus:outline-none"
+            />
+            <svg
+              className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-text-muted"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={1.8}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <circle cx="11" cy="11" r="7" />
+              <path d="m21 21-4.3-4.3" />
+            </svg>
+          </div>
+          <button
+            type="button"
+            onClick={handleNewProject}
+            className="flex h-10 shrink-0 items-center gap-2 rounded-xl bg-text-primary px-5 text-sm font-medium text-bg-page transition-all hover:opacity-90 active:scale-[0.98]"
+          >
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={2}
+              strokeLinecap="round"
+              className="h-4 w-4"
+            >
+              <path d="M12 5v14M5 12h14" />
+            </svg>
+            Новый проект
+          </button>
+        </div>
+
+        {!isOwner(user?.uid || "", profile?.email) &&
+          (profile?.plan || "free") === "free" &&
+          activeProjects.length > 0 && (
+          <div className="mb-4 flex items-center justify-between rounded-xl border border-border-strong bg-bg-card px-4 py-2.5">
+            <p className="text-xs text-text-muted">
+              Проекты:{" "}
+              <span className="font-medium text-text-primary">
+                {activeProjects.length} из {FREE_PROJECT_LIMIT}
+              </span>{" "}
+              на бесплатном тарифе
+            </p>
+            <button
+              type="button"
+              onClick={() => router.push("/pricing")}
+              className="shrink-0 rounded-lg bg-text-primary px-3 py-1.5 text-xs font-medium text-bg-page transition-all hover:opacity-90"
+            >
+              Pro безлимит
+            </button>
+          </div>
+        )}
+
+        {visibleProjects.length === 0 ? (
+          <div className="py-20 text-center">
+            <p className="mb-4 text-sm text-text-muted">
+              {query ? "Ничего не найдено" : "У вас пока нет проектов"}
+            </p>
+            {!query && (
+              <button
+                type="button"
+                onClick={handleNewProject}
+                className="rounded-xl border border-border-strong bg-bg-input px-5 py-3 text-sm font-medium text-text-primary transition-all hover:bg-bg-cardHover"
+              >
+                Создать первый проект
+              </button>
+            )}
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {visibleProjects.map((p) => (
+              <ProjectCard
+                key={p.id}
+                project={p}
+                menuOpen={menuFor === p.id}
+                onSelect={() => handleSelectProject(p.id)}
+                onMenuToggle={() =>
+                  setMenuFor(menuFor === p.id ? null : p.id)
+                }
+                onRename={(name) => handleRenameProject(p.id, name)}
+                onPin={() => {
+                  handlePinProject(p.id);
+                  setMenuFor(null);
+                }}
+                onDelete={() => {
+                  setConfirmDelete({ id: p.id, name: p.name });
+                  setMenuFor(null);
+                }}
+              />
+            ))}
+          </div>
+        )}
+      </main>
+
+      {newProjectOpen && user && (
+        <NewProjectWizard
+          open={newProjectOpen}
+          ownerUid={user.uid}
+          plan={isOwner(user.uid, profile?.email) ? "pro" : profile?.plan || "free"}
+          onClose={() => setNewProjectOpen(false)}
+          onCreated={handleProjectCreated}
+        />
+      )}
+
+      <ConfirmModal
+        open={!!confirmDelete}
+        title="Удалить проект навсегда?"
+        message={`Проект «${confirmDelete?.name}» будет удалён навсегда: все макеты, правки и уведомления очистятся из базы без возможности восстановления.`}
+        confirmLabel="Удалить навсегда"
+        danger
+        onConfirm={handleDeleteProject}
+        onCancel={() => setConfirmDelete(null)}
+      />
+
+      <ConfirmModal
+        open={limitOpen}
+        title="Лимит бесплатных проектов"
+        message="На бесплатном тарифе — до 3 проектов. Обновитесь до Pro для безлимита."
+        confirmLabel="Узнать о Pro"
+        onConfirm={() => {
+          setLimitOpen(false);
+          router.push("/pricing");
+        }}
+        onCancel={() => setLimitOpen(false)}
+      />
+
+      <AnimatePresence>
+        {toast && (
+          <motion.div
+            initial={{ opacity: 0, y: 20, x: "-50%" }}
+            animate={{ opacity: 1, y: 0, x: "-50%" }}
+            exit={{ opacity: 0, y: 20, x: "-50%" }}
+            className="fixed bottom-6 left-1/2 z-50 rounded-xl border border-border-strong bg-bg-card px-4 py-2.5 text-sm text-text-primary shadow-xl"
+          >
+            {toast}
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <FeedbackButton />
+    </div>
+  );
+}
+
+function ProjectCard({
+  project,
+  menuOpen,
+  onSelect,
+  onMenuToggle,
+  onRename,
+  onPin,
+  onDelete,
+}: {
+  project: Project;
+  menuOpen: boolean;
+  onSelect: () => void;
+  onMenuToggle: () => void;
+  onRename: (name: string) => void;
+  onPin: () => void;
+  onDelete: () => void;
+}) {
+  const [renaming, setRenaming] = useState(false);
+  const [renameValue, setRenameValue] = useState("");
+
+  return (
+    <div
+      className="group relative rounded-xl border border-border-strong bg-bg-card transition-all hover:border-text-primary/30 hover:bg-bg-cardHover cursor-pointer"
+      onClick={onSelect}
+    >
+      <div className="flex items-center gap-3 px-4 py-3">
+        <div className="min-w-0 flex-1">
+          {renaming ? (
+            <input
+              type="text"
+              value={renameValue}
+              onChange={(e) => setRenameValue(e.target.value)}
+              onClick={(e) => e.stopPropagation()}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && renameValue.trim()) {
+                  onRename(renameValue.trim());
+                  setRenaming(false);
+                }
+                if (e.key === "Escape") setRenaming(false);
+              }}
+              onBlur={() => {
+                if (renameValue.trim()) onRename(renameValue.trim());
+                setRenaming(false);
+              }}
+              autoFocus
+              className="w-full rounded border border-border-strong bg-bg-input px-2 py-1 text-sm text-text-primary focus:outline-none"
+            />
+          ) : (
+            <>
+              <div className="flex h-5 items-center gap-1.5 overflow-hidden">
+                {project.clientSubmitted && !project.clientSubmittedRead && (
+                  <span className="mr-1.5 inline-block h-2 w-2 shrink-0 rounded-full bg-red-500" title="Новые правки" />
+                )}
+                <span className="truncate align-middle text-sm font-medium text-text-primary">
+                  {project.name}
+                </span>
+              </div>
+            </>
+          )}
+        </div>
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onMenuToggle();
+          }}
+          className="shrink-0 rounded-lg p-1.5 text-text-muted opacity-0 transition-all hover:bg-bg-cardHover hover:text-text-primary group-hover:opacity-100"
+          aria-label="Меню"
+        >
+          <svg viewBox="0 0 24 24" fill="currentColor" className="h-4 w-4">
+            <circle cx="12" cy="5" r="1.5" />
+            <circle cx="12" cy="12" r="1.5" />
+            <circle cx="12" cy="19" r="1.5" />
+          </svg>
+        </button>
+      </div>
+
+      <AnimatePresence>
+        {menuOpen && (
+          <>
+            <div
+              className="fixed inset-0 z-40"
+              onClick={(e) => {
+                e.stopPropagation();
+                onMenuToggle();
+              }}
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="absolute right-2 top-full z-50 mt-1 w-44 rounded-xl border border-border-strong bg-bg-card p-1 shadow-xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <button
+                type="button"
+                onClick={onPin}
+                className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-text-primary transition-colors hover:bg-bg-cardHover"
+              >
+                {project.pinned ? "Открепить" : "Закрепить"}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setRenameValue(project.name);
+                  setRenaming(true);
+                  onMenuToggle();
+                }}
+                className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-text-primary transition-colors hover:bg-bg-cardHover"
+              >
+                Переименовать
+              </button>
+              <div className="my-1 h-px bg-border-strong" />
+              <button
+                type="button"
+                onClick={onDelete}
+                className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-red-400 transition-colors hover:bg-red-500/10"
+              >
+                Удалить
+              </button>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}

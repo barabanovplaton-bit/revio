@@ -1218,7 +1218,7 @@ export function ProjectHub({
       <ConfirmModal
         open={exhaustedModal}
         title="Все раунды правок завершены"
-        message={`Вы использовали все раунды правок по проекту «${project.name}». Чтобы продолжить работу, создайте новый проект и поделитесь новой ссылкой с клиентом.`}
+        message="Вы использовали все раунды правок по этому проекту."
         confirmLabel="Создать новый проект"
         onConfirm={() => {
           setExhaustedModal(false);
