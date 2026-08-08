@@ -41,11 +41,14 @@ const FAQ = [
   },
 ];
 
-const DEMO_POINTS = [
-  { l: "52%", t: "24%", n: 1, comment: "Увеличь логотип" },
-  { l: "30%", t: "58%", n: 2, comment: "Тут темновато" },
-  { l: "64%", t: "70%", n: 3, comment: "Поправь отступы" },
+/* Координаты (в %) внутри демо-окна: точки прямоугольников-карточек */
+const DEMO_STEPS = [
+  { l: "21%", t: "52%", n: 1, text: "Увеличь логотип" },
+  { l: "50%", t: "52%", n: 2, text: "Поправить отступы" },
+  { l: "79%", t: "52%", n: 3, text: "Заменить цвет" },
 ];
+
+const CURSOR_ORIGIN = { l: "3%", t: "5%" };
 
 const fadeUp = {
   hidden: { opacity: 0, y: 24 },
@@ -56,37 +59,71 @@ const fadeUp = {
   }),
 };
 
+function Check({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2.5}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+    >
+      <path d="M20 6 9 17l-5-5" />
+    </svg>
+  );
+}
+
 function DemoMockup() {
-  const [active, setActive] = useState<number | null>(null);
+  const [pos, setPos] = useState(CURSOR_ORIGIN);
+  const [clicking, setClicking] = useState(false);
+  const [revealed, setRevealed] = useState(0);
 
   useEffect(() => {
     let alive = true;
-    let timer: ReturnType<typeof setTimeout>;
-    let step = 0;
+    const timers: ReturnType<typeof setTimeout>[] = [];
+    const wait = (ms: number) =>
+      new Promise<void>((r) => timers.push(setTimeout(r, ms)));
 
-    const advance = () => {
-      if (!alive) return;
-      if (step >= DEMO_POINTS.length) {
-        setActive(null);
-        step = 0;
-        timer = setTimeout(advance, 2200);
-        return;
+    (async () => {
+      await wait(400);
+      while (alive) {
+        // плавно скользим от исходного угла к первой точке
+        for (const s of DEMO_STEPS) {
+          if (!alive) return;
+          setPos({ l: s.l, t: s.t });
+          await wait(820); // скольжение (~0.8с)
+          if (!alive) return;
+          // микро-клик
+          setClicking(true);
+          await wait(120);
+          if (!alive) return;
+          setClicking(false);
+          await wait(210); // пауза 0.2с -> появится точка + бабл
+          if (!alive) return;
+          setRevealed((r) => Math.max(r, s.n));
+        }
+        // все 3 висят 3 секунды
+        await wait(3000);
+        if (!alive) return;
+        // плавное исчезновение, курсор возвращается
+        setRevealed(0);
+        await wait(650);
+        if (!alive) return;
+        setPos(CURSOR_ORIGIN);
+        await wait(900);
       }
-      setActive(step);
-      step += 1;
-      timer = setTimeout(advance, 1500);
-    };
+    })();
 
-    timer = setTimeout(advance, 1400);
     return () => {
       alive = false;
-      clearTimeout(timer);
+      timers.forEach(clearTimeout);
     };
   }, []);
 
   return (
     <div className="relative">
-      {/* фиолетовое свечение за макетом */}
       <div className="absolute -inset-6 rounded-[2rem] bg-accent/40 blur-3xl" />
 
       <div className="relative rounded-2xl border border-white/10 bg-bg-card p-4 shadow-2xl">
@@ -98,71 +135,77 @@ function DemoMockup() {
             Раунд 1 · холст правок
           </span>
         </div>
+
         <div className="relative mt-4 aspect-[16/10] overflow-hidden rounded-xl bg-bg-input">
-          <div className="absolute inset-0 flex items-center justify-center">
-            <div className="h-[70%] w-[85%] rounded-lg border border-text-primary/20 bg-bg-card" />
+          {/* ---- абстрактный макет сайта ---- */}
+          <div className="absolute inset-6">
+            {/* шапка */}
+            <div className="absolute left-0 right-0 top-0 h-[9%] rounded-md bg-white/10" />
+            {/* баннер/заголовок */}
+            <div className="absolute left-0 right-0 top-[12%] h-[26%] rounded-md bg-white/[0.06]" />
+            <div className="absolute left-[6%] top-[30%] h-[5%] w-[32%] rounded-sm bg-white/[0.08]" />
+            {/* 3 карточки */}
+            <div className="absolute left-0 right-0 top-[44%] flex h-[34%] gap-[4%]">
+              {[0, 1, 2].map((i) => (
+                <div
+                  key={i}
+                  className="flex-1 rounded-md border border-white/10 bg-white/[0.07]"
+                />
+              ))}
+            </div>
+            {/* футер */}
+            <div className="absolute bottom-0 left-0 right-0 h-[9%] rounded-md bg-white/[0.09]" />
           </div>
 
-          {DEMO_POINTS.map((m, idx) => (
-            <motion.div
-              key={m.n}
-              className="absolute flex h-7 w-7 items-center justify-center rounded-full border-2 border-white bg-text-primary text-[11px] font-bold text-bg-page shadow-lg"
-              style={{ left: m.l, top: m.t }}
-              initial={{ scale: 0, opacity: 0 }}
-              animate={
-                active === null || active < idx
-                  ? { scale: 0, opacity: 0 }
-                  : { scale: 1, opacity: 1 }
-              }
-              transition={{ type: "spring", stiffness: 400, damping: 20 }}
-            >
-              {m.n}
-            </motion.div>
+          {/* точки с баблами */}
+          {DEMO_STEPS.map((s) => (
+            <div key={s.n} className="absolute z-20" style={{ left: s.l, top: s.t }}>
+              {/* точка */}
+              <div
+                className="flex h-7 w-7 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border-2 border-white bg-black text-[11px] font-bold text-white shadow-lg transition-all duration-300"
+                style={{ opacity: revealed >= s.n ? 1 : 0, scale: revealed >= s.n ? 1 : 0.4 }}
+              >
+                {s.n}
+              </div>
+              {/* бабл рядом */}
+              <div
+                className="translate-x-2 -translate-y-1/2 whitespace-nowrap rounded-lg border border-white/20 bg-white/10 px-2.5 py-1.5 text-xs text-white backdrop-blur-sm transition-all duration-300"
+                style={{ opacity: revealed >= s.n ? 1 : 0, transform: revealed >= s.n ? `translate(8px, -50%)` : `translate(8px, -30%)` }}
+              >
+                {s.n}. {s.text}
+              </div>
+            </div>
           ))}
 
-          <AnimatePresence>
-            {active !== null && (
-              <motion.div
-                key="cursor"
-                className="pointer-events-none absolute z-10"
-                initial={{ opacity: 0, scale: 0.8 }}
-                animate={{
-                  opacity: 1,
-                  scale: 1,
-                  left: DEMO_POINTS[active].l,
-                  top: DEMO_POINTS[active].t,
-                }}
-                exit={{ opacity: 0, scale: 0.8 }}
-                transition={{ type: "spring", stiffness: 300, damping: 22 }}
-                style={{ transform: "translate(-50%, -50%)" }}
-              >
-                <svg viewBox="0 0 24 24" className="h-6 w-6 drop-shadow-lg">
-                  <path
-                    d="M5 3l7 6-3 6 2-1 1.5 4 2-1.5-1.5-4 3 2.5z"
-                    fill="#EDEDED"
-                    stroke="#0A0A0A"
-                    strokeWidth="1.2"
-                    strokeLinejoin="round"
-                  />
-                </svg>
-              </motion.div>
-            )}
-          </AnimatePresence>
-
-          <AnimatePresence>
-            {active !== null && (
-              <motion.div
-                key={active}
-                className="absolute bottom-3 right-3 rounded-lg border border-white/20 bg-white/10 px-2.5 py-1.5 text-xs text-white backdrop-blur-sm"
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: 8 }}
-                transition={{ duration: 0.25 }}
-              >
-                {DEMO_POINTS[active].n}. {DEMO_POINTS[active].comment}
-              </motion.div>
-            )}
-          </AnimatePresence>
+          {/* курсор */}
+          <div
+            className="pointer-events-none absolute z-30"
+            style={{
+              left: pos.l,
+              top: pos.t,
+              transform: "translate(-50%, -20%)",
+              transition:
+                "left 0.8s cubic-bezier(0.4, 0, 0.2, 1), top 0.8s cubic-bezier(0.4, 0, 0.2, 1)",
+            }}
+          >
+            <svg
+              viewBox="0 0 24 24"
+              className="h-6 w-6 drop-shadow-lg"
+              style={{
+                transformOrigin: "30% 30%",
+                transform: clicking ? "scale(0.75)" : "scale(1)",
+                transition: "transform 0.15s ease",
+              }}
+            >
+              <path
+                d="M5 3l7 6-3 6 2-1 1.5 4 2-1.5-1.5-4 3 2.5z"
+                fill="#EDEDED"
+                stroke="#0A0A0A"
+                strokeWidth="1.2"
+                strokeLinejoin="round"
+              />
+            </svg>
+          </div>
         </div>
       </div>
     </div>
@@ -248,7 +291,7 @@ export function Landing() {
             <button
               type="button"
               onClick={goToLogin}
-              className="rounded-xl bg-accent px-6 py-3 text-sm font-medium text-white shadow-lg shadow-accent/30 transition-all hover:opacity-90 active:scale-[0.98]"
+              className="rounded-xl bg-white px-6 py-3 text-sm font-medium text-black transition-all hover:opacity-90 active:scale-[0.98]"
             >
               Начать бесплатно
             </button>
@@ -293,9 +336,9 @@ export function Landing() {
               custom={i}
               whileHover={{ y: -4 }}
               transition={{ type: "spring", stiffness: 300, damping: 20 }}
-              className="group rounded-2xl border border-border-strong bg-bg-card p-6 hover:border-accent/60"
+              className="group rounded-2xl border border-border-strong bg-bg-card p-6 transition-colors hover:border-white/20"
             >
-              <div className="mb-3 flex h-9 w-9 items-center justify-center rounded-xl bg-accent-soft text-sm font-bold text-accent transition-colors group-hover:bg-accent group-hover:text-white">
+              <div className="mb-3 flex h-9 w-9 items-center justify-center rounded-xl border border-white/20 text-sm font-bold text-text-primary">
                 {s.num}
               </div>
               <h3 className="mb-1.5 font-medium text-text-primary">
@@ -338,14 +381,19 @@ export function Landing() {
               </span>
             </p>
             <ul className="mt-4 space-y-2 text-sm text-text-muted">
-              <li>• До 3 проектов</li>
-              <li>• До 10 изображений на проект</li>
-              <li>• До 5 раундов правок</li>
+              {["До 3 проектов", "До 10 изображений на проект", "До 5 раундов правок"].map(
+                (li) => (
+                  <li key={li} className="flex items-start gap-2">
+                    <Check className="mt-0.5 h-4 w-4 shrink-0 text-accent" />
+                    <span>{li}</span>
+                  </li>
+                )
+              )}
             </ul>
             <button
               type="button"
               onClick={goToLogin}
-              className="mt-6 w-full rounded-xl border border-border-strong py-2.5 text-sm font-medium text-text-primary transition-all hover:border-accent/50 hover:text-accent"
+              className="mt-6 w-full rounded-xl border border-border-strong py-2.5 text-sm font-medium text-text-primary transition-all hover:bg-bg-cardHover"
             >
               Начать бесплатно
             </button>
@@ -354,12 +402,12 @@ export function Landing() {
           <motion.div
             variants={fadeUp}
             custom={2}
-            className="rounded-2xl border-2 border-accent bg-bg-card p-6 relative shadow-lg shadow-accent/20"
+            className="relative rounded-2xl border-2 border-accent bg-bg-card p-6 shadow-lg shadow-accent/20"
           >
             <div className="flex items-center justify-between">
               <h3 className="font-medium text-text-primary">Pro</h3>
               <span className="rounded-lg bg-accent px-2 py-0.5 text-xs font-medium text-white">
-                Рекомендуем
+                ПОПУЛЯРНЫЙ
               </span>
             </div>
             <p className="mt-1 text-2xl font-semibold text-text-primary">
@@ -369,14 +417,19 @@ export function Landing() {
               </span>
             </p>
             <ul className="mt-4 space-y-2 text-sm text-text-muted">
-              <li>• Безлимит проектов</li>
-              <li>• Безлимит изображений</li>
-              <li>• Безлимит раундов правок</li>
+              {["Неограниченные проекты", "Неограниченные изображения", "Неограниченные правки"].map(
+                (li) => (
+                  <li key={li} className="flex items-start gap-2">
+                    <Check className="mt-0.5 h-4 w-4 shrink-0 text-accent" />
+                    <span>{li}</span>
+                  </li>
+                )
+              )}
             </ul>
             <button
               type="button"
               onClick={() => router.push("/pricing")}
-              className="mt-6 w-full rounded-xl bg-accent py-2.5 text-sm font-medium text-white shadow-lg shadow-accent/40 transition-all hover:shadow-accent/60 hover:brightness-110 active:scale-[0.98]"
+              className="mt-6 w-full rounded-xl border border-accent py-2.5 text-sm font-medium text-accent transition-colors hover:bg-accent hover:text-white"
             >
               Подробнее о Pro
             </button>
@@ -416,7 +469,6 @@ export function Landing() {
         transition={{ duration: 0.5 }}
         className="relative overflow-hidden py-14 text-center"
       >
-        {/* световое пятно-градиент с пульсацией */}
         <div className="animate-breath pointer-events-none absolute left-1/2 top-1/2 h-[420px] w-[520px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-accent/30 blur-[100px]" />
         <div className="relative">
           <h2 className="mb-3 font-display text-2xl font-semibold text-text-primary">
@@ -425,7 +477,7 @@ export function Landing() {
           <button
             type="button"
             onClick={goToLogin}
-            className="rounded-xl bg-accent px-8 py-3 text-sm font-medium text-white shadow-lg shadow-accent/30 transition-all hover:shadow-accent/50 hover:brightness-110 active:scale-[0.98]"
+            className="rounded-xl bg-white px-8 py-3 text-sm font-medium text-black transition-all hover:opacity-90 active:scale-[0.98]"
           >
             Начать бесплатно
           </button>
