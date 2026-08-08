@@ -83,7 +83,24 @@ export function ProjectHub({
   const [fullscreenIndex, setFullscreenIndex] = useState<number | null>(null);
   const [replaceConfirm, setReplaceConfirm] = useState(false);
   const [replaceHelpOpen, setReplaceHelpOpen] = useState(false);
+  const replaceHelpRef = useRef<HTMLDivElement>(null);
   const [exhaustedModal, setExhaustedModal] = useState(false);
+
+  // Авто-закрытие подсказки «?» на кнопке «Заменить макеты» по клику вне
+  useEffect(() => {
+    if (!replaceHelpOpen) return;
+    const onDocClick = (e: MouseEvent | TouchEvent) => {
+      if (replaceHelpRef.current && !replaceHelpRef.current.contains(e.target as Node)) {
+        setReplaceHelpOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", onDocClick);
+    document.addEventListener("touchstart", onDocClick);
+    return () => {
+      document.removeEventListener("mousedown", onDocClick);
+      document.removeEventListener("touchstart", onDocClick);
+    };
+  }, [replaceHelpOpen]);
 
   // Canvas (просмотр макетов с маячками текущего раунда)
   const [canvasOpen, setCanvasOpen] = useState(false);
@@ -590,9 +607,13 @@ export function ProjectHub({
   // Есть ли непрочитанные новые правки клиента (показываются красные точки)
   const hasNewRevisions = !!project.clientSubmitted && !project.clientSubmittedRead;
   const replaceBlocked =
-    !hasClientRevisions || (!isProPlan && !hasRoundsLeft(project));
+    !hasClientRevisions ||
+    (roundsTotal > 0 && currentRound >= roundsTotal) ||
+    (!isProPlan && !hasRoundsLeft(project));
   // Раунды полностью исчерпаны (например, клиент отправил правки по последнему 2 из 2)
-  const allRoundsExhausted = !isProPlan && !hasRoundsLeft(project);
+  const allRoundsExhausted =
+    (roundsTotal > 0 && currentRound >= roundsTotal) ||
+    (!isProPlan && !hasRoundsLeft(project));
 
   const shareUrl =
     typeof window !== "undefined"
@@ -1043,6 +1064,11 @@ export function ProjectHub({
               <button
                 type="button"
                 onClick={() => {
+                  // Жёсткий блок: раунд сверх лимита не создаётся ни при каких условиях
+                  if (currentRound >= roundsTotal && roundsTotal > 0) {
+                    setExhaustedModal(true);
+                    return;
+                  }
                   if (replaceBlocked) {
                     if (allRoundsExhausted) {
                       setExhaustedModal(true);
@@ -1070,12 +1096,13 @@ export function ProjectHub({
                   <polyline points="17,8 12,3 7,8" />
                   <line x1="12" y1="3" x2="12" y2="15" />
                 </svg>
-                {allRoundsExhausted ? "Все раунды правок завершены" : "Заменить макеты"}
+                {allRoundsExhausted ? "Все раунды завершены" : "Заменить макеты"}
                 {/* Иконка-кружок «?» внутри кнопки */}
                 <span
                   role="button"
                   tabIndex={0}
                   aria-label="Подсказка"
+                  ref={replaceHelpRef}
                   onClick={(e) => {
                     e.stopPropagation();
                     setReplaceHelpOpen((v) => !v);
@@ -1086,7 +1113,7 @@ export function ProjectHub({
                       setReplaceHelpOpen((v) => !v);
                     }
                   }}
-                  className="relative ml-1 flex h-5 w-5 cursor-pointer items-center justify-center rounded-full border border-current text-[10px] font-bold transition-all hover:bg-current hover:text-bg-page"
+                  className="relative ml-1 flex h-5 w-5 cursor-pointer items-center justify-center rounded-full border border-current text-[10px] font-bold transition-colors hover:bg-current/20 hover:text-current"
                 >
                   ?
                   <AnimatePresence>
@@ -1096,7 +1123,7 @@ export function ProjectHub({
                         animate={{ opacity: 1, y: 0 }}
                         exit={{ opacity: 0, y: 6 }}
                         transition={{ duration: 0.16, ease: "easeOut" }}
-                        className="pointer-events-none absolute bottom-full left-1/2 mb-2 w-64 -translate-x-1/2 rounded-lg border border-border-strong bg-bg-card p-2.5 text-left text-[11px] leading-relaxed text-text-primary shadow-xl"
+                        className="pointer-events-none absolute bottom-full left-1/2 z-[9999] mb-2 w-64 -translate-x-1/2 rounded-lg border border-border-strong bg-bg-card p-2.5 text-left text-[11px] leading-relaxed text-text-primary shadow-2xl"
                       >
                         Загрузите обновленные файлы после получения правок от клиента. Это запустит следующий раунд правок.
                       </motion.span>

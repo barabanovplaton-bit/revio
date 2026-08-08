@@ -273,6 +273,10 @@ export async function startNewRound(
   if (!project) return;
 
   const current = project.currentRound || 1;
+  const total = project.roundsTotal ?? 0;
+  // Жёсткий блок: нельзя начинать раунд сверх лимита (никаких «Раунд 3 из 2»)
+  if (total > 0 && current >= total) return;
+
   const history = project.packageHistory || [];
   if (project.imageUrls && project.imageUrls.length > 0) {
     history.push({

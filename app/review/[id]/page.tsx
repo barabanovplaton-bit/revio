@@ -333,7 +333,7 @@ export default function ReviewPage({
                 type="button"
                 onClick={() => setHelpOpen((v) => !v)}
                 className={cn(
-                  "flex h-9 w-9 items-center justify-center rounded-xl border text-xs font-bold transition-all",
+                  "flex items-center justify-center rounded-xl border px-3 py-2 text-xs font-bold transition-all",
                   helpOpen
                     ? "border-text-primary/60 bg-text-primary text-bg-page"
                     : "border-border-strong bg-bg-input text-text-primary hover:bg-bg-cardHover hover:text-white"
@@ -349,7 +349,7 @@ export default function ReviewPage({
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: -4 }}
                     transition={{ duration: 0.18, ease: "easeOut" }}
-                    className="absolute right-0 top-full w-80 rounded-b-2xl rounded-tl-2xl border border-t-0 border-border-strong bg-bg-card p-5 shadow-2xl"
+                    className="absolute right-0 top-full z-[9999] w-80 rounded-b-2xl rounded-tl-2xl border border-t-0 border-border-strong bg-bg-card p-5 shadow-2xl"
                   >
                     <div className="mb-3 flex items-center justify-between">
                       <h3 className="text-sm font-semibold text-text-primary">Как оставить правки</h3>
