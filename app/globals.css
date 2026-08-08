@@ -139,3 +139,9 @@ html, body {
 body, .theme-transition {
   transition: background-color 200ms ease-out, color 200ms ease-out, border-color 200ms ease-out;
 }
+
+/* Выделение текста */
+::selection {
+  background-color: #E880FC;
+  color: #000000;
+}

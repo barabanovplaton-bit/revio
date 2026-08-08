@@ -44,7 +44,7 @@ const FAQ = [
 /* Координаты (в %) внутри демо-окна: курсор двигается по порядку (шапка, между блоками, правый блок) */
 const DEMO_STEPS = [
   { l: "14%", t: "14%", n: 1, text: "Увеличь логотип", side: "right" as const },
-  { l: "33%", t: "62%", n: 2, text: "Поправить отступы", side: "below" as const },
+  { l: "33%", t: "62%", n: 2, text: "Поправить отступы", side: "right" as const },
   { l: "88%", t: "40%", n: 3, text: "Изменить цвет", side: "left" as const },
 ];
 
@@ -161,13 +161,9 @@ function DemoMockup() {
                 ? revealed >= s.n
                   ? "translate(16px, -50%)"
                   : "translate(16px, -40%)"
-                : s.side === "below"
-                  ? revealed >= s.n
-                    ? "translate(-50%, 18px)"
-                    : "translate(-50%, 8%)"
-                  : revealed >= s.n
-                    ? "translate(calc(-100% - 16px), -50%)"
-                    : "translate(calc(-100% - 16px), -40%)";
+                : revealed >= s.n
+                  ? "translate(calc(-100% - 16px), -50%)"
+                  : "translate(calc(-100% - 16px), -40%)";
             return (
               <div key={s.n} className="absolute z-20" style={{ left: s.l, top: s.t }}>
                 {/* точка */}
@@ -228,9 +224,7 @@ function DemoMockup() {
   );
 }
 
-function FaqItem({ q, a }: { q: string; a: string }) {
-  const [open, setOpen] = useState(false);
-
+function FaqItem({ q, a, open, onToggle }: { q: string; a: string; open: boolean; onToggle: () => void }) {
   return (
     <motion.div
       layout
@@ -240,7 +234,7 @@ function FaqItem({ q, a }: { q: string; a: string }) {
     >
       <button
         type="button"
-        onClick={() => setOpen((v) => !v)}
+        onClick={onToggle}
         className="flex w-full items-center justify-between gap-3 py-4 text-left"
       >
         <span className={`font-medium transition-colors ${open ? "text-accent" : "text-text-primary"}`}>
@@ -284,6 +278,7 @@ function FaqItem({ q, a }: { q: string; a: string }) {
 export function Landing() {
   const router = useRouter();
   const goToLogin = () => router.push("/login");
+  const [openFaq, setOpenFaq] = useState<string | null>(null);
 
   return (
     <div className="relative mx-auto w-full max-w-5xl flex-1 px-4 pb-16 md:px-6">
@@ -297,7 +292,7 @@ export function Landing() {
       >
         <motion.div variants={fadeUp} custom={0}>
           <h1 className="font-display text-3xl font-semibold leading-tight text-text-primary md:text-5xl">
-            Правки без хаоса
+            Правки без <span className="text-accent">хаоса</span>
           </h1>
           <p className="mt-4 max-w-md text-sm leading-relaxed text-text-muted md:text-base">
             Загрузите макеты, отправьте клиенту ссылку и получайте правки
@@ -471,7 +466,12 @@ export function Landing() {
         <div className="mx-auto max-w-2xl space-y-3">
           {FAQ.map((f, i) => (
             <motion.div key={f.q} variants={fadeUp} custom={i + 1}>
-              <FaqItem q={f.q} a={f.a} />
+              <FaqItem
+                q={f.q}
+                a={f.a}
+                open={openFaq === f.q}
+                onToggle={() => setOpenFaq((cur) => (cur === f.q ? null : f.q))}
+              />
             </motion.div>
           ))}
         </div>
