@@ -19,6 +19,26 @@
   .no-spinners {
     -moz-appearance: textfield;
   }
+
+  /* Фиолетовый акцент проекта */
+  .text-accent { color: var(--accent); }
+  .bg-accent { background-color: var(--accent); }
+  .border-accent { border-color: var(--accent); }
+
+  /* Пульс светового пятна (breath) */
+  .animate-breath {
+    animation: breath 6s ease-in-out infinite;
+  }
+  @keyframes breath {
+    0%, 100% { opacity: 0.55; transform: scale(1); }
+    50% { opacity: 0.95; transform: scale(1.08); }
+  }
+
+  /* Для демо-анимации курсора: движение точками */
+  .animate-cursor {
+    opacity: 0;
+    transition: opacity 300ms ease;
+  }
 }
 
 /* ============ ТЕМА (системная + ручная) ============ */
@@ -37,6 +57,9 @@
   --avatar-bg: #FFFFFF;
   --avatar-fg: #0A0A0A;
   --shadow-glow: rgba(255, 255, 255, 0.06);
+  --accent: #8B5CF6;
+  --accent-soft: rgba(139, 92, 246, 0.15);
+  --accent-glow: rgba(139, 92, 246, 0.35);
   color-scheme: dark;
 }
 
@@ -54,6 +77,9 @@
   --avatar-bg: #0A0A0A;
   --avatar-fg: #FFFFFF;
   --shadow-glow: rgba(0, 0, 0, 0.05);
+  --accent: #7C3AED;
+  --accent-soft: rgba(124, 58, 237, 0.12);
+  --accent-glow: rgba(124, 58, 237, 0.25);
   color-scheme: light;
 }
 
@@ -73,6 +99,9 @@
     --avatar-bg: #0A0A0A;
     --avatar-fg: #FFFFFF;
     --shadow-glow: rgba(0, 0, 0, 0.05);
+    --accent: #7C3AED;
+    --accent-soft: rgba(124, 58, 237, 0.12);
+    --accent-glow: rgba(124, 58, 237, 0.25);
     color-scheme: light;
   }
 }
